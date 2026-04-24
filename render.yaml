@@ -6,10 +6,3 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     autoDeploy: true
-
-  - type: static
-    name: flashcards-frontend
-    rootDir: videos_flashcards
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    autoDeploy: true
