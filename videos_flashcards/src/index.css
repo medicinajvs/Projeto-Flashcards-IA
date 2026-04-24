@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* TECNOLOGIA DE TEMAS DINÂMICOS 
+  Baseada na análise de CSS Variables + Scroll
+*/
+
+:root {
+  /* Configuração da Transição Suave (O "GSAP" nativo) */
+  --transition-speed: 1s; /* 1 segundo para mudar de cor suavemente */
+  --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* TEMA 1: Padrão (Hero/Intro) - Fundo Escuro/Teal Profundo */
+[data-theme="default"] {
+  --bg-primary: #ffffff;      /* Branco na intro para contraste com a foto */
+  --text-primary: #374151;
+  --accent-color: #008080;
+  --bg-section: transparent;  /* Transparente para ver a imagem de fundo */
+}
+
+/* TEMA 2: Clínica (Atmosphere) - Verde Água Suave */
+[data-theme="clinic"] {
+  --bg-primary: #e0f2f1;      /* Teal muito suave (Mint) */
+  --text-primary: #1e3a8a;    /* Azul marinho suave */
+  --accent-color: #00695c;
+  --bg-section: #e0f2f1;
+}
+
+/* TEMA 3: Equipe (Warmth) - Bege/Areia Acolhedor */
+[data-theme="team"] {
+  --bg-primary: #fff8e1;      /* Amarelo/Bege muito suave */
+  --text-primary: #4a4a4a;
+  --accent-color: #f59e0b;    /* Toque dourado */
+  --bg-section: #fff8e1;
+}
+
+/* APLICAÇÃO DA ANIMAÇÃO NO CORPO */
+.theme-transition-container {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-speed) var(--transition-ease),
+              color var(--transition-speed) var(--transition-ease);
+}
+
+/* Utilitários para usar as variáveis no Tailwind */
+.text-theme-primary { color: var(--text-primary); transition: color var(--transition-speed); }
+.bg-theme-accent { background-color: var(--accent-color); transition: background-color var(--transition-speed); }
+
+@keyframes progress {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
