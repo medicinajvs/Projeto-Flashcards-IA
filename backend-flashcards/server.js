@@ -7,6 +7,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { google } = require('googleapis');
 require('dotenv').config();
 
 if (process.env.FFMPEG_PATH) {
@@ -943,7 +944,7 @@ Retorne apenas JSON válido no schema solicitado.`,
   );
 }
 
-async function uploadVideoToR2(localPath, originalFilename, mimeType) {
+async function uploadVideoToR2(localPath, originalFilename, mimeType, folder = 'videos') {
   if (!r2) {
     return {
       videoStorageProvider: null,
@@ -954,20 +955,26 @@ async function uploadVideoToR2(localPath, originalFilename, mimeType) {
 
   const normalizedName = normalizeUtf8Filename(originalFilename);
   const sanitizedName = sanitizeFilename(normalizedName);
-  const key = `videos/${Date.now()}-${Math.random().toString(36).slice(2)}-${sanitizedName}`;
+  const safeFolder = String(folder || 'videos')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/[^a-zA-Z0-9/_-]/g, '-');
+
+  const key = `${safeFolder}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}-${sanitizedName}`;
 
   const contentType = mimeType && mimeType.startsWith('video/')
-  ? mimeType
-  : 'video/mp4';
+    ? mimeType
+    : 'video/mp4';
 
-await r2.send(
-  new PutObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: key,
-    Body: fs.readFileSync(localPath),
-    ContentType: contentType,
-  })
-);
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: fs.readFileSync(localPath),
+      ContentType: contentType,
+    })
+  );
 
   const publicUrl = R2_PUBLIC_BASE_URL
     ? `${R2_PUBLIC_BASE_URL.replace(/\/$/, '')}/${key}`
@@ -980,6 +987,36 @@ await r2.send(
   };
 }
 
+function getRunEnrichmentSupportTranscript(run = {}) {
+  return String(run.enrichment_support_transcript || '').trim();
+}
+
+function buildTextWithEnrichmentSupport({
+  transcript = '',
+  enrichmentSupportTranscript = '',
+}) {
+  const mainTranscript = String(transcript || '').trim();
+  const supportTranscript = String(enrichmentSupportTranscript || '').trim();
+
+  if (!supportTranscript) {
+    return mainTranscript;
+  }
+
+  return `
+[TEXTO PRINCIPAL — BASE OBRIGATÓRIA]
+${mainTranscript}
+
+[SEGUNDO VÍDEO — BASE COMPLEMENTAR PARA ENRIQUECIMENTO]
+${supportTranscript}
+
+Instruções:
+- Use o segundo vídeo para enriquecer, esclarecer, organizar e ampliar o estudo.
+- Não substitua o tema central do vídeo principal.
+- Não trate o segundo vídeo como evidência científica superior às fontes médicas.
+- Quando houver divergência, preserve a transcrição principal e use fontes científicas como critério.
+`.trim();
+}
+
 async function saveStudyRun({
   originalFilename,
   transcript,
@@ -990,6 +1027,12 @@ async function saveStudyRun({
   videoStorageProvider,
   videoObjectKey,
   videoUrl,
+  enrichmentSupportFilename,
+  enrichmentSupportTranscript,
+  enrichmentSupportVideoStorageProvider,
+  enrichmentSupportVideoObjectKey,
+  enrichmentSupportVideoUrl,
+  enrichmentSupportTranscriptionProvider,
   specialty,
   secondaryTopics,
   autoTags,
@@ -1012,6 +1055,18 @@ async function saveStudyRun({
       video_storage_provider: videoStorageProvider ?? null,
       video_object_key: videoObjectKey ?? null,
       video_url: videoUrl ?? null,
+      enrichment_support_filename: enrichmentSupportFilename || null,
+      enrichment_support_transcript: enrichmentSupportTranscript || null,
+      enrichment_support_transcript_preview: enrichmentSupportTranscript
+        ? buildTranscriptPreview(enrichmentSupportTranscript)
+        : null,
+      enrichment_support_video_storage_provider: enrichmentSupportVideoStorageProvider || null,
+      enrichment_support_video_object_key: enrichmentSupportVideoObjectKey || null,
+      enrichment_support_video_url: enrichmentSupportVideoUrl || null,
+      enrichment_support_transcription_provider: enrichmentSupportTranscriptionProvider || null,
+      enrichment_support_processed_at: enrichmentSupportTranscript
+        ? new Date().toISOString()
+        : null,
       specialty: specialty || null,
       secondary_topics: secondaryTopics ?? [],
       auto_tags: autoTags ?? [],
@@ -1398,6 +1453,7 @@ Objetivo:
 
 Regras:
 - Não invente informações fora da transcrição.
+- Se houver segundo vídeo complementar, use-o para ampliar a detecção de tópicos, mas mantenha o vídeo principal como eixo central da análise.
 - Produza entre 4 e 8 tópicos detectados.
 - Produza entre 3 e 6 queries de busca.
 - As queries devem ser boas para PubMed.
@@ -1410,8 +1466,11 @@ Tema sugerido pelo usuário: ${themeHint || 'Não informado'}
 Aula sugerida pelo usuário: ${lessonHint || 'Não informado'}
 Objetivo da análise: ${goalHint || 'Identificar lacunas, melhorias e possíveis mnemônicos'}
 
-[TRANSCRIÇÃO]
+[TRANSCRIÇÃO PRINCIPAL]
 ${run.transcript}
+
+[TRANSCRIÇÃO DO SEGUNDO VÍDEO COMPLEMENTAR]
+${getRunEnrichmentSupportTranscript(run) || 'Nenhum segundo vídeo complementar foi enviado.'}
 `;
 
   return generateStructuredObjectWithGemini({
@@ -1937,7 +1996,26 @@ async function analyzeTranscriptAgainstSources(run, plan, sources, referenceVide
       },
       missing_topics: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'object',
+          properties: {
+            topic: { type: 'string' },
+            why_missing: { type: 'string' },
+            correction_strategy: { type: 'string' },
+            addition_text: { type: 'string' },
+            source_numbers: {
+              type: 'array',
+              items: { type: 'integer' },
+            },
+          },
+          required: [
+            'topic',
+            'why_missing',
+            'correction_strategy',
+            'addition_text',
+            'source_numbers',
+          ],
+        },
       },
       improvement_suggestions: {
         type: 'array',
@@ -1998,10 +2076,13 @@ Sua função é validar criticamente a cobertura de uma aula médica comparando:
 1) a transcrição da aula principal;
 2) fontes científicas externas;
 3) vídeos de referência usados como apoio didático.
+4) uma transcrição complementar enviada pelo usuário, quando existir.
 
 Objetivos:
 - identificar pontos fortes reais da transcrição;
 - detectar lacunas com impacto clínico ou pedagógico;
+- para cada lacuna, explique a melhor forma de corrigi-la no texto enriquecido;
+- para cada lacuna, gere um campo addition_text com um bloco pronto para ser inserido diretamente no texto enriquecido;
 - sugerir melhorias concretas de nível residência médica;
 - sugerir mnemônicos úteis, quando fizer sentido;
 - indicar focos prioritários para novos flashcards;
@@ -2012,6 +2093,8 @@ Regras:
 - Não invente referências.
 - Quando citar apoio de fonte científica, use os números das fontes fornecidas.
 - Vídeos de referência servem para reforço didático e organização pedagógica.
+- A transcrição complementar enviada pelo usuário deve ser usada como fonte pedagógica adicional para corrigir lacunas, ampliar exemplos, melhorar organização e sugerir flashcards.
+- Não substitua o conteúdo principal pela transcrição complementar; use-a como reforço.
 - Priorize utilidade prática, prova de residência, raciocínio clínico e conduta.
 - Evite sugestões superficiais ou redundantes.
 - Se a transcrição já estiver forte em um tópico, reconheça isso.
@@ -2028,6 +2111,9 @@ ${(plan.topics_detected || []).map((t) => `- ${t}`).join('\n')}
 
 Transcrição principal:
 ${run.transcript}
+
+Transcrição complementar enviada pelo usuário:
+${getRunEnrichmentSupportTranscript(run) || 'Nenhuma transcrição complementar enviada.'}
 
 Fontes científicas encontradas:
 ${numberedSources || 'Nenhuma fonte científica encontrada.'}
@@ -2082,6 +2168,7 @@ Seu trabalho é enriquecer uma transcrição de aula médica original sem descar
 
 Objetivos:
 - preservar o texto original como núcleo;
+- usar a transcrição complementar do usuário como apoio para enriquecer pontos fracos, adicionar exemplos, organizar raciocínio e melhorar didática;
 - adicionar informações faltantes de alto valor;
 - incorporar sugestões práticas e mnemônicos úteis;
 - melhorar a utilidade para revisão médica e prova;
@@ -2089,6 +2176,7 @@ Objetivos:
 
 Regras:
 - Não contradiga a transcrição original.
+- Não substitua a aula principal pelo segundo vídeo. A transcrição complementar deve entrar como reforço integrado.
 - Não invente fatos sem apoio nas sugestões/fontes fornecidas.
 - O texto final deve parecer uma versão enriquecida da aula, e não uma lista solta.
 - Mantenha português médico claro e objetivo.
@@ -2099,15 +2187,27 @@ Regras:
 `;
 
   const userText = `
-[TRANSCRIÇÃO ORIGINAL]
+[TRANSCRIÇÃO ORIGINAL — VÍDEO PRINCIPAL]
 ${run.transcript}
+
+[TRANSCRIÇÃO COMPLEMENTAR — SEGUNDO VÍDEO ENVIADO PELO USUÁRIO]
+${getRunEnrichmentSupportTranscript(run) || 'Nenhuma transcrição complementar enviada.'}
 
 [ANÁLISE DE EVIDÊNCIA]
 Pontos fortes:
 ${(analysis.strengths || []).map((x) => `- ${x}`).join('\n')}
 
 Lacunas:
-${(analysis.missing_topics || []).map((x) => `- ${x}`).join('\n')}
+${(analysis.missing_topics || [])
+  .map((x) => {
+    if (typeof x === 'string') return `- ${x}`;
+
+    return `- ${x.topic || x.title || 'Lacuna'}: ${x.why_missing || ''}
+Como corrigir: ${x.correction_strategy || ''}
+Texto sugerido: ${x.addition_text || ''}
+Fontes: ${(x.source_numbers || []).join(', ')}`;
+  })
+  .join('\n')}
 
 Sugestões:
 ${(analysis.improvement_suggestions || [])
@@ -2259,6 +2359,10 @@ async function listStudyRuns({ page = 1, limit = 12, search = '' }) {
       enriched_transcript,
       flashcards_model,
       video_url,
+      enrichment_support_filename,
+      enrichment_support_transcript_preview,
+      enrichment_support_video_url,
+      enrichment_support_processed_at,
       is_favorite,
       study_tag,
       review_state,
@@ -2278,7 +2382,7 @@ async function listStudyRuns({ page = 1, limit = 12, search = '' }) {
 
   if (search && search.trim()) {
     query = query.or(
-      `original_filename.ilike.%${search.trim()}%,transcript.ilike.%${search.trim()}%`
+      `original_filename.ilike.%${search.trim()}%,transcript.ilike.%${search.trim()}%,enrichment_support_transcript.ilike.%${search.trim()}%,enrichment_support_filename.ilike.%${search.trim()}%`
     );
   }
 
@@ -2383,6 +2487,140 @@ async function getLibraryAnalytics({ specialty = '' } = {}) {
     bySpecialty,
     bySubSpecialty,
     byDeck,
+  };
+}
+
+const GOOGLE_CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+];
+
+function getGoogleOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CALENDAR_CLIENT_ID,
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI
+  );
+}
+
+async function saveGoogleCalendarTokens(tokens) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado no backend.');
+  }
+
+  if (!tokens.refresh_token) {
+    const existing = await getGoogleCalendarTokens();
+
+    if (!existing?.refresh_token) {
+      throw new Error('Google não retornou refresh_token. Revogue o acesso e conecte novamente.');
+    }
+
+    tokens.refresh_token = existing.refresh_token;
+  }
+
+  const payload = {
+    provider: 'google_calendar',
+    user_key: 'default_user',
+    access_token: tokens.access_token || null,
+    refresh_token: tokens.refresh_token,
+    scope: tokens.scope || null,
+    token_type: tokens.token_type || null,
+    expiry_date: tokens.expiry_date || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('google_oauth_tokens')
+    .upsert(payload, { onConflict: 'provider,user_key' })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao salvar tokens Google: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function getGoogleCalendarTokens() {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('google_oauth_tokens')
+    .select('*')
+    .eq('provider', 'google_calendar')
+    .eq('user_key', 'default_user')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao buscar tokens Google: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function getAuthorizedGoogleCalendarClient() {
+  const stored = await getGoogleCalendarTokens();
+
+  if (!stored?.refresh_token) {
+    throw new Error('Google Calendar ainda não conectado.');
+  }
+
+  const oauth2Client = getGoogleOAuthClient();
+
+  oauth2Client.setCredentials({
+    access_token: stored.access_token || undefined,
+    refresh_token: stored.refresh_token,
+    expiry_date: stored.expiry_date || undefined,
+  });
+
+  oauth2Client.on('tokens', async (tokens) => {
+    await saveGoogleCalendarTokens(tokens);
+  });
+
+  return google.calendar({
+    version: 'v3',
+    auth: oauth2Client,
+  });
+}
+
+function buildGoogleCalendarReviewEventFromCard(card) {
+  const dueAt = card?.review_state?.dueAt
+    ? new Date(card.review_state.dueAt)
+    : new Date();
+
+  const dateKey = dueAt.toISOString().slice(0, 10);
+
+  const intervalLabel = card.smartReviewLabel || card.reviewLabel || 'D0';
+
+  return {
+    summary: `🧠 ${intervalLabel} - Revisar flashcard: ${String(card.question || 'Card').slice(0, 80)}`,
+    description: [
+      'Revisão espaçada - Flashcards IA',
+      `CARD_ID: ${card.id}`,
+      `DUE: ${dateKey}`,
+      '',
+      `Pergunta: ${card.question || ''}`,
+      '',
+      `Resposta: ${card.answer || ''}`,
+      '',
+      card.preceptor_note ? `Nota do preceptor: ${card.preceptor_note}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    start: { date: dateKey },
+    end: { date: dateKey },
+    transparency: 'transparent',
+    reminders: {
+      useDefault: false,
+      overrides: [{ method: 'popup', minutes: 540 }],
+    },
+    extendedProperties: {
+      private: {
+        flashcardsIaCardId: String(card.id),
+        flashcardsIaReviewLabel: intervalLabel,
+      },
+    },
   };
 }
 
@@ -2494,6 +2732,84 @@ app.post('/api/flashcard-decks', async (req, res) => {
     return res.json({ deck });
   } catch (error) {
     console.error('❌ Erro ao criar deck:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/flashcard-decks/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      throw new Error('Supabase não configurado no backend.');
+    }
+
+    const { id } = req.params;
+    const {
+      name,
+      specialty,
+      sub_specialty,
+      parent_deck_id,
+      deck_type,
+      description,
+    } = req.body || {};
+
+    const payload = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (name !== undefined) payload.name = String(name || '').trim();
+    if (specialty !== undefined) payload.specialty = String(specialty || '').trim() || null;
+    if (sub_specialty !== undefined) payload.sub_specialty = String(sub_specialty || '').trim() || null;
+    if (parent_deck_id !== undefined) payload.parent_deck_id = parent_deck_id || null;
+    if (deck_type !== undefined) payload.deck_type = String(deck_type || 'manual').trim();
+    if (description !== undefined) payload.description = String(description || '').trim() || null;
+
+    const { data, error } = await supabase
+      .from('flashcard_decks')
+      .update(payload)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return res.json({ deck: data });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar deck:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/flashcard-decks/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      throw new Error('Supabase não configurado no backend.');
+    }
+
+    const { id } = req.params;
+
+    await supabase
+      .from('flashcards_library')
+      .update({
+        deck_id: null,
+        is_archived: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('deck_id', id);
+
+    const { error } = await supabase
+      .from('flashcard_decks')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Erro ao excluir deck:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -2817,20 +3133,48 @@ app.post('/api/flashcards-library/:id/review', async (req, res) => {
       throw new Error(updateError.message);
     }
 
+    const reviewLogPayload = {
+      flashcard_id: Number(id),
+      grade,
+      session_mode,
+      session_source,
+    };
+
     const { error: logError } = await supabase
       .from('flashcard_review_log')
-      .insert({
-        flashcard_id: Number(id),
-        grade,
-        session_mode,
-        session_source,
-      });
+      .insert(reviewLogPayload);
 
     if (logError) {
-      throw new Error(logError.message);
+      const isMissingMetadataColumn =
+        logError.message?.includes('session_mode') ||
+        logError.message?.includes('session_source') ||
+        logError.message?.includes('schema cache');
+
+      if (isMissingMetadataColumn) {
+        console.warn(
+          '⚠️ flashcard_review_log sem colunas session_mode/session_source. Salvando log básico.'
+        );
+
+        const { error: fallbackLogError } = await supabase
+          .from('flashcard_review_log')
+          .insert({
+            flashcard_id: Number(id),
+            grade,
+          });
+
+        if (fallbackLogError) {
+          console.warn(
+            '⚠️ Não foi possível salvar log básico da revisão:',
+            fallbackLogError.message
+          );
+        }
+      } else {
+        throw new Error(logError.message);
+      }
     }
 
     return res.json({ ok: true });
+
   } catch (error) {
     console.error('❌ Erro ao registrar revisão da biblioteca:', error.message);
     return res.status(500).json({ error: error.message });
@@ -2997,7 +3341,12 @@ app.post('/api/generate-flashcards-from-run/:id', async (req, res) => {
       });
     }
 
-    const result = await generateFlashcardsWithGemini(run.transcript);
+    const textForFlashcards = buildTextWithEnrichmentSupport({
+      transcript: run.transcript,
+      enrichmentSupportTranscript: getRunEnrichmentSupportTranscript(run),
+    });
+
+    const result = await generateFlashcardsWithGemini(textForFlashcards);
     const updatedRun = await updateStudyRunFlashcards(run.id, result.flashcards, result.modelUsed);
 
     try {
@@ -3032,7 +3381,10 @@ app.post('/api/generate-flashcards-from-run/:id', async (req, res) => {
 });
 
 app.post('/api/process-video', (req, res, next) => {
-  upload.single('video')(req, res, (error) => {
+  upload.fields([
+    { name: 'video', maxCount: 1 },
+    { name: 'enrichmentVideo', maxCount: 1 },
+  ])(req, res, (error) => {
     if (error) {
       if (error.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
@@ -3050,16 +3402,21 @@ app.post('/api/process-video', (req, res, next) => {
 }, async (req, res) => {
   let uploadedVideoPath = null;
   let extractedAudioPath = null;
+  let uploadedEnrichmentVideoPath = null;
+  let extractedEnrichmentAudioPath = null;
 
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nenhum vídeo foi enviado.' });
+    const mainVideoFile = req.files?.video?.[0] || null;
+    const enrichmentVideoFile = req.files?.enrichmentVideo?.[0] || null;
+
+    if (!mainVideoFile) {
+      return res.status(400).json({ error: 'Nenhum vídeo principal foi enviado.' });
     }
 
     const shouldGenerateFlashcards = String(req.body.generateFlashcards ?? 'true') !== 'false';
-    const normalizedOriginalFilename = normalizeUtf8Filename(req.file.originalname);
+    const normalizedOriginalFilename = normalizeUtf8Filename(mainVideoFile.originalname);
 
-    uploadedVideoPath = req.file.path;
+    uploadedVideoPath = mainVideoFile.path;
     extractedAudioPath = path.join(
       TEMP_AUDIO_DIR,
       `${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`
@@ -3071,6 +3428,38 @@ app.post('/api/process-video', (req, res, next) => {
 
     console.log('📝 Transcrevendo com Deepgram...');
     const transcript = await transcribeAudioWithDeepgram(extractedAudioPath);
+
+    let enrichmentSupportTranscript = '';
+    let normalizedEnrichmentFilename = null;
+    let storedEnrichmentVideo = {
+      videoStorageProvider: null,
+      videoObjectKey: null,
+      videoUrl: null,
+    };
+
+    if (enrichmentVideoFile) {
+      normalizedEnrichmentFilename = normalizeUtf8Filename(enrichmentVideoFile.originalname);
+      uploadedEnrichmentVideoPath = enrichmentVideoFile.path;
+      extractedEnrichmentAudioPath = path.join(
+        TEMP_AUDIO_DIR,
+        `${Date.now()}-${Math.random().toString(36).slice(2)}-enrichment.mp3`
+      );
+
+      console.log(`📥 Vídeo complementar recebido: ${normalizedEnrichmentFilename}`);
+      console.log('🎵 Extraindo áudio do vídeo complementar...');
+      await convertVideoToMp3(uploadedEnrichmentVideoPath, extractedEnrichmentAudioPath);
+
+      console.log('📝 Transcrevendo vídeo complementar com Deepgram...');
+      enrichmentSupportTranscript = await transcribeAudioWithDeepgram(extractedEnrichmentAudioPath);
+
+      console.log('☁️ Enviando vídeo complementar para o R2...');
+      storedEnrichmentVideo = await uploadVideoToR2(
+        uploadedEnrichmentVideoPath,
+        normalizedEnrichmentFilename,
+        enrichmentVideoFile.mimetype,
+        'enrichment-videos'
+      );
+    }
 
     let classifiedMetadata = null;
     let specialty = req.body.specialty || 'Clínica Médica';
@@ -3110,7 +3499,12 @@ app.post('/api/process-video', (req, res, next) => {
 
     if (shouldGenerateFlashcards) {
       console.log('🧠 Gerando flashcards com Gemini...');
-      const result = await generateFlashcardsWithGemini(transcript);
+      const textForFlashcards = buildTextWithEnrichmentSupport({
+        transcript,
+        enrichmentSupportTranscript,
+      });
+
+      const result = await generateFlashcardsWithGemini(textForFlashcards);
       flashcards = result.flashcards;
       flashcardsModel = result.modelUsed;
       flashcardsProvider = 'gemini';
@@ -3119,7 +3513,7 @@ app.post('/api/process-video', (req, res, next) => {
     const storedVideo = await uploadVideoToR2(
       uploadedVideoPath,
       normalizedOriginalFilename,
-      req.file.mimetype
+      mainVideoFile.mimetype
     );
 
     const savedRun = await saveStudyRun({
@@ -3132,6 +3526,14 @@ app.post('/api/process-video', (req, res, next) => {
       videoStorageProvider: storedVideo.videoStorageProvider,
       videoObjectKey: storedVideo.videoObjectKey,
       videoUrl: storedVideo.videoUrl,
+
+      enrichmentSupportFilename: normalizedEnrichmentFilename,
+      enrichmentSupportTranscript,
+      enrichmentSupportVideoStorageProvider: storedEnrichmentVideo.videoStorageProvider,
+      enrichmentSupportVideoObjectKey: storedEnrichmentVideo.videoObjectKey,
+      enrichmentSupportVideoUrl: storedEnrichmentVideo.videoUrl,
+      enrichmentSupportTranscriptionProvider: enrichmentSupportTranscript ? 'deepgram' : null,
+
       specialty,
       secondaryTopics,
       autoTags,
@@ -3163,6 +3565,9 @@ app.post('/api/process-video', (req, res, next) => {
     console.log('✅ Pipeline concluído.');
     return res.json({
       transcript,
+      enrichmentSupportTranscript,
+      enrichmentSupportFilename: normalizedEnrichmentFilename,
+      enrichmentSupportVideoUrl: storedEnrichmentVideo.videoUrl,
       flashcards: flashcards || [],
       transcriptionProvider: 'deepgram',
       flashcardsProvider,
@@ -3179,6 +3584,8 @@ app.post('/api/process-video', (req, res, next) => {
   } finally {
     safeDelete(uploadedVideoPath);
     safeDelete(extractedAudioPath);
+    safeDelete(uploadedEnrichmentVideoPath);
+    safeDelete(extractedEnrichmentAudioPath);
   }
 });
 
@@ -3211,10 +3618,242 @@ app.get('/api/enrich-run/:id', async (req, res) => {
       enrichedGeneratedAt: run.enriched_generated_at || null,
       enrichedFlashcards: Array.isArray(run.enriched_flashcards) ? run.enriched_flashcards : [],
       enrichedFlashcardsGeneratedAt: run.enriched_flashcards_generated_at || null,
+
+      enrichmentSupportFilename: run.enrichment_support_filename || null,
+      enrichmentSupportTranscript: run.enrichment_support_transcript || null,
+      enrichmentSupportTranscriptPreview: run.enrichment_support_transcript_preview || null,
+      enrichmentSupportVideoUrl: run.enrichment_support_video_url || null,
+      enrichmentSupportProcessedAt: run.enrichment_support_processed_at || null,
     });
   } catch (error) {
     console.error('❌ Erro ao buscar enriquecimento:', error.message);
     return res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/enrich-run/:id', async (req, res) => {
+  try {
+    const run = await getStudyRunById(req.params.id);
+
+    if (!run?.id) {
+      return res.status(404).json({ error: 'Study run não encontrado.' });
+    }
+
+    const { enrichedTranscript, enrichedSummary } = req.body || {};
+
+    if (typeof enrichedTranscript !== 'string') {
+      return res.status(400).json({
+        error: 'Texto enriquecido inválido.',
+      });
+    }
+
+    const previousSummary =
+      run.enriched_summary && typeof run.enriched_summary === 'object'
+        ? run.enriched_summary
+        : {};
+
+    const nextSummary = {
+      ...previousSummary,
+      ...(enrichedSummary && typeof enrichedSummary === 'object' ? enrichedSummary : {}),
+      manually_edited: true,
+      manual_last_saved_at: new Date().toISOString(),
+    };
+
+    const updatedRun = await updateStudyRunEnrichment(
+      run.id,
+      enrichedTranscript,
+      nextSummary
+    );
+
+    return res.json({
+      run: updatedRun,
+      enrichedTranscript: updatedRun.enriched_transcript || '',
+      enrichedSummary: updatedRun.enriched_summary || null,
+      enrichedGeneratedAt: updatedRun.enriched_generated_at || null,
+      enrichedFlashcards: Array.isArray(updatedRun.enriched_flashcards)
+        ? updatedRun.enriched_flashcards
+        : [],
+      enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at || null,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao salvar edição do texto enriquecido:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/google-calendar/status', async (req, res) => {
+  try {
+    const tokens = await getGoogleCalendarTokens();
+
+    res.json({
+      connected: Boolean(tokens?.refresh_token),
+      scope: tokens?.scope || null,
+      updated_at: tokens?.updated_at || null,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+app.get('/api/google-calendar/auth-url', async (req, res) => {
+  try {
+    const oauth2Client = getGoogleOAuthClient();
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: GOOGLE_CALENDAR_SCOPES,
+    });
+
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+app.get('/api/google-calendar/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      throw new Error('Código OAuth ausente.');
+    }
+
+    const oauth2Client = getGoogleOAuthClient();
+    const { tokens } = await oauth2Client.getToken(code);
+
+    await saveGoogleCalendarTokens(tokens);
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    res.redirect(`${frontendUrl}?googleCalendar=connected`);
+  } catch (err) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(
+      `${frontendUrl}?googleCalendar=error&message=${encodeURIComponent(err.message)}`
+    );
+  }
+});
+
+app.delete('/api/google-calendar/disconnect', async (req, res) => {
+  try {
+    if (!supabase) {
+      throw new Error('Supabase não configurado no backend.');
+    }
+
+    const { error } = await supabase
+      .from('google_oauth_tokens')
+      .delete()
+      .eq('provider', 'google_calendar')
+      .eq('user_key', 'default_user');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+app.get('/api/google-calendar/review-events', async (req, res) => {
+  try {
+    const calendar = await getAuthorizedGoogleCalendarClient();
+
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const timeMin = new Date(`${month}-01T00:00:00.000Z`);
+    const timeMax = new Date(timeMin);
+    timeMax.setMonth(timeMax.getMonth() + 1);
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      q: 'Revisão espaçada - Flashcards IA',
+      singleEvents: true,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      maxResults: 2500,
+      orderBy: 'startTime',
+    });
+
+    res.json({
+      events: response.data.items || [],
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+app.post('/api/google-calendar/sync-reviews', async (req, res) => {
+  try {
+    const { cards = [] } = req.body;
+
+    if (!Array.isArray(cards)) {
+      throw new Error('Lista de cards inválida.');
+    }
+
+    const calendar = await getAuthorizedGoogleCalendarClient();
+
+    const limitedCards = cards.slice(0, 80);
+    const created = [];
+
+    for (const card of limitedCards) {
+      const event = buildGoogleCalendarReviewEventFromCard(card);
+
+      const reviewLabel =
+        card.smartReviewLabel || card.reviewLabel || 'D0';
+
+      const existingEventsResponse = await calendar.events.list({
+        calendarId: 'primary',
+        privateExtendedProperty: [
+          `flashcardsIaCardId=${String(card.id)}`,
+          `flashcardsIaReviewLabel=${reviewLabel}`,
+        ],
+        singleEvents: true,
+        maxResults: 10,
+      });
+
+      const existingEvent = existingEventsResponse.data.items?.[0];
+
+      if (existingEvent) {
+        const response = await calendar.events.update({
+          calendarId: 'primary',
+          eventId: existingEvent.id,
+          requestBody: {
+            ...existingEvent,
+            ...event,
+          },
+        });
+
+        created.push(response.data);
+        continue;
+      }
+
+      const response = await calendar.events.insert({
+        calendarId: 'primary',
+        requestBody: event,
+      });
+
+      created.push(response.data);
+    }
+
+    res.json({
+      ok: true,
+      created_count: created.length,
+      events: created,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
   }
 });
 
@@ -3307,6 +3946,217 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Erro ao gerar flashcards do texto enriquecido:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
+  try {
+    const run = await getStudyRunById(req.params.id);
+
+    if (!run?.id) {
+      return res.status(404).json({ error: 'Study run não encontrado.' });
+    }
+
+    const analysisPack = await getLatestEvidenceAnalysisByStudyRunId(run.id);
+
+    const mnemonics = Array.isArray(analysisPack?.analysis?.mnemonics)
+      ? analysisPack.analysis.mnemonics
+      : [];
+
+    if (!mnemonics.length) {
+      return res.status(400).json({
+        error: 'Nenhum mnemônico encontrado na análise de evidência.',
+      });
+    }
+
+    const mnemonicFlashcards = mnemonics
+      .map((item, index) => {
+        const title = item?.title || `Mnemônico ${index + 1}`;
+        const mnemonic = item?.mnemonic || '';
+        const explanation = item?.explanation || '';
+        const useCase = item?.use_case || '';
+
+        return {
+          pergunta: `Como usar o mnemônico "${title}"?`,
+          resposta: [
+            mnemonic ? `Mnemônico: ${mnemonic}` : '',
+            explanation ? `Explicação: ${explanation}` : '',
+            useCase ? `Quando usar: ${useCase}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          nota_preceptor:
+            'Flashcard exclusivo criado a partir da seção Mnemônicos sugeridos da Análise de Evidência.',
+          difficulty: 'medium',
+          tags: ['mnemônico', 'análise de evidência'],
+        };
+      })
+      .filter((card) => card.pergunta && card.resposta);
+
+    const existingFlashcards = Array.isArray(run.enriched_flashcards)
+      ? run.enriched_flashcards
+      : Array.isArray(run.flashcards)
+        ? run.flashcards
+        : [];
+
+    const existingQuestions = new Set(
+      existingFlashcards.map((card) =>
+        String(card.question || card.pergunta || '').trim().toLowerCase()
+      )
+    );
+
+    const uniqueMnemonicFlashcards = mnemonicFlashcards.filter((card) => {
+      const question = String(card.pergunta || '').trim().toLowerCase();
+      return question && !existingQuestions.has(question);
+    });
+
+    const mergedFlashcards = [...existingFlashcards, ...uniqueMnemonicFlashcards];
+
+    const updatedRun = await updateStudyRunEnrichedFlashcards(
+      run.id,
+      mergedFlashcards,
+      'mnemonic-builder'
+    );
+
+    try {
+      if (uniqueMnemonicFlashcards.length > 0) {
+        await saveFlashcardsToLibrary({
+          theme: 'Mnemônicos',
+          runId: updatedRun.id,
+          flashcards: uniqueMnemonicFlashcards,
+          specialty: updatedRun.specialty || 'Clínica Médica',
+          subSpecialty:
+            Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 0
+              ? updatedRun.secondary_topics[0]
+              : '',
+        });
+      }
+    } catch (libraryError) {
+      console.warn(
+        '⚠️ Falha ao salvar flashcards de mnemônicos na biblioteca:',
+        libraryError.message
+      );
+    }
+
+    return res.json({
+      run: updatedRun,
+      mnemonicFlashcards: uniqueMnemonicFlashcards,
+      flashcards: updatedRun.enriched_flashcards || [],
+      enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar flashcards dos mnemônicos:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
+  try {
+    const run = await getStudyRunById(req.params.id);
+
+    if (!run?.id) {
+      return res.status(404).json({ error: 'Study run não encontrado.' });
+    }
+
+    const analysisPack = await getLatestEvidenceAnalysisByStudyRunId(run.id);
+    const mnemonics = Array.isArray(analysisPack?.analysis?.mnemonics)
+      ? analysisPack.analysis.mnemonics
+      : [];
+
+    if (!mnemonics.length) {
+      return res.status(400).json({
+        error: 'Nenhum mnemônico encontrado na análise de evidência.',
+      });
+    }
+
+    const mnemonicFlashcards = mnemonics
+      .map((item, index) => {
+        const title = item?.title || `Mnemônico ${index + 1}`;
+        const mnemonic = item?.mnemonic || '';
+        const explanation = item?.explanation || '';
+        const useCase = item?.use_case || '';
+
+        return {
+          pergunta: `Mnemônico: como lembrar ${title}?`,
+          resposta: [
+            mnemonic ? `Mnemônico: ${mnemonic}` : '',
+            explanation ? `Explicação: ${explanation}` : '',
+            useCase ? `Quando usar: ${useCase}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          nota_preceptor:
+            'Flashcard exclusivo criado a partir da seção Mnemônicos sugeridos da Análise de Evidência.',
+          difficulty: 'medium',
+          tags: ['mnemônico', 'análise de evidência'],
+        };
+      })
+      .filter((card) => card.pergunta && card.resposta);
+
+    const existingFlashcards = Array.isArray(run.enriched_flashcards)
+      ? run.enriched_flashcards
+      : Array.isArray(run.flashcards)
+        ? run.flashcards
+        : [];
+
+    const existingQuestions = new Set(
+      existingFlashcards.map((card) =>
+        String(card.question || card.pergunta || '').trim().toLowerCase()
+      )
+    );
+
+    const uniqueMnemonicFlashcards = mnemonicFlashcards.filter((card) => {
+      const question = String(card.pergunta || '').trim().toLowerCase();
+      return question && !existingQuestions.has(question);
+    });
+
+    if (!uniqueMnemonicFlashcards.length) {
+      return res.json({
+        run,
+        mnemonicFlashcards: [],
+        flashcards: existingFlashcards,
+        message: 'Os flashcards de mnemônicos já existiam para esta execução.',
+      });
+    }
+
+    const mergedFlashcards = [...existingFlashcards, ...uniqueMnemonicFlashcards];
+
+    const updatedRun = await updateStudyRunEnrichedFlashcards(
+      run.id,
+      mergedFlashcards,
+      'mnemonic-builder'
+    );
+
+    try {
+      await saveFlashcardsToLibrary({
+        theme:
+          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 1
+            ? updatedRun.secondary_topics[1]
+            : 'Mnemônicos',
+        runId: updatedRun.id,
+        flashcards: uniqueMnemonicFlashcards,
+        specialty: updatedRun.specialty || 'Clínica Médica',
+        subSpecialty:
+          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 0
+            ? updatedRun.secondary_topics[0]
+            : '',
+      });
+    } catch (libraryError) {
+      console.warn(
+        '⚠️ Falha ao salvar flashcards de mnemônicos na biblioteca:',
+        libraryError.message
+      );
+    }
+
+    return res.json({
+      run: updatedRun,
+      mnemonicFlashcards: uniqueMnemonicFlashcards,
+      flashcards: updatedRun.enriched_flashcards || [],
+      enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar flashcards dos mnemônicos:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });
