@@ -306,7 +306,11 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
   return {
     question: card.question ?? card.pergunta ?? '',
     answer: card.answer ?? card.resposta ?? '',
-    preceptor_note: card.preceptorNote ?? card.nota_preceptor ?? null,
+    preceptor_note:
+      card.preceptorNote ??
+      card.nota_preceptor ??
+      card.preceptor_note ??
+      null,
     difficulty: card.difficulty || 'medium',
     specialty: card.specialty || null,
     sub_specialty: card.subSpecialty ?? card.sub_specialty ?? null,
@@ -2980,21 +2984,6 @@ app.get('/api/flashcards-library', async (req, res) => {
 app.get('/api/library-analytics', async (req, res) => {
   try {
     const specialty = String(req.query.specialty || '').trim();
-
-    const analytics = await getLibraryAnalytics({
-      specialty,
-    });
-
-    return res.json(analytics);
-  } catch (error) {
-    console.error('❌ Erro ao carregar analytics da biblioteca:', error.message);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/library-analytics', async (req, res) => {
-  try {
-    const specialty = String(req.query.specialty || '').trim();
     const deckId = String(req.query.deckId || '').trim();
 
     const analytics = await getLibraryAnalytics({
@@ -3912,14 +3901,40 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
     }
 
     const result = await generateFlashcardsWithGemini(run.enriched_transcript);
+
+    const enrichedGeneratedFlashcards = (result.flashcards || []).map((card) => {
+      const currentTags = Array.isArray(card.tags) ? card.tags : [];
+
+      return {
+        ...card,
+        tags: Array.from(
+          new Set([
+            ...currentTags,
+            'texto enriquecido',
+            'flashcard enriquecido',
+            'origem:texto-enriquecido',
+          ])
+        ),
+        nota_preceptor: [
+          card.nota_preceptor || card.preceptor_note || card.preceptorNote || '',
+          'Origem: flashcard criado automaticamente a partir do texto enriquecido/aprovado.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      };
+    });
+
     const updatedRun = await updateStudyRunEnrichedFlashcards(
       run.id,
-      result.flashcards,
+      enrichedGeneratedFlashcards,
       result.modelUsed
     );
 
+    let librarySaved = false;
+    let libraryWarning = null;
+
     try {
-      await saveFlashcardsToLibrary({
+      const savedLibraryCards = await saveFlashcardsToLibrary({
         theme:
           Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 1
             ? updatedRun.secondary_topics[1]
@@ -3932,7 +3947,11 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
             ? updatedRun.secondary_topics[0]
             : '',
       });
+
+      librarySaved = Array.isArray(savedLibraryCards) && savedLibraryCards.length > 0;
     } catch (libraryError) {
+      libraryWarning = libraryError.message;
+
       console.warn(
         '⚠️ Falha ao salvar flashcards enriquecidos na biblioteca:',
         libraryError.message
@@ -3943,6 +3962,8 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
       run: updatedRun,
       flashcards: updatedRun.enriched_flashcards || [],
       enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
+      librarySaved,
+      libraryWarning,
     });
   } catch (error) {
     console.error('❌ Erro ao gerar flashcards do texto enriquecido:', error.message);

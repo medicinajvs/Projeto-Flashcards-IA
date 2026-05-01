@@ -52,17 +52,45 @@ const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
 function normalizeFlashcards(rawFlashcards) {
   if (!Array.isArray(rawFlashcards)) return [];
 
-  return rawFlashcards.map((card, index) => ({
-    id: card.id ?? `card-${index}`,
-    question: card.question ?? card.pergunta ?? '',
-    answer: card.answer ?? card.resposta ?? '',
-    preceptorNote: card.preceptorNote ?? card.nota_preceptor ?? null,
-    difficulty: card.difficulty || 'medium',
-    reviewed:
-      typeof card.reviewed === 'boolean'
-        ? card.reviewed
-        : Boolean((card.question ?? card.pergunta) && (card.answer ?? card.resposta)),
-  }));
+  return rawFlashcards.map((card, index) => {
+    const tags = Array.isArray(card.tags) ? card.tags : [];
+
+    return {
+      id: card.id ?? `card-${index}`,
+      question: card.question ?? card.pergunta ?? '',
+      answer: card.answer ?? card.resposta ?? '',
+      preceptorNote:
+        card.preceptorNote ??
+        card.nota_preceptor ??
+        card.preceptor_note ??
+        null,
+      difficulty: card.difficulty || 'medium',
+      tags,
+      origin:
+        card.origin ||
+        card.source_type ||
+        (tags.some((tag) => String(tag).toLowerCase().includes('texto enriquecido'))
+          ? 'enriched'
+          : ''),
+      reviewed:
+        typeof card.reviewed === 'boolean'
+          ? card.reviewed
+          : Boolean((card.question ?? card.pergunta) && (card.answer ?? card.resposta)),
+    };
+  });
+}
+
+function isEnrichedGeneratedFlashcard(card) {
+  const tags = Array.isArray(card?.tags)
+    ? card.tags.map((tag) => String(tag).toLowerCase())
+    : [];
+
+  return (
+    card?.origin === 'enriched' ||
+    tags.includes('origem:texto-enriquecido') ||
+    tags.includes('texto enriquecido') ||
+    tags.includes('flashcard enriquecido')
+  );
 }
 
 function buildHistoryPreview(text) {
@@ -1161,6 +1189,7 @@ export default function AdvancedFlashcardPoC() {
   const librarySectionRef = useRef(null);
   const studySessionSectionRef = useRef(null);
   const spacedReviewSectionRef = useRef(null);
+  const studyCardAreaRef = useRef(null);
   const [isSectionSidebarExpanded, setIsSectionSidebarExpanded] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [videoFile, setVideoFile] = useState(null);
@@ -1172,7 +1201,7 @@ export default function AdvancedFlashcardPoC() {
   const [generateFlashcardsNow, setGenerateFlashcardsNow] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingSavedFlashcards, setIsGeneratingSavedFlashcards] = useState(false);
-  
+  const [shouldScrollToStudyCard, setShouldScrollToStudyCard] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [flashcards, setFlashcards] = useState([]);
   const [currentRunId, setCurrentRunId] = useState(null);
@@ -1193,6 +1222,10 @@ export default function AdvancedFlashcardPoC() {
   const [studyTopic, setStudyTopic] = useState('');
   const [studyDeckId, setStudyDeckId] = useState('');
   const [currentStudyCardIndex, setCurrentStudyCardIndex] = useState(0);
+  const [studyPreviewCards, setStudyPreviewCards] = useState([]);
+  const [studyPreviewSummary, setStudyPreviewSummary] = useState(null);
+  const [isLoadingStudyPreview, setIsLoadingStudyPreview] = useState(false);
+  const [studySelectionSummary, setStudySelectionSummary] = useState(null);
   const [sortBy, setSortBy] = useState('newest');
   const [historySpecialtyFilter, setHistorySpecialtyFilter] = useState('');
   const [historyTopicFilter, setHistoryTopicFilter] = useState('');
@@ -1229,6 +1262,8 @@ export default function AdvancedFlashcardPoC() {
   const [libraryMode, setLibraryMode] = useState('deck');
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
   const [isSavingCardsToLibrary, setIsSavingCardsToLibrary] = useState(false);
+  const [flashcardsOrigin, setFlashcardsOrigin] = useState('original');
+  const [flashcardsLibrarySaveStatus, setFlashcardsLibrarySaveStatus] = useState('idle');
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckSpecialty, setNewDeckSpecialty] = useState('');
   const [newDeckSubSpecialty, setNewDeckSubSpecialty] = useState('');
@@ -1381,6 +1416,8 @@ export default function AdvancedFlashcardPoC() {
     setMnemonicFlashcardsCreated(false);
     setTranscript('');
     setFlashcards([]);
+    setFlashcardsOrigin('original');
+    setFlashcardsLibrarySaveStatus('idle');
     setCurrentRunId(null);
     setCurrentFilename('');
     setEditingAppliedBlockId(null);
@@ -2044,6 +2081,8 @@ export default function AdvancedFlashcardPoC() {
     setError(null);
     setTranscript('');
     setFlashcards([]);
+    setFlashcardsOrigin('original');
+    setFlashcardsLibrarySaveStatus('idle');
     setCurrentRunId(null);
     setCurrentFilename('');
     setEvidenceAnalysis(null);
@@ -2081,6 +2120,8 @@ export default function AdvancedFlashcardPoC() {
 
       setTranscript(data.transcript || '');
       setFlashcards(normalizeFlashcards(data.flashcards || []));
+      setFlashcardsOrigin('original');
+      setFlashcardsLibrarySaveStatus('idle');
       setCurrentRunId(savedRun?.id ?? null);
       if (savedRun?.id) {
         await loadSavedEvidenceAnalysis(savedRun.id);
@@ -2132,7 +2173,15 @@ export default function AdvancedFlashcardPoC() {
       setCurrentRunId(run.id);
       setCurrentFilename(run.original_filename || '');
       setTranscript(run.transcript || '');
-      setFlashcards(normalizeFlashcards(run.enriched_flashcards || run.flashcards || []));
+      const loadedFlashcards = normalizeFlashcards(run.enriched_flashcards || run.flashcards || []);
+
+      setFlashcards(loadedFlashcards);
+      setFlashcardsOrigin(
+        Array.isArray(run.enriched_flashcards) && run.enriched_flashcards.length > 0
+          ? 'enriched'
+          : 'original'
+      );
+      setFlashcardsLibrarySaveStatus('idle');
       setCurrentSpecialty(run.specialty || '');
       setCurrentSecondaryTopics(Array.isArray(run.secondary_topics) ? run.secondary_topics : []);
       setCurrentAutoTags(Array.isArray(run.auto_tags) ? run.auto_tags : []);
@@ -2220,6 +2269,8 @@ export default function AdvancedFlashcardPoC() {
       setFlashcards(normalizeFlashcards(run.flashcards || []));
       setCurrentFilename(run.original_filename || '');
       setFlashcardsViewMode('grid');
+      setFlashcardsOrigin('original');
+      setFlashcardsLibrarySaveStatus('idle');
 
       loadHistoryDebounced(historySearch);
     } catch (err) {
@@ -2801,6 +2852,8 @@ export default function AdvancedFlashcardPoC() {
       setFlashcards(normalizeFlashcards(data.flashcards || data.mnemonicFlashcards || []));
       setEnrichedFlashcardsGeneratedAt(data.enrichedFlashcardsGeneratedAt || null);
       setFlashcardsViewMode('grid');
+      setFlashcardsOrigin('mnemonic');
+      setFlashcardsLibrarySaveStatus('idle');
       setMnemonicFlashcardsCreated(true);
 
       loadHistoryDebounced(historySearch);
@@ -2902,11 +2955,27 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
-  const generateFlashcardsFromEnrichedRun = async (runIdParam = null) => {
+  const generateFlashcardsFromEnrichedRun = async (
+    runIdParam = null,
+    options = {}
+  ) => {
     const targetRunId = runIdParam || currentRunId;
+    const {
+      persistCurrentText = false,
+      scrollToExclusiveSession = false,
+    } = options;
 
     if (!targetRunId) {
       setError('Nenhuma transcrição salva está aberta.');
+      return;
+    }
+
+    const enrichedTextForGeneration = String(
+      approvedEnrichedTranscript || enrichedTranscript || ''
+    ).trim();
+
+    if (persistCurrentText && !enrichedTextForGeneration) {
+      setError('Não há texto enriquecido/aprovado disponível para gerar flashcards.');
       return;
     }
 
@@ -2914,6 +2983,13 @@ export default function AdvancedFlashcardPoC() {
     setError(null);
 
     try {
+      if (persistCurrentText) {
+        setEnrichedTranscript(enrichedTextForGeneration);
+        setApprovedEnrichedTranscript(enrichedTextForGeneration);
+
+        await saveEnrichedTranscriptDraft(enrichedTextForGeneration);
+      }
+
       const response = await fetch(
         `${API_BASE}/api/generate-flashcards-from-enriched-run/${targetRunId}`,
         {
@@ -2930,8 +3006,22 @@ export default function AdvancedFlashcardPoC() {
       setFlashcards(normalizeFlashcards(data.flashcards || []));
       setEnrichedFlashcardsGeneratedAt(data.enrichedFlashcardsGeneratedAt || null);
       setFlashcardsViewMode('grid');
+      setFlashcardsOrigin('enriched');
+      setFlashcardsLibrarySaveStatus(data.librarySaved ? 'saved' : 'error');
 
       loadHistoryDebounced(historySearch);
+
+      if (scrollToExclusiveSession) {
+        setIsHistoryDetailsOpen(true);
+
+        setTimeout(() => {
+          historyDetailsSectionRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        }, 180);
+      }
+
       return data;
     } catch (err) {
       setError(`Falha ao gerar flashcards do texto enriquecido: ${err.message}`);
@@ -3182,28 +3272,35 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
-  const saveCurrentFlashcardsToLibrary = async () => {
+  const saveCurrentFlashcardsToLibrary = async ({ cards = flashcards } = {}) => {
+    const cardsToSave = Array.isArray(cards) ? cards : flashcards;
+
     if (!selectedDeckId) {
       setError('Selecione um deck da biblioteca antes de salvar.');
       return;
     }
 
-    if (!flashcards.length) {
+    if (!cardsToSave.length) {
       setError('Não há flashcards carregados para salvar.');
       return;
     }
 
     try {
       setIsSavingCardsToLibrary(true);
+      setFlashcardsLibrarySaveStatus('saving');
       setError(null);
 
       const response = await fetch(`${API_BASE}/api/flashcard-decks/${selectedDeckId}/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cards: flashcards,
+          cards: cardsToSave,
           source_run_id: currentRunId || null,
           specialty: currentSpecialty || '',
+          sub_specialty:
+            Array.isArray(currentSecondaryTopics) && currentSecondaryTopics.length > 0
+              ? currentSecondaryTopics[0]
+              : '',
           secondary_topics: currentSecondaryTopics,
           auto_tags: currentAutoTags,
         }),
@@ -3219,7 +3316,14 @@ export default function AdvancedFlashcardPoC() {
       await loadLibraryDecks();
       await loadDeckTree();
       await loadLibraryAnalytics();
+
+      setFlashcardsLibrarySaveStatus('saved');
+
+      setTimeout(() => {
+        setFlashcardsLibrarySaveStatus('idle');
+      }, 2800);
     } catch (err) {
+      setFlashcardsLibrarySaveStatus('error');
       setError(`Falha ao salvar na biblioteca: ${err.message}`);
     } finally {
       setIsSavingCardsToLibrary(false);
@@ -3502,12 +3606,21 @@ export default function AdvancedFlashcardPoC() {
         queue = sortStudyQueueByUnansweredFirst(queue);
       }
 
+      const nextStudySelectionSummary = buildStudySelectionSummary({
+        mode: normalizedMode,
+        baseCards,
+        queue,
+      });
+
       setStudyMode(normalizedMode);
       setLibraryCards(baseCards);
       setStudyQueue(queue);
       setCurrentLibraryStudyIndex(0);
       setCurrentStudyCardIndex(0);
       setIsLibraryStudyFlipped(false);
+      setShouldScrollToStudyCard(queue.length > 0);
+      setStudyPreviewCards(queue);
+      setStudyPreviewSummary(nextStudySelectionSummary);
 
       if (!queue.length) {
         const modeLabel =
@@ -3525,6 +3638,9 @@ export default function AdvancedFlashcardPoC() {
       }
     } catch (err) {
       setStudyQueue([]);
+      setShouldScrollToStudyCard(false);
+      setStudyPreviewCards([]);
+      setStudyPreviewSummary(null);
       setCurrentLibraryStudyIndex(0);
       setError(`Falha ao montar sessão de estudo: ${err.message}`);
     } finally {
@@ -3552,6 +3668,236 @@ export default function AdvancedFlashcardPoC() {
       }
     );
   };
+
+  const buildStudySelectionSummary = ({
+    mode = 'all',
+    baseCards = [],
+    queue = [],
+  } = {}) => {
+    const modeLabels = {
+      all: 'Todos',
+      favorites: 'Favoritos',
+      due: 'Vencidos',
+      new: 'Novos',
+      deck: 'Deck selecionado',
+    };
+
+    const responseFilterLabels = {
+      all: 'Todas',
+      unanswered: 'Não respondidos',
+      again: 'Errei',
+      hard: 'Difícil',
+      good: 'Bom',
+      easy: 'Fácil',
+    };
+
+    const selectedDeck = libraryDecks.find(
+      (deck) => String(deck.id) === String(selectedDeckId)
+    );
+
+    const responseCounts = queue.reduce(
+      (acc, card) => {
+        const grade = getLibraryStudyLastGrade(card);
+
+        if (grade === 0) acc.unanswered += 1;
+        if (grade === 1) acc.again += 1;
+        if (grade === 2) acc.hard += 1;
+        if (grade === 3) acc.good += 1;
+        if (grade === 4) acc.easy += 1;
+
+        return acc;
+      },
+      {
+        unanswered: 0,
+        again: 0,
+        hard: 0,
+        good: 0,
+        easy: 0,
+      }
+    );
+
+    const difficultyCounts = queue.reduce((acc, card) => {
+      const difficulty = String(card.difficulty || 'medium').toLowerCase();
+
+      if (difficulty.includes('hard') || difficulty.includes('difficult')) {
+        acc.hard += 1;
+      } else if (difficulty.includes('easy')) {
+        acc.easy += 1;
+      } else {
+        acc.medium += 1;
+      }
+
+      return acc;
+    }, { easy: 0, medium: 0, hard: 0 });
+
+    const countBy = (cards, getter) => {
+      const map = new Map();
+
+      cards.forEach((card) => {
+        const value = getter(card);
+
+        if (!value) return;
+
+        map.set(value, (map.get(value) || 0) + 1);
+      });
+
+      return Array.from(map.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR'))
+        .slice(0, 5);
+    };
+
+    const bySpecialty = countBy(queue, (card) => card.specialty || 'Sem especialidade');
+
+    const byTopic = countBy(queue, (card) => {
+      if (card.sub_specialty) return card.sub_specialty;
+      if (card.study_tag) return card.study_tag;
+      if (Array.isArray(card.tags) && card.tags.length > 0) return card.tags[0];
+
+      return 'Sem tema';
+    });
+
+    const persistedStats = calculatePersistedStudyStats(queue);
+
+    const accuracy =
+      persistedStats.totalSeen > 0
+        ? Math.round((persistedStats.correctCount / persistedStats.totalSeen) * 100)
+        : 0;
+
+    const activeFilters = [
+      {
+        label: 'Modo',
+        value: modeLabels[mode] || 'Todos',
+      },
+      {
+        label: 'Especialidade',
+        value: studySpecialty || 'Todas as especialidades',
+      },
+      {
+        label: 'Tema/tag',
+        value: studyTopic || 'Todos os temas',
+      },
+      {
+        label: 'Resposta anterior',
+        value: responseFilterLabels[studyResponseFilter] || 'Todas',
+      },
+    ];
+
+    if (mode === 'deck' || selectedDeckId) {
+      activeFilters.push({
+        label: 'Deck',
+        value: selectedDeck?.name || 'Deck selecionado',
+      });
+    }
+
+    return {
+      modeLabel: modeLabels[mode] || 'Todos',
+      baseCount: baseCards.length,
+      selectedCount: queue.length,
+      dueCount: queue.filter(isLibraryCardDueForStudy).length,
+      newCount: queue.filter(isLibraryCardNewForStudy).length,
+      favoriteCount: queue.filter((card) => Boolean(card.is_favorite)).length,
+      enrichedCount: queue.filter(isEnrichedGeneratedFlashcard).length,
+      responseCounts,
+      difficultyCounts,
+      bySpecialty,
+      byTopic,
+      persistedStats,
+      accuracy,
+      activeFilters,
+    };
+  };
+
+  useEffect(() => {
+    let isActive = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsLoadingStudyPreview(true);
+
+        const normalizedMode = studyMode || 'all';
+
+        if (normalizedMode === 'deck' && !selectedDeckId) {
+          const emptySummary = buildStudySelectionSummary({
+            mode: normalizedMode,
+            baseCards: [],
+            queue: [],
+          });
+
+          if (isActive) {
+            setStudyPreviewCards([]);
+            setStudyPreviewSummary(emptySummary);
+          }
+
+          return;
+        }
+
+        const baseCards = await fetchLibraryCardsDirectly({
+          deckId: normalizedMode === 'deck' ? selectedDeckId : '',
+          specialty: studySpecialty,
+          favorites: normalizedMode === 'favorites',
+          dueOnly: false,
+          search: '',
+          limit: 500,
+        });
+
+        let queue = [...baseCards];
+
+        if (normalizedMode === 'due') {
+          queue = queue.filter(isLibraryCardDueForStudy);
+        }
+
+        if (normalizedMode === 'new') {
+          queue = queue.filter(isLibraryCardNewForStudy);
+        }
+
+        if (studyTopic) {
+          queue = queue.filter((card) => cardMatchesStudyTopic(card, studyTopic));
+        }
+
+        if (normalizedMode === 'deck' && selectedDeckId) {
+          queue = queue.filter((card) => String(card.deck_id) === String(selectedDeckId));
+        }
+
+        queue = queue.filter((card) => cardMatchesStudyResponseFilter(card, studyResponseFilter));
+
+        if (studyResponseFilter === 'all') {
+          queue = sortStudyQueueByUnansweredFirst(queue);
+        }
+
+        const nextSummary = buildStudySelectionSummary({
+          mode: normalizedMode,
+          baseCards,
+          queue,
+        });
+
+        if (isActive) {
+          setStudyPreviewCards(queue);
+          setStudyPreviewSummary(nextSummary);
+        }
+      } catch (err) {
+        if (isActive) {
+          setStudyPreviewCards([]);
+          setStudyPreviewSummary(null);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingStudyPreview(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [
+    studyMode,
+    studySpecialty,
+    studyTopic,
+    studyResponseFilter,
+    selectedDeckId,
+  ]);
 
   const buildNextLibraryReviewState = (card, grade) => {
     return calculateNextSpacedReviewState(card, grade);
@@ -3768,6 +4114,23 @@ export default function AdvancedFlashcardPoC() {
     flashcards.length > 0 && currentStudyIndex >= 0 && currentStudyIndex < flashcards.length
       ? flashcards[currentStudyIndex]
       : null;
+
+  const flashcardsPreviewTitle =
+    flashcardsOrigin === 'enriched'
+      ? 'Flashcards gerados do texto enriquecido'
+      : flashcardsOrigin === 'mnemonic'
+        ? 'Flashcards gerados dos mnemônicos'
+        : 'Flashcards da sessão';
+
+  const flashcardsPreviewDescription =
+    flashcardsOrigin === 'enriched'
+      ? 'Estes cards foram criados a partir do texto enriquecido/aprovado desta sessão.'
+      : flashcardsOrigin === 'mnemonic'
+        ? 'Estes cards foram criados com base nos mnemônicos da análise de evidência.'
+        : 'Estes cards foram criados com base na transcrição original do estudo.';
+
+  const selectedDeckName =
+    libraryDecks.find((deck) => String(deck.id) === String(selectedDeckId))?.name || '';
 
   const recommendedHistoryItems = useMemo(() => {
     const missingTopics = Array.isArray(evidenceAnalysis?.missing_topics)
@@ -4400,6 +4763,19 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
+  const openExclusiveItemSession = () => {
+    if (!currentRunId) return;
+
+    setIsHistoryDetailsOpen(true);
+
+    setTimeout(() => {
+      historyDetailsSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 180);
+  };
+
   const sectionNavItems = [
     {
       id: 'upload',
@@ -4435,6 +4811,14 @@ export default function AdvancedFlashcardPoC() {
       icon: Wand2,
       ref: enrichedSectionRef,
       visible: Boolean(transcript),
+    },
+    {
+      id: 'exclusive-item-session',
+      label: 'Sessão do Item',
+      icon: PlayCircle,
+      ref: historyDetailsSectionRef,
+      visible: Boolean(currentRunId),
+      onClick: openExclusiveItemSession,
     },
     {
       id: 'library',
@@ -5044,6 +5428,21 @@ export default function AdvancedFlashcardPoC() {
     currentLibraryStudyIndex < studyQueue.length
       ? studyQueue[currentLibraryStudyIndex]
       : null;
+
+  useEffect(() => {
+    if (!shouldScrollToStudyCard || !currentLibraryStudyCard) return;
+
+    const timer = setTimeout(() => {
+      studyCardAreaRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+
+      setShouldScrollToStudyCard(false);
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [shouldScrollToStudyCard, currentLibraryStudyCard]);
 
   const currentLibraryStudyLastGrade = currentLibraryStudyCard
     ? getLibraryStudyLastGrade(currentLibraryStudyCard)
@@ -5767,19 +6166,22 @@ export default function AdvancedFlashcardPoC() {
   };
 
   const approveEnrichmentChanges = async () => {
-    const finalText = enrichedTranscript || transcript || '';
+    const finalText = String(enrichedTranscript || transcript || '').trim();
 
-    if (!finalText.trim()) {
+    if (!finalText) {
       setError('Não há texto enriquecido disponível para aprovar.');
       return;
     }
 
     try {
       setEnrichmentApprovalStatus('saving');
+
       setApprovedEnrichedTranscript(finalText);
+      setEnrichedTranscript(finalText);
+      setComparisonMode('enriched');
 
       if (currentRunId) {
-        await saveEnrichedTranscriptDraft();
+        await saveEnrichedTranscriptDraft(finalText);
       }
 
       setEnrichmentApprovalStatus('saved');
@@ -5790,11 +6192,11 @@ export default function AdvancedFlashcardPoC() {
           behavior: 'smooth',
           block: 'start',
         });
-      }, 180);
+      }, 650);
 
       setTimeout(() => {
         setEnrichmentApprovalStatus('idle');
-      }, 2400);
+      }, 3600);
     } catch (err) {
       setEnrichmentApprovalStatus('idle');
       setError(`Falha ao aprovar melhorias: ${err.message}`);
@@ -5864,6 +6266,18 @@ export default function AdvancedFlashcardPoC() {
 
   return (
     <>
+    <style>{`
+      .no-visible-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .no-visible-scrollbar::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
+      }
+    `}</style>
     <div className="min-h-screen bg-[#f5f7fb] font-sans text-slate-800">
       <aside
         className={`hidden lg:flex fixed top-6 left-6 z-40 h-[calc(100vh-48px)] ${
@@ -5894,7 +6308,7 @@ export default function AdvancedFlashcardPoC() {
         </div>
 
         <div
-          className={`flex-1 flex flex-col transition-all duration-300 ${
+          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain no-visible-scrollbar flex flex-col transition-all duration-300 ${
             isSectionSidebarExpanded
               ? 'p-3 gap-2 items-stretch'
               : 'py-3 px-0 gap-3 items-center justify-start'
@@ -5906,7 +6320,14 @@ export default function AdvancedFlashcardPoC() {
             return (
               <button
                 key={item.id}
-                onClick={() => scrollToSection(item.ref)}
+                onClick={() => {
+                  if (item.onClick) {
+                    item.onClick();
+                    return;
+                  }
+
+                  scrollToSection(item.ref);
+                }}
                 className={`text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 ${
                   isSectionSidebarExpanded
                     ? 'w-full flex items-center justify-start gap-3 rounded-2xl px-3 py-3'
@@ -6602,7 +7023,7 @@ export default function AdvancedFlashcardPoC() {
                     className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
                   >
                     <RefreshCw size={16} />
-                    Regenerar
+                    Regenerar do original
                   </button>
 
                   <button
@@ -8078,11 +8499,33 @@ export default function AdvancedFlashcardPoC() {
 
                   <button
                     type="button"
-                    onClick={() => setComparisonMode('enriched')}
-                    className="px-6 py-2.5 rounded-xl bg-[#18181b] hover:bg-[#27272a] text-white font-medium text-sm transition-colors shadow-md flex items-center gap-2"
+                    onClick={approveEnrichmentChanges}
+                    disabled={enrichmentApprovalStatus === 'saving'}
+                    className={`relative px-6 py-2.5 rounded-xl text-white font-medium text-sm transition-all shadow-md flex items-center gap-2 overflow-hidden disabled:cursor-not-allowed ${
+                      enrichmentApprovalStatus === 'saved'
+                        ? 'bg-emerald-600 shadow-emerald-200 scale-[1.02]'
+                        : enrichmentApprovalStatus === 'saving'
+                          ? 'bg-indigo-600 opacity-90'
+                          : 'bg-[#18181b] hover:bg-[#27272a]'
+                    }`}
                   >
-                    <Check className="w-4 h-4" />
-                    Aprovar Melhorias
+                    {enrichmentApprovalStatus === 'saved' ? (
+                      <>
+                        <span className="absolute inset-0 bg-emerald-400/20 animate-ping" />
+                        <Check className="relative z-10 w-4 h-4" />
+                        <span className="relative z-10">Melhorias aprovadas</span>
+                      </>
+                    ) : enrichmentApprovalStatus === 'saving' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Aplicando melhorias...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Aprovar Melhorias
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -8191,15 +8634,70 @@ export default function AdvancedFlashcardPoC() {
             )}
           </div>
 
-          <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-y-auto">
+          <div
+            className={`relative text-sm leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-y-auto rounded-xl p-4 transition-all duration-500 ${
+              enrichmentApprovalStatus === 'saved'
+                ? 'bg-emerald-50 text-emerald-950 ring-2 ring-emerald-200 shadow-sm'
+                : 'bg-white text-slate-600'
+            }`}
+          >
+            {enrichmentApprovalStatus === 'saved' ? (
+              <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 px-4 py-3 bg-emerald-100/95 backdrop-blur border-b border-emerald-200 text-emerald-800 text-xs font-black uppercase tracking-[0.14em] flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                Texto aprovado aplicado nesta sessão
+              </div>
+            ) : null}
+
             {approvedEnrichedTranscript || enrichedTranscript || transcript || 'Sem transcrição carregada.'}
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 flex-1 min-h-0 flex flex-col">
-          <h3 className="text-lg font-bold text-slate-900 mb-3 shrink-0">
-            Prévia dos flashcards
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 shrink-0">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">
+                {flashcardsPreviewTitle}
+              </h3>
+
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                {flashcardsPreviewDescription}
+              </p>
+            </div>
+
+            {flashcardsOrigin === 'enriched' && flashcards.length > 0 ? (
+              <div className="flex flex-col items-stretch sm:items-end gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 self-start sm:self-end rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] border ${
+                    flashcardsLibrarySaveStatus === 'saved'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                      : flashcardsLibrarySaveStatus === 'error'
+                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                  }`}
+                >
+                  {flashcardsLibrarySaveStatus === 'error' ? (
+                    <AlertCircle className="w-3.5 h-3.5" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+
+                  {flashcardsLibrarySaveStatus === 'saved'
+                    ? 'Salvo automaticamente'
+                    : flashcardsLibrarySaveStatus === 'error'
+                      ? 'Biblioteca não confirmada'
+                      : 'Origem: texto enriquecido'}
+                </span>
+
+                <p className="text-[11px] text-slate-400 max-w-[260px] text-left sm:text-right">
+                  {flashcardsLibrarySaveStatus === 'saved'
+                    ? 'Estes flashcards foram criados a partir do texto enriquecido e enviados automaticamente para a Biblioteca.'
+                    : flashcardsLibrarySaveStatus === 'error'
+                      ? 'Os flashcards foram criados no item, mas o salvamento automático na Biblioteca não foi confirmado.'
+                      : 'Estes flashcards foram criados a partir do texto enriquecido/aprovado.'}
+                </p>
+              </div>
+            ) : null}
+          </div>
 
           {flashcards.length === 0 ? (
             <p className="text-sm text-slate-500">
@@ -8212,9 +8710,18 @@ export default function AdvancedFlashcardPoC() {
                   key={card.id || index}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                 >
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400 mb-2">
-                    Flashcard {index + 1}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                      Flashcard {index + 1}
+                    </p>
+
+                    {isEnrichedGeneratedFlashcard(card) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-indigo-700 border border-indigo-100">
+                        <Wand2 className="w-3 h-3" />
+                        Enriquecido
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-sm font-semibold text-slate-900 line-clamp-2">
                     {card.question}
                   </p>
@@ -8304,11 +8811,20 @@ export default function AdvancedFlashcardPoC() {
             </button>
 
             <button
-              onClick={() => generateFlashcardsFromSavedRun(true)}
-              disabled={!currentRunId || isGeneratingSavedFlashcards}
-              className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+              onClick={() =>
+                generateFlashcardsFromEnrichedRun(null, {
+                  persistCurrentText: true,
+                  scrollToExclusiveSession: true,
+                })
+              }
+              disabled={
+                !currentRunId ||
+                isGeneratingEnrichedFlashcards ||
+                !(approvedEnrichedTranscript || enrichedTranscript)
+              }
+              className="px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition-colors disabled:opacity-50"
             >
-              Regenerar flashcards
+              {isGeneratingEnrichedFlashcards ? 'Gerando...' : 'Regenerar pelo texto enriquecido'}
             </button>
 
             <button
@@ -9450,6 +9966,7 @@ export default function AdvancedFlashcardPoC() {
                         { id: 'favorites', label: 'Favoritos' },
                         { id: 'due', label: 'Vencidos' },
                         { id: 'new', label: 'Novos' },
+                        { id: 'deck', label: 'Deck selecionado' },
                       ],
                     },
                   ]}
@@ -9531,31 +10048,327 @@ export default function AdvancedFlashcardPoC() {
 
               </div>
 
+              {studySelectionSummary ? (
+                <div className="rounded-3xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500 mb-1">
+                        Resumo da sessão montada
+                      </p>
+                      <h3 className="text-lg font-black text-slate-900">
+                        {studySelectionSummary.selectedCount} flashcards selecionados para estudo
+                      </h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Base analisada: {studySelectionSummary.baseCount} cards antes dos filtros finais.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {studySelectionSummary.activeFilters.map((filter) => (
+                        <span
+                          key={`${filter.label}-${filter.value}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                        >
+                          <span className="text-slate-400">{filter.label}:</span>
+                          <span className="text-slate-800">{filter.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">
+                        Selecionados
+                      </p>
+                      <p className="text-2xl font-black text-indigo-700 mt-1">
+                        {studySelectionSummary.selectedCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Novos
+                      </p>
+                      <p className="text-2xl font-black text-slate-800 mt-1">
+                        {studySelectionSummary.newCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-amber-500">
+                        Vencidos
+                      </p>
+                      <p className="text-2xl font-black text-amber-700 mt-1">
+                        {studySelectionSummary.dueCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-pink-50 border border-pink-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-pink-500">
+                        Favoritos
+                      </p>
+                      <p className="text-2xl font-black text-pink-700 mt-1">
+                        {studySelectionSummary.favoriteCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-violet-500">
+                        Enriquecidos
+                      </p>
+                      <p className="text-2xl font-black text-violet-700 mt-1">
+                        {studySelectionSummary.enrichedCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-emerald-500">
+                        Acerto prévio
+                      </p>
+                      <p className="text-2xl font-black text-emerald-700 mt-1">
+                        {studySelectionSummary.accuracy}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="px-5 pb-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Resposta anterior
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {[
+                          ['Não respondidos', studySelectionSummary.responseCounts.unanswered],
+                          ['Errei', studySelectionSummary.responseCounts.again],
+                          ['Difícil', studySelectionSummary.responseCounts.hard],
+                          ['Bom', studySelectionSummary.responseCounts.good],
+                          ['Fácil', studySelectionSummary.responseCounts.easy],
+                        ].map(([label, count]) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600">{label}</span>
+                            <span className="font-black text-slate-900">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Dificuldade dos cards
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {[
+                          ['Fácil', studySelectionSummary.difficultyCounts.easy],
+                          ['Média', studySelectionSummary.difficultyCounts.medium],
+                          ['Difícil', studySelectionSummary.difficultyCounts.hard],
+                        ].map(([label, count]) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600">{label}</span>
+                            <span className="font-black text-slate-900">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Principais temas
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {(studySelectionSummary.byTopic.length
+                          ? studySelectionSummary.byTopic
+                          : [{ name: 'Sem tema detectado', count: 0 }]
+                        ).map((item) => (
+                          <div key={item.name} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600 truncate">{item.name}</span>
+                            <span className="font-black text-slate-900">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-slate-700">
+                    Selecione os filtros e clique em “Iniciar estudo”.
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Depois disso, esta área mostrará quantos flashcards entraram na sessão e a composição dos cards selecionados.
+                  </p>
+                </div>
+              )}
+
               <p className="text-xs text-slate-400 font-medium">
                 Dados salvos a partir do histórico de revisão dos flashcards.
               </p>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <p className="text-xs text-slate-400 uppercase font-bold">Vistos</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-2">{visibleStudyStats.totalSeen}</p>
-                </div>
+              {studyPreviewSummary ? (
+                <div className="rounded-3xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500">
+                          Prévia dinâmica da configuração
+                        </p>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <p className="text-xs text-slate-400 uppercase font-bold">Acertos</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-2">{visibleStudyStats.correctCount}</p>
-                </div>
+                        {isLoadingStudyPreview ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Atualizando
+                          </span>
+                        ) : null}
+                      </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <p className="text-xs text-slate-400 uppercase font-bold">Difíceis</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-2">{visibleStudyStats.hardCount}</p>
-                </div>
+                      <h3 className="text-lg font-black text-slate-900">
+                        {studyPreviewSummary.selectedCount} flashcards serão estudados
+                      </h3>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <p className="text-xs text-slate-400 uppercase font-bold">Fáceis</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-2">{visibleStudyStats.easyCount}</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Base analisada: {studyPreviewSummary.baseCount} cards encontrados antes dos filtros finais.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {studyPreviewSummary.activeFilters.map((filter) => (
+                        <span
+                          key={`${filter.label}-${filter.value}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                        >
+                          <span className="text-slate-400">{filter.label}:</span>
+                          <span className="text-slate-800">{filter.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                    {[
+                      {
+                        label: 'Selecionados',
+                        value: studyPreviewSummary.selectedCount,
+                        className: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+                      },
+                      {
+                        label: 'Novos',
+                        value: studyPreviewSummary.newCount,
+                        className: 'bg-slate-50 border-slate-100 text-slate-800',
+                      },
+                      {
+                        label: 'Vencidos',
+                        value: studyPreviewSummary.dueCount,
+                        className: 'bg-amber-50 border-amber-100 text-amber-700',
+                      },
+                      {
+                        label: 'Favoritos',
+                        value: studyPreviewSummary.favoriteCount,
+                        className: 'bg-pink-50 border-pink-100 text-pink-700',
+                      },
+                      {
+                        label: 'Enriquecidos',
+                        value: studyPreviewSummary.enrichedCount,
+                        className: 'bg-violet-50 border-violet-100 text-violet-700',
+                      },
+                      {
+                        label: 'Acerto prévio',
+                        value: `${studyPreviewSummary.accuracy}%`,
+                        className: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+                      },
+                    ].map((metric) => (
+                      <div
+                        key={metric.label}
+                        className={`rounded-2xl border p-4 ${metric.className}`}
+                      >
+                        <p className="text-xs font-bold uppercase tracking-wider opacity-70">
+                          {metric.label}
+                        </p>
+                        <p className="text-2xl font-black mt-1">
+                          {metric.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="px-5 pb-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Resposta anterior
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {[
+                          ['Não respondidos', studyPreviewSummary.responseCounts.unanswered],
+                          ['Errei', studyPreviewSummary.responseCounts.again],
+                          ['Difícil', studyPreviewSummary.responseCounts.hard],
+                          ['Bom', studyPreviewSummary.responseCounts.good],
+                          ['Fácil', studyPreviewSummary.responseCounts.easy],
+                        ].map(([label, count]) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600">{label}</span>
+                            <span className="font-black text-slate-900">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Dificuldade dos cards
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {[
+                          ['Fácil', studyPreviewSummary.difficultyCounts.easy],
+                          ['Média', studyPreviewSummary.difficultyCounts.medium],
+                          ['Difícil', studyPreviewSummary.difficultyCounts.hard],
+                        ].map(([label, count]) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600">{label}</span>
+                            <span className="font-black text-slate-900">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-3">
+                        Principais temas
+                      </p>
+
+                      <div className="space-y-2 text-sm">
+                        {(studyPreviewSummary.byTopic.length
+                          ? studyPreviewSummary.byTopic
+                          : [{ name: 'Sem tema detectado', count: 0 }]
+                        ).map((item) => (
+                          <div key={item.name} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600 truncate">{item.name}</span>
+                            <span className="font-black text-slate-900">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {studyPreviewSummary.selectedCount === 0 ? (
+                    <div className="mx-5 mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      Nenhum flashcard encontrado com a configuração atual. Ajuste os filtros antes de iniciar.
+                    </div>
+                  ) : null}
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-slate-700">
+                    Configure os filtros para montar uma prévia da sessão.
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Esta área será atualizada automaticamente conforme você alterar modo, especialidade, tema, deck ou resposta anterior.
+                  </p>
+                </div>
+              )}
 
               {!currentLibraryStudyCard ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
@@ -9566,7 +10379,10 @@ export default function AdvancedFlashcardPoC() {
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-4">
+                <div
+                  ref={studyCardAreaRef}
+                  className="flex flex-col items-center justify-center py-4"
+                >
                   <div className="flex items-center justify-between w-full max-w-2xl mb-6">
                     <span className="text-sm font-semibold text-slate-500">
                       Card {currentLibraryStudyIndex + 1} de {studyQueue.length}
