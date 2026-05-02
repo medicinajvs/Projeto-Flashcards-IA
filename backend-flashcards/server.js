@@ -6,7 +6,14 @@ const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} = require('@aws-sdk/client-s3');
+
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { google } = require('googleapis');
 require('dotenv').config();
 
@@ -991,6 +998,93 @@ async function uploadVideoToR2(localPath, originalFilename, mimeType, folder = '
   };
 }
 
+function buildR2PublicUrl(key) {
+  return R2_PUBLIC_BASE_URL
+    ? `${R2_PUBLIC_BASE_URL.replace(/\/$/, '')}/${key}`
+    : null;
+}
+
+function buildTempVideoKey(originalFilename = '') {
+  const normalizedName = normalizeUtf8Filename(originalFilename);
+  const sanitizedName = sanitizeFilename(normalizedName);
+
+  return `temp-videos/${Date.now()}-${Math.random().toString(36).slice(2)}-${sanitizedName}`;
+}
+
+function buildPermanentAudioKey(originalFilename = '') {
+  const normalizedName = normalizeUtf8Filename(originalFilename);
+  const sanitizedName = sanitizeFilename(normalizedName).replace(/\.[^.]+$/, '');
+
+  return `audio/${Date.now()}-${Math.random().toString(36).slice(2)}-${sanitizedName}.mp3`;
+}
+
+async function createR2PresignedUploadUrl({
+  key,
+  contentType = 'application/octet-stream',
+  expiresIn = 60 * 30,
+}) {
+  if (!r2) {
+    throw new Error('Cloudflare R2 não configurado.');
+  }
+
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(r2, command, { expiresIn });
+
+  return {
+    key,
+    uploadUrl,
+    publicUrl: buildR2PublicUrl(key),
+    expiresIn,
+  };
+}
+
+async function uploadAudioToR2(localPath, originalFilename) {
+  if (!r2) {
+    return {
+      audioStorageProvider: null,
+      audioObjectKey: null,
+      audioUrl: null,
+      audioSizeBytes: null,
+    };
+  }
+
+  const key = buildPermanentAudioKey(originalFilename);
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: fs.createReadStream(localPath),
+      ContentType: 'audio/mpeg',
+    })
+  );
+
+  const stats = fs.statSync(localPath);
+
+  return {
+    audioStorageProvider: 'cloudflare-r2',
+    audioObjectKey: key,
+    audioUrl: buildR2PublicUrl(key),
+    audioSizeBytes: stats.size,
+  };
+}
+
+async function deleteR2Object(key) {
+  if (!r2 || !key) return;
+
+  await r2.send(
+    new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+    })
+  );
+}
+
 function getRunEnrichmentSupportTranscript(run = {}) {
   return String(run.enrichment_support_transcript || '').trim();
 }
@@ -1080,6 +1174,80 @@ async function saveStudyRun({
 
   if (error) {
     throw new Error(`Falha ao salvar no Supabase: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function createProcessingJob({
+  originalFilename,
+  originalFileSize,
+  originalMimeType,
+  tempVideoObjectKey,
+  shouldGenerateFlashcards = true,
+}) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado no backend.');
+  }
+
+  const { data, error } = await supabase
+    .from('processing_jobs')
+    .insert({
+      status: 'uploaded',
+      current_step: 'Upload concluído. Aguardando processamento.',
+      progress: 5,
+      original_filename: originalFilename,
+      original_file_size: originalFileSize || null,
+      original_mime_type: originalMimeType || null,
+      temp_video_object_key: tempVideoObjectKey,
+      temp_video_storage_provider: 'cloudflare-r2',
+      flashcards_provider: shouldGenerateFlashcards ? 'gemini' : null,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao criar job de processamento: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function getProcessingJobById(id) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado no backend.');
+  }
+
+  const { data, error } = await supabase
+    .from('processing_jobs')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao carregar job: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function updateProcessingJob(id, updates = {}) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado no backend.');
+  }
+
+  const { data, error } = await supabase
+    .from('processing_jobs')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao atualizar job: ${error.message}`);
   }
 
   return data;
@@ -3365,6 +3533,80 @@ app.post('/api/generate-flashcards-from-run/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Erro ao gerar flashcards do histórico:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/uploads/direct-video-url', async (req, res) => {
+  try {
+    const {
+      filename,
+      contentType,
+      size,
+      generateFlashcards = true,
+    } = req.body || {};
+
+    if (!filename) {
+      return res.status(400).json({ error: 'Nome do arquivo é obrigatório.' });
+    }
+
+    const key = buildTempVideoKey(filename);
+
+    const upload = await createR2PresignedUploadUrl({
+      key,
+      contentType: contentType || 'video/mp4',
+      expiresIn: 60 * 30,
+    });
+
+    return res.json({
+      ...upload,
+      originalFilename: filename,
+      originalFileSize: size || null,
+      originalMimeType: contentType || null,
+      generateFlashcards: Boolean(generateFlashcards),
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar URL de upload direto:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/processing-jobs', async (req, res) => {
+  try {
+    const {
+      originalFilename,
+      originalFileSize,
+      originalMimeType,
+      tempVideoObjectKey,
+      generateFlashcards = true,
+    } = req.body || {};
+
+    if (!tempVideoObjectKey) {
+      return res.status(400).json({ error: 'tempVideoObjectKey é obrigatório.' });
+    }
+
+    const job = await createProcessingJob({
+      originalFilename,
+      originalFileSize,
+      originalMimeType,
+      tempVideoObjectKey,
+      shouldGenerateFlashcards: Boolean(generateFlashcards),
+    });
+
+    return res.status(201).json({ job });
+  } catch (error) {
+    console.error('❌ Erro ao criar job:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/processing-jobs/:id', async (req, res) => {
+  try {
+    const job = await getProcessingJobById(req.params.id);
+
+    return res.json({ job });
+  } catch (error) {
+    console.error('❌ Erro ao consultar job:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });

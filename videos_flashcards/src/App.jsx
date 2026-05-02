@@ -1171,7 +1171,7 @@ function PremiumRichTextEditor({
 }
 
 export default function AdvancedFlashcardPoC() {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
   const GOOGLE_CALENDAR_CLIENT_ID = import.meta.env.VITE_GOOGLE_CALENDAR_CLIENT_ID || '';
   const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY || '';
   const GOOGLE_CALENDAR_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
@@ -1198,9 +1198,12 @@ export default function AdvancedFlashcardPoC() {
   const [enrichmentSupportFilename, setEnrichmentSupportFilename] = useState('');
   const [enrichmentSupportVideoUrl, setEnrichmentSupportVideoUrl] = useState('');
   const [enrichmentSupportProcessedAt, setEnrichmentSupportProcessedAt] = useState(null);
+
   const [generateFlashcardsNow, setGenerateFlashcardsNow] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingJobInfo, setProcessingJobInfo] = useState(null);
   const [isGeneratingSavedFlashcards, setIsGeneratingSavedFlashcards] = useState(false);
+
   const [shouldScrollToStudyCard, setShouldScrollToStudyCard] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [flashcards, setFlashcards] = useState([]);
@@ -1410,9 +1413,12 @@ export default function AdvancedFlashcardPoC() {
     setEnrichmentSupportFilename('');
     setEnrichmentSupportVideoUrl('');
     setEnrichmentSupportProcessedAt(null);
+
     setGenerateFlashcardsNow(true);
     setIsProcessing(false);
+    setProcessingJobInfo(null);
     setIsGeneratingSavedFlashcards(false);
+
     setMnemonicFlashcardsCreated(false);
     setTranscript('');
     setFlashcards([]);
@@ -2067,9 +2073,101 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const updateProcessingJobInfo = (updates = {}) => {
+    setProcessingJobInfo((prev) => ({
+      ...(prev || {}),
+      ...updates,
+    }));
+  };
+
+  const uploadFileToSignedUrl = ({ file, uploadUrl, contentType }) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.open('PUT', uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+
+        const uploadProgress = Math.round((event.loaded / event.total) * 100);
+
+        updateProcessingJobInfo({
+          status: 'uploading',
+          current_step: `Enviando vídeo para armazenamento temporário... ${uploadProgress}%`,
+          uploadProgress,
+          progress: Math.min(20, Math.max(1, Math.round(uploadProgress * 0.2))),
+        });
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+          return;
+        }
+
+        reject(new Error(`Falha no upload direto para o R2. Status ${xhr.status}.`));
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Falha de rede durante o upload direto para o R2.'));
+      };
+
+      xhr.send(file);
+    });
+  };
+
+  const waitForProcessingJob = async (jobId) => {
+    const maxAttempts = 1200;
+    const intervalMs = 3000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await fetch(`${API_BASE}/api/processing-jobs/${jobId}`);
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao consultar status do processamento.');
+      }
+
+      const job = data.job;
+
+      updateProcessingJobInfo({
+        id: job.id,
+        status: job.status,
+        current_step: job.current_step || 'Processando...',
+        progress: Number(job.progress || 0),
+        uploadProgress: 100,
+        error_message: job.error_message || '',
+        study_run_id: job.study_run_id || null,
+        audio_url: job.audio_url || null,
+      });
+
+      if (job.status === 'completed') {
+        return job;
+      }
+
+      if (job.status === 'error') {
+        throw new Error(job.error_message || 'Erro no processamento assíncrono.');
+      }
+
+      await wait(intervalMs);
+    }
+
+    throw new Error('Tempo limite ao aguardar conclusão do processamento.');
+  };
+
   const processVideo = async () => {
     if (!videoFile) {
       setError('Selecione um vídeo antes de processar.');
+      return;
+    }
+
+    if (enrichmentVideoFile) {
+      setError(
+        'O novo fluxo assíncrono da Fase 1 ainda processa apenas o vídeo principal. Remova o vídeo complementar por enquanto.'
+      );
       return;
     }
 
@@ -2078,6 +2176,12 @@ export default function AdvancedFlashcardPoC() {
     setEnrichedGeneratedAt(null);
     setEnrichedFlashcardsGeneratedAt(null);
     setIsProcessing(true);
+    setProcessingJobInfo({
+      status: 'preparing',
+      current_step: 'Preparando upload direto...',
+      progress: 0,
+      uploadProgress: 0,
+    });
     setError(null);
     setTranscript('');
     setFlashcards([]);
@@ -2096,62 +2200,113 @@ export default function AdvancedFlashcardPoC() {
     setCurrentAutoTags([]);
 
     try {
-      const formData = new FormData();
-      formData.append('video', videoFile);
-      formData.append('generateFlashcards', String(generateFlashcardsNow));
+      const contentType = videoFile.type || 'application/octet-stream';
 
-      if (enrichmentVideoFile) {
-        formData.append('enrichmentVideo', enrichmentVideoFile);
-      }
-
-      const response = await fetch(`${API_BASE}/api/process-video`, {
-        method: 'POST',
-        body: formData,
+      updateProcessingJobInfo({
+        status: 'preparing_upload',
+        current_step: 'Criando URL segura de upload...',
+        progress: 1,
+        uploadProgress: 0,
       });
 
-      const data = await parseResponseSafely(response);
+      const uploadUrlResponse = await fetch(`${API_BASE}/api/uploads/direct-video-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: videoFile.name,
+          contentType,
+          size: videoFile.size,
+          generateFlashcards: generateFlashcardsNow,
+        }),
+      });
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao processar o vídeo.');
+      const uploadData = await parseResponseSafely(uploadUrlResponse);
+
+      if (!uploadUrlResponse.ok) {
+        throw new Error(uploadData.error || 'Erro ao preparar upload direto.');
       }
 
-      const savedRun = data.savedRun ?? null;
-      hydrateEnrichmentSupportState(savedRun || data);
-
-      setTranscript(data.transcript || '');
-      setFlashcards(normalizeFlashcards(data.flashcards || []));
-      setFlashcardsOrigin('original');
-      setFlashcardsLibrarySaveStatus('idle');
-      setCurrentRunId(savedRun?.id ?? null);
-      if (savedRun?.id) {
-        await loadSavedEvidenceAnalysis(savedRun.id);
-        await loadSavedEnrichment(savedRun.id);
+      if (!uploadData.uploadUrl || !uploadData.key) {
+        throw new Error('Backend não retornou URL de upload ou chave temporária do R2.');
       }
-      setCurrentFilename(savedRun?.original_filename || videoFile.name || '');
-      setCurrentSpecialty(data.detectedSpecialty || savedRun?.specialty || '');
-      setCurrentSecondaryTopics(
-        Array.isArray(data.detectedSecondaryTopics)
-          ? data.detectedSecondaryTopics
-          : Array.isArray(savedRun?.secondary_topics)
-            ? savedRun.secondary_topics
-            : []
-      );
-      setCurrentAutoTags(
-        Array.isArray(data.detectedAutoTags)
-          ? data.detectedAutoTags
-          : Array.isArray(savedRun?.auto_tags)
-            ? savedRun.auto_tags
-            : []
-      );
-      setFlashcardsViewMode('grid');
 
-      loadHistoryDebounced(historySearch);
+      await uploadFileToSignedUrl({
+        file: videoFile,
+        uploadUrl: uploadData.uploadUrl,
+        contentType,
+      });
 
-      if (autoRunOnProcess && savedRun?.id) {
-        await runAutomationPipeline(savedRun);
+      updateProcessingJobInfo({
+        status: 'creating_job',
+        current_step: 'Upload concluído. Criando job de processamento...',
+        progress: 25,
+        uploadProgress: 100,
+      });
+
+      const jobResponse = await fetch(`${API_BASE}/api/processing-jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          originalFilename: uploadData.originalFilename || videoFile.name,
+          originalFileSize: uploadData.originalFileSize || videoFile.size,
+          originalMimeType: uploadData.originalMimeType || contentType,
+          tempVideoObjectKey: uploadData.key,
+          generateFlashcards: generateFlashcardsNow,
+        }),
+      });
+
+      const jobData = await parseResponseSafely(jobResponse);
+
+      if (!jobResponse.ok) {
+        throw new Error(jobData.error || 'Erro ao criar job de processamento.');
+      }
+
+      const jobId = jobData.job?.id;
+
+      if (!jobId) {
+        throw new Error('Backend não retornou o ID do job.');
+      }
+
+      updateProcessingJobInfo({
+        id: jobId,
+        status: jobData.job.status || 'uploaded',
+        current_step: jobData.job.current_step || 'Job criado. Aguardando worker...',
+        progress: Number(jobData.job.progress || 5),
+        uploadProgress: 100,
+      });
+
+      const completedJob = await waitForProcessingJob(jobId);
+
+      updateProcessingJobInfo({
+        ...completedJob,
+        status: 'completed',
+        current_step: completedJob.current_step || 'Processamento concluído.',
+        progress: 100,
+        uploadProgress: 100,
+      });
+
+      setCurrentFilename(videoFile.name || completedJob.original_filename || '');
+
+      if (completedJob.study_run_id) {
+        await openHistoryItem(completedJob.study_run_id);
+        loadHistoryDebounced(historySearch);
+      } else {
+        setTranscript(completedJob.transcript || '');
+        setFlashcards(normalizeFlashcards(completedJob.flashcards || []));
+        setFlashcardsViewMode('grid');
+        loadHistoryDebounced(historySearch);
       }
     } catch (err) {
-      setError(`Falha no processamento: ${err.message}`);
+      setError(`Falha no processamento assíncrono: ${err.message}`);
+      updateProcessingJobInfo({
+        status: 'error',
+        current_step: 'Erro no processamento.',
+        error_message: err.message,
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -6682,6 +6837,114 @@ export default function AdvancedFlashcardPoC() {
                                   automationPreset === 'deep' ? 'Automático profundo' :
                                   'Reopen inteligente'}
                     </div>
+
+                    {processingJobInfo ? (
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.14em] text-indigo-500">
+                              Processamento assíncrono
+                            </p>
+
+                            <p className="text-sm font-bold text-slate-800 mt-1">
+                              {processingJobInfo.current_step || 'Preparando processamento...'}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] border ${
+                              processingJobInfo.status === 'completed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : processingJobInfo.status === 'error'
+                                  ? 'bg-red-50 text-red-700 border-red-100'
+                                  : 'bg-white text-indigo-700 border-indigo-100'
+                            }`}
+                          >
+                            {processingJobInfo.status === 'completed' ? (
+                              <Check className="w-3.5 h-3.5" />
+                            ) : processingJobInfo.status === 'error' ? (
+                              <AlertCircle className="w-3.5 h-3.5" />
+                            ) : (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            )}
+
+                            {processingJobInfo.status === 'completed'
+                              ? 'Concluído'
+                              : processingJobInfo.status === 'error'
+                                ? 'Erro'
+                                : 'Em andamento'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1">
+                            <span>
+                              {processingJobInfo.status === 'uploading'
+                                ? 'Upload direto para o R2'
+                                : 'Progresso do job'}
+                            </span>
+                            <span>
+                              {Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  Number(
+                                    processingJobInfo.status === 'uploading'
+                                      ? processingJobInfo.uploadProgress
+                                      : processingJobInfo.progress
+                                  ) || 0
+                                )
+                              )}
+                              %
+                            </span>
+                          </div>
+
+                          <div className="h-2 rounded-full bg-white border border-indigo-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                processingJobInfo.status === 'error'
+                                  ? 'bg-red-500'
+                                  : processingJobInfo.status === 'completed'
+                                    ? 'bg-emerald-500'
+                                    : 'bg-indigo-500'
+                              }`}
+                              style={{
+                                width: `${Math.max(
+                                  0,
+                                  Math.min(
+                                    100,
+                                    Number(
+                                      processingJobInfo.status === 'uploading'
+                                        ? processingJobInfo.uploadProgress
+                                        : processingJobInfo.progress
+                                    ) || 0
+                                  )
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {processingJobInfo.id ? (
+                          <p className="text-[11px] text-slate-400">
+                            Job: {processingJobInfo.id}
+                          </p>
+                        ) : null}
+
+                        {processingJobInfo.status === 'completed' && !processingJobInfo.study_run_id ? (
+                          <p className="text-xs text-emerald-700 font-medium">
+                            Fase 1 concluída: áudio extraído e vídeo temporário removido. A criação automática do estudo entra na Fase 2.
+                          </p>
+                        ) : null}
+
+                        {processingJobInfo.status === 'error' && processingJobInfo.error_message ? (
+                          <p className="text-xs text-red-600 font-medium">
+                            {processingJobInfo.error_message}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <button
                       onClick={processVideo}
                       disabled={!videoFile || isProcessing}
@@ -6690,7 +6953,7 @@ export default function AdvancedFlashcardPoC() {
                       {isProcessing ? (
                         <>
                           <Loader2 className="animate-spin" size={20} />
-                          Processando vídeo...
+                          Processando em segundo plano...
                         </>
                       ) : (
                         <>
