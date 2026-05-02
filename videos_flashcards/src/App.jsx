@@ -2294,11 +2294,13 @@ export default function AdvancedFlashcardPoC() {
       if (completedJob.study_run_id) {
         await openHistoryItem(completedJob.study_run_id);
         loadHistoryDebounced(historySearch);
+        await refreshLibraryAfterProcessing();
       } else {
         setTranscript(completedJob.transcript || '');
         setFlashcards(normalizeFlashcards(completedJob.flashcards || []));
         setFlashcardsViewMode('grid');
         loadHistoryDebounced(historySearch);
+        await refreshLibraryAfterProcessing();
       }
     } catch (err) {
       setError(`Falha no processamento assíncrono: ${err.message}`);
@@ -3691,6 +3693,25 @@ export default function AdvancedFlashcardPoC() {
         value === normalizedTopic ||
         value.includes(normalizedTopic)
     );
+  };
+
+  const refreshLibraryAfterProcessing = async () => {
+    try {
+      await Promise.all([
+        loadLibraryDecks(),
+        loadDeckTree(),
+        loadLibraryAnalytics(),
+        loadLibraryCards({
+          deckId: '',
+          specialty: '',
+          favorites: false,
+          dueOnly: false,
+          search: '',
+        }),
+      ]);
+    } catch (err) {
+      console.warn('Falha ao atualizar biblioteca após processamento:', err.message);
+    }
   };
 
   const fetchLibraryCardsDirectly = async ({
