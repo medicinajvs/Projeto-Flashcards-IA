@@ -11,6 +11,10 @@ const {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } = require('@aws-sdk/client-s3');
 
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -45,6 +49,7 @@ const TEMP_AUDIO_DIR = path.join(ROOT_DIR, 'temp-audio');
 const REQUEST_TIMEOUT_MS = 120000;
 const DEFAULT_ARTICLES_PER_SOURCE = 6;
 const DEFAULT_REFERENCE_VIDEOS_LIMIT = 3;
+const MULTIPART_PART_SIZE_BYTES = 64 * 1024 * 1024;
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -1041,6 +1046,114 @@ async function createR2PresignedUploadUrl({
     publicUrl: buildR2PublicUrl(key),
     expiresIn,
   };
+}
+
+async function createR2MultipartUploadSession({
+  key,
+  contentType = 'application/octet-stream',
+}) {
+  if (!r2) {
+    throw new Error('Cloudflare R2 não configurado.');
+  }
+
+  const response = await r2.send(
+    new CreateMultipartUploadCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    })
+  );
+
+  if (!response.UploadId) {
+    throw new Error('R2 não retornou UploadId para multipart upload.');
+  }
+
+  return {
+    key,
+    uploadId: response.UploadId,
+  };
+}
+
+async function createR2MultipartPartUrl({
+  key,
+  uploadId,
+  partNumber,
+  expiresIn = 60 * 60 * 2,
+}) {
+  if (!r2) {
+    throw new Error('Cloudflare R2 não configurado.');
+  }
+
+  const command = new UploadPartCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    UploadId: uploadId,
+    PartNumber: Number(partNumber),
+  });
+
+  const uploadUrl = await getSignedUrl(r2, command, { expiresIn });
+
+  return {
+    key,
+    uploadId,
+    partNumber: Number(partNumber),
+    uploadUrl,
+    expiresIn,
+  };
+}
+
+async function completeR2MultipartUpload({
+  key,
+  uploadId,
+  parts = [],
+}) {
+  if (!r2) {
+    throw new Error('Cloudflare R2 não configurado.');
+  }
+
+  const normalizedParts = parts
+    .map((part) => ({
+      ETag: part.ETag || part.etag,
+      PartNumber: Number(part.PartNumber || part.partNumber),
+    }))
+    .filter((part) => part.ETag && Number.isFinite(part.PartNumber))
+    .sort((a, b) => a.PartNumber - b.PartNumber);
+
+  if (!normalizedParts.length) {
+    throw new Error('Nenhuma parte válida foi enviada para completar o multipart upload.');
+  }
+
+  await r2.send(
+    new CompleteMultipartUploadCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: normalizedParts,
+      },
+    })
+  );
+
+  return {
+    key,
+    publicUrl: buildR2PublicUrl(key),
+    parts: normalizedParts.length,
+  };
+}
+
+async function abortR2MultipartUpload({
+  key,
+  uploadId,
+}) {
+  if (!r2 || !key || !uploadId) return;
+
+  await r2.send(
+    new AbortMultipartUploadCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      UploadId: uploadId,
+    })
+  );
 }
 
 async function uploadAudioToR2(localPath, originalFilename) {
@@ -2531,6 +2644,16 @@ async function listStudyRuns({ page = 1, limit = 12, search = '' }) {
       enriched_transcript,
       flashcards_model,
       video_url,
+      video_object_key,
+      video_storage_provider,
+      audio_url,
+      audio_object_key,
+      audio_storage_provider,
+      audio_mime_type,
+      audio_size_bytes,
+      audio_duration_seconds,
+      source_video_discarded,
+      source_video_discarded_at,
       enrichment_support_filename,
       enrichment_support_transcript_preview,
       enrichment_support_video_url,
@@ -3555,7 +3678,7 @@ app.post('/api/uploads/direct-video-url', async (req, res) => {
     const upload = await createR2PresignedUploadUrl({
       key,
       contentType: contentType || 'video/mp4',
-      expiresIn: 60 * 30,
+      expiresIn: 60 * 60 * 2,
     });
 
     return res.json({
@@ -3567,6 +3690,122 @@ app.post('/api/uploads/direct-video-url', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Erro ao criar URL de upload direto:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/uploads/multipart-video/start', async (req, res) => {
+  try {
+    const {
+      filename,
+      contentType,
+      size,
+      generateFlashcards = true,
+    } = req.body || {};
+
+    if (!filename) {
+      return res.status(400).json({ error: 'Nome do arquivo é obrigatório.' });
+    }
+
+    const fileSize = Number(size || 0);
+    const key = buildTempVideoKey(filename);
+
+    const session = await createR2MultipartUploadSession({
+      key,
+      contentType: contentType || 'video/mp4',
+    });
+
+    return res.json({
+      ...session,
+      partSize: MULTIPART_PART_SIZE_BYTES,
+      totalParts: fileSize > 0 ? Math.ceil(fileSize / MULTIPART_PART_SIZE_BYTES) : null,
+      originalFilename: filename,
+      originalFileSize: fileSize || null,
+      originalMimeType: contentType || null,
+      generateFlashcards: Boolean(generateFlashcards),
+    });
+  } catch (error) {
+    console.error('❌ Erro ao iniciar multipart upload:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/uploads/multipart-video/part-url', async (req, res) => {
+  try {
+    const {
+      key,
+      uploadId,
+      partNumber,
+    } = req.body || {};
+
+    if (!key || !uploadId || !partNumber) {
+      return res.status(400).json({
+        error: 'key, uploadId e partNumber são obrigatórios.',
+      });
+    }
+
+    const part = await createR2MultipartPartUrl({
+      key,
+      uploadId,
+      partNumber,
+      expiresIn: 60 * 60 * 2,
+    });
+
+    return res.json(part);
+  } catch (error) {
+    console.error('❌ Erro ao criar URL de parte multipart:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/uploads/multipart-video/complete', async (req, res) => {
+  try {
+    const {
+      key,
+      uploadId,
+      parts,
+    } = req.body || {};
+
+    if (!key || !uploadId || !Array.isArray(parts) || !parts.length) {
+      return res.status(400).json({
+        error: 'key, uploadId e parts são obrigatórios.',
+      });
+    }
+
+    const completed = await completeR2MultipartUpload({
+      key,
+      uploadId,
+      parts,
+    });
+
+    return res.json(completed);
+  } catch (error) {
+    console.error('❌ Erro ao completar multipart upload:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/uploads/multipart-video/abort', async (req, res) => {
+  try {
+    const {
+      key,
+      uploadId,
+    } = req.body || {};
+
+    if (!key || !uploadId) {
+      return res.status(400).json({
+        error: 'key e uploadId são obrigatórios.',
+      });
+    }
+
+    await abortR2MultipartUpload({
+      key,
+      uploadId,
+    });
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Erro ao abortar multipart upload:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });

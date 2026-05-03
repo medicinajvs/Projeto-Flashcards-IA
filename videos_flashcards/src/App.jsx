@@ -43,11 +43,27 @@ import {
   Highlighter,
   Link2,
   Eraser,
+  Brain,
+  HeartPulse,
+  Stethoscope,
+  Baby,
+  ShieldCheck,
+  Microscope,
+  Bone,
+  Eye,
+  Pill,
+  Scissors,
+  Activity,
+  Ear,
+  Droplets,
+  Syringe,
 } from 'lucide-react';
 
 const HISTORY_ITEMS_PER_PAGE = 6;
 const HISTORY_FETCH_LIMIT = 120;
 const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
+const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
+const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
 
 function normalizeFlashcards(rawFlashcards) {
   if (!Array.isArray(rawFlashcards)) return [];
@@ -93,6 +109,72 @@ function isEnrichedGeneratedFlashcard(card) {
   );
 }
 
+function normalizeFolderText(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function getMedicalAreaForLabel(label = '') {
+  const text = normalizeFolderText(label);
+
+  if (!text) return 'Outros';
+
+  if (text.includes('cardio') || text.includes('hipertens') || text.includes('arritmia') || text.includes('insuficiencia cardiaca')) return 'Cardiologia';
+  if (text.includes('neuro') || text.includes('cefaleia') || text.includes('epilepsia') || text.includes('avc') || text.includes('encefalo') || text.includes('medula')) return 'Neurologia';
+  if (text.includes('gastro') || text.includes('hepat') || text.includes('intestin') || text.includes('disabsort') || text.includes('celiaca') || text.includes('pancreat')) return 'Gastroenterologia';
+  if (text.includes('pneumo') || text.includes('asma') || text.includes('dpoc') || text.includes('pulmao') || text.includes('respiratorio') || text.includes('fibrose cistica')) return 'Pneumologia';
+  if (text.includes('nefro') || text.includes('rim') || text.includes('renal') || text.includes('glomerul') || text.includes('eletrolit')) return 'Nefrologia';
+  if (text.includes('hemato') || text.includes('anemia') || text.includes('plaquet') || text.includes('coagul') || text.includes('leucemia') || text.includes('linfoma')) return 'Hematologia';
+  if (text.includes('infect') || text.includes('sepse') || text.includes('hiv') || text.includes('tubercul') || text.includes('antibiot')) return 'Infectologia';
+  if (text.includes('endocr') || text.includes('diabetes') || text.includes('tireo') || text.includes('adrenal') || text.includes('obesidade')) return 'Endocrinologia';
+  if (text.includes('reumato') || text.includes('vasculite') || text.includes('artrite') || text.includes('lupus') || text.includes('autoimune')) return 'Reumatologia';
+  if (text.includes('psiqu') || text.includes('depress') || text.includes('ansiedade') || text.includes('psicose') || text.includes('delirio') || text.includes('alucin')) return 'Psiquiatria';
+  if (text.includes('pediatr') || text.includes('crianca') || text.includes('neonato') || text.includes('lactente')) return 'Pediatria';
+  if (text.includes('gineco') || text.includes('obstetr') || text.includes('gesta') || text.includes('gravidez') || text.includes('parto')) return 'Ginecologia e Obstetrícia';
+  if (text.includes('cirurg') || text.includes('trauma') || text.includes('abdome agudo') || text.includes('pos-operatorio')) return 'Cirurgia';
+  if (text.includes('orto') || text.includes('fratura') || text.includes('osso') || text.includes('articulacao')) return 'Ortopedia';
+  if (text.includes('dermato') || text.includes('pele') || text.includes('lesao cutanea')) return 'Dermatologia';
+  if (text.includes('oftalmo') || text.includes('olho') || text.includes('retina') || text.includes('glaucoma')) return 'Oftalmologia';
+  if (text.includes('otorrino') || text.includes('ouvido') || text.includes('rinite') || text.includes('sinusite')) return 'Otorrinolaringologia';
+  if (text.includes('preventiva') || text.includes('epidemi') || text.includes('saude publica') || text.includes('rastreamento') || text.includes('vacina')) return 'Medicina Preventiva';
+  if (text.includes('emerg') || text.includes('uti') || text.includes('urgencia') || text.includes('choque') || text.includes('reanima')) return 'Urgência e Terapia Intensiva';
+
+  return 'Clínica Médica';
+}
+
+function getFolderVisualForLabel(label = '') {
+  const area = getMedicalAreaForLabel(label);
+
+  const visualMap = {
+    Cardiologia: { icon: HeartPulse, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Neurologia: { icon: Brain, iconClass: 'bg-violet-50 text-violet-600 border-violet-100' },
+    Gastroenterologia: { icon: Activity, iconClass: 'bg-amber-50 text-amber-700 border-amber-100' },
+    Pneumologia: { icon: Stethoscope, iconClass: 'bg-sky-50 text-sky-600 border-sky-100' },
+    Nefrologia: { icon: Droplets, iconClass: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+    Hematologia: { icon: Droplets, iconClass: 'bg-rose-50 text-rose-600 border-rose-100' },
+    Infectologia: { icon: Syringe, iconClass: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    Endocrinologia: { icon: Pill, iconClass: 'bg-purple-50 text-purple-600 border-purple-100' },
+    Reumatologia: { icon: ShieldCheck, iconClass: 'bg-orange-50 text-orange-700 border-orange-100' },
+    Psiquiatria: { icon: Brain, iconClass: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100' },
+    Pediatria: { icon: Baby, iconClass: 'bg-pink-50 text-pink-600 border-pink-100' },
+    'Ginecologia e Obstetrícia': { icon: Baby, iconClass: 'bg-pink-50 text-pink-700 border-pink-100' },
+    Cirurgia: { icon: Scissors, iconClass: 'bg-slate-100 text-slate-700 border-slate-200' },
+    Ortopedia: { icon: Bone, iconClass: 'bg-stone-100 text-stone-700 border-stone-200' },
+    Dermatologia: { icon: Microscope, iconClass: 'bg-orange-50 text-orange-600 border-orange-100' },
+    Oftalmologia: { icon: Eye, iconClass: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+    Otorrinolaringologia: { icon: Ear, iconClass: 'bg-teal-50 text-teal-700 border-teal-100' },
+    'Medicina Preventiva': { icon: ShieldCheck, iconClass: 'bg-green-50 text-green-700 border-green-100' },
+    'Urgência e Terapia Intensiva': { icon: Activity, iconClass: 'bg-red-50 text-red-700 border-red-100' },
+    'Clínica Médica': { icon: Stethoscope, iconClass: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+    Outros: { icon: Folder, iconClass: 'bg-slate-100 text-slate-600 border-slate-200' },
+  };
+
+  return visualMap[area] || visualMap.Outros;
+}
+
 function buildHistoryPreview(text) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
   if (!clean) return 'Sem prévia disponível.';
@@ -101,6 +183,10 @@ function buildHistoryPreview(text) {
 
 function mapRunToHistoryItem(run) {
   const flashcards = normalizeFlashcards(run.enriched_flashcards || run.flashcards);
+  const videoUrl = run.video_url || run.videoUrl || null;
+  const audioUrl = run.audio_url || run.audioUrl || null;
+  const specialty = run.specialty || '';
+
   return {
     id: run.id,
     title: run.original_filename || 'Sem título',
@@ -108,10 +194,18 @@ function mapRunToHistoryItem(run) {
     flashcards,
     flashcardsCount: flashcards.length,
     hasFlashcards: flashcards.length > 0,
-    type: run.video_url ? 'video' : 'text',
+    type: videoUrl ? 'video' : audioUrl ? 'audio' : 'text',
     preview: run.transcript_preview || buildHistoryPreview(run.transcript),
     transcript: run.transcript || '',
-    videoUrl: run.video_url || null,
+    videoUrl,
+    audioUrl,
+    hasAudio: Boolean(audioUrl),
+    audioObjectKey: run.audio_object_key || '',
+    audioStorageProvider: run.audio_storage_provider || '',
+    audioMimeType: run.audio_mime_type || '',
+    audioSizeBytes: run.audio_size_bytes || null,
+    audioDurationSeconds: run.audio_duration_seconds || null,
+    sourceVideoDiscarded: Boolean(run.source_video_discarded),
     enrichmentSupportFilename: run.enrichment_support_filename || '',
     enrichmentSupportTranscriptPreview: run.enrichment_support_transcript_preview || '',
     enrichmentSupportVideoUrl: run.enrichment_support_video_url || '',
@@ -125,7 +219,8 @@ function mapRunToHistoryItem(run) {
     raw: run,
     isFavorite: Boolean(run.is_favorite),
     studyTag: run.study_tag || '',
-    specialty: run.specialty || '',
+    specialty,
+    specialtyArea: getMedicalAreaForLabel(specialty),
     secondaryTopics: Array.isArray(run.secondary_topics) ? run.secondary_topics : [],
     autoTags: Array.isArray(run.auto_tags) ? run.auto_tags : [],
   };
@@ -1664,7 +1759,10 @@ export default function AdvancedFlashcardPoC() {
   const smartFolders = useMemo(() => {
     const allCount = historyData.length;
     const withFlashcardsCount = historyData.filter((item) => item.hasFlashcards).length;
-    const transcriptOnlyCount = historyData.filter((item) => !item.hasFlashcards).length;
+    const withAudioCount = historyData.filter((item) => item.type === 'audio' || item.hasAudio).length;
+    const transcriptOnlyCount = historyData.filter(
+      (item) => item.type === 'text' && !item.hasFlashcards
+    ).length;
     const withVideoCount = historyData.filter((item) => item.type === 'video').length;
 
     return [
@@ -1673,48 +1771,61 @@ export default function AdvancedFlashcardPoC() {
         id: 'favorites',
         name: 'Favoritos',
         count: historyData.filter((item) => item.isFavorite).length,
-        icon: FolderOpen,
+        icon: Star,
       },
-      { id: 'with-flashcards', name: 'Com Flashcards', count: withFlashcardsCount, icon: FolderOpen },
-      { id: 'transcript-only', name: 'Só Transcrição', count: transcriptOnlyCount, icon: Folder },
+      { id: 'with-flashcards', name: 'Com Flashcards', count: withFlashcardsCount, icon: BookOpen },
+      { id: 'with-audio', name: 'Com Áudio', count: withAudioCount, icon: PlayCircle },
+      { id: 'transcript-only', name: 'Só Transcrição', count: transcriptOnlyCount, icon: FileText },
       { id: 'with-video', name: 'Com Vídeo', count: withVideoCount, icon: Video },
     ];
   }, [historyData]);
 
-  const specialtyFolders = useMemo(() => {
+  const historyAreaFolders = useMemo(() => {
     const counts = historyData.reduce((acc, item) => {
-      const name = String(item.specialty || '').trim();
-      if (!name) return acc;
+      const area = item.specialtyArea || getMedicalAreaForLabel(item.specialty || '');
+      if (!area) return acc;
 
-      acc[name] = (acc[name] || 0) + 1;
+      acc[area] = (acc[area] || 0) + 1;
       return acc;
     }, {});
 
     return Object.entries(counts)
       .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
-      .map(([name, count]) => ({
-        id: `specialty:${name}`,
-        name,
-        count,
-        icon: FolderOpen,
-      }));
+      .map(([name, count]) => {
+        const visual = getFolderVisualForLabel(name);
+
+        return {
+          id: `area:${name}`,
+          name,
+          count,
+          icon: visual.icon,
+        };
+      });
   }, [historyData]);
 
   const allFolders = useMemo(() => {
-    return [...smartFolders, ...specialtyFolders];
-  }, [smartFolders, specialtyFolders]);
+    return [...smartFolders, ...historyAreaFolders];
+  }, [smartFolders, historyAreaFolders]);
 
   const filteredAndSortedHistory = useMemo(() => {
     let result = [...historyData];
 
     if (currentFolder === 'with-flashcards') {
       result = result.filter((item) => item.hasFlashcards);
+    } else if (currentFolder === 'with-audio') {
+      result = result.filter((item) => item.type === 'audio' || item.hasAudio);
     } else if (currentFolder === 'transcript-only') {
-      result = result.filter((item) => !item.hasFlashcards);
+      result = result.filter((item) => item.type === 'text' && !item.hasFlashcards);
     } else if (currentFolder === 'with-video') {
       result = result.filter((item) => item.type === 'video');
     } else if (currentFolder === 'favorites') {
       result = result.filter((item) => item.isFavorite);
+    } else if (currentFolder.startsWith('area:')) {
+      const areaName = currentFolder.replace('area:', '');
+      result = result.filter(
+        (item) =>
+          (item.specialtyArea || getMedicalAreaForLabel(item.specialty || '')) === areaName
+      );
     } else if (currentFolder.startsWith('specialty:')) {
       const specialtyName = currentFolder.replace('specialty:', '');
       result = result.filter((item) => item.specialty === specialtyName);
@@ -1723,7 +1834,7 @@ export default function AdvancedFlashcardPoC() {
     if (filterType === 'flashcards') {
       result = result.filter((item) => item.hasFlashcards);
     } else if (filterType === 'transcript') {
-      result = result.filter((item) => !item.hasFlashcards);
+      result = result.filter((item) => item.type === 'text' && !item.hasFlashcards);
     }
 
     if (historySpecialtyFilter) {
@@ -1853,6 +1964,8 @@ export default function AdvancedFlashcardPoC() {
         ...item,
         transcript: run.transcript || item.preview || '',
         videoUrl: run.video_url || run.videoUrl || item.videoUrl || '',
+        audioUrl: run.audio_url || run.audioUrl || item.audioUrl || '',
+        hasAudio: Boolean(run.audio_url || run.audioUrl || item.audioUrl),
         enrichedTranscript: run.enriched_transcript || run.enrichedTranscript || '',
       });
     } catch (err) {
@@ -2082,41 +2195,248 @@ export default function AdvancedFlashcardPoC() {
     }));
   };
 
-  const uploadFileToSignedUrl = ({ file, uploadUrl, contentType }) => {
+  const uploadBlobToSignedUrl = ({
+    blob,
+    uploadUrl,
+    contentType,
+    onProgress,
+  }) => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
       xhr.open('PUT', uploadUrl, true);
-      xhr.setRequestHeader('Content-Type', contentType || 'application/octet-stream');
+
+      if (contentType) {
+        xhr.setRequestHeader('Content-Type', contentType);
+      }
 
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
 
-        const uploadProgress = Math.round((event.loaded / event.total) * 100);
+        const progress = Math.round((event.loaded / event.total) * 100);
 
-        updateProcessingJobInfo({
-          status: 'uploading',
-          current_step: `Enviando vídeo para armazenamento temporário... ${uploadProgress}%`,
-          uploadProgress,
-          progress: Math.min(20, Math.max(1, Math.round(uploadProgress * 0.2))),
-        });
+        if (typeof onProgress === 'function') {
+          onProgress({
+            loaded: event.loaded,
+            total: event.total,
+            progress,
+          });
+        }
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
+          resolve({
+            etag: xhr.getResponseHeader('ETag'),
+          });
           return;
         }
 
-        reject(new Error(`Falha no upload direto para o R2. Status ${xhr.status}.`));
+        reject(new Error(`Falha no upload para o R2. Status ${xhr.status}.`));
       };
 
       xhr.onerror = () => {
-        reject(new Error('Falha de rede durante o upload direto para o R2.'));
+        reject(new Error('Falha de rede durante o upload para o R2.'));
       };
 
-      xhr.send(file);
+      xhr.send(blob);
     });
+  };
+
+  const uploadBlobToSignedUrlWithRetry = async (args, maxRetries = MULTIPART_UPLOAD_RETRY_LIMIT) => {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      try {
+        return await uploadBlobToSignedUrl(args);
+      } catch (error) {
+        lastError = error;
+
+        updateProcessingJobInfo({
+          current_step: `Falha no envio de uma parte. Tentando novamente (${attempt}/${maxRetries})...`,
+        });
+
+        await wait(1000 * attempt);
+      }
+    }
+
+    throw lastError || new Error('Falha no upload após múltiplas tentativas.');
+  };
+
+  const uploadFileToSignedUrl = async ({ file, uploadUrl, contentType }) => {
+    await uploadBlobToSignedUrlWithRetry({
+      blob: file,
+      uploadUrl,
+      contentType: contentType || 'application/octet-stream',
+      onProgress: ({ progress }) => {
+        updateProcessingJobInfo({
+          status: 'uploading',
+          current_step: `Enviando vídeo para armazenamento temporário... ${progress}%`,
+          uploadProgress: progress,
+          progress: Math.min(20, Math.max(1, Math.round(progress * 0.2))),
+        });
+      },
+    });
+  };
+
+  const uploadFileToR2Multipart = async ({
+    file,
+    filename,
+    contentType,
+    generateFlashcards,
+  }) => {
+    let startData = null;
+    const partProgressMap = {};
+
+    try {
+      updateProcessingJobInfo({
+        status: 'uploading',
+        current_step: 'Iniciando upload multipart para vídeo grande...',
+        uploadProgress: 0,
+        progress: 1,
+      });
+
+      const startResponse = await fetch(`${API_BASE}/api/uploads/multipart-video/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename,
+          contentType,
+          size: file.size,
+          generateFlashcards,
+        }),
+      });
+
+      startData = await parseResponseSafely(startResponse);
+
+      if (!startResponse.ok) {
+        throw new Error(startData.error || 'Erro ao iniciar multipart upload.');
+      }
+
+      const partSize = Number(startData.partSize || 64 * 1024 * 1024);
+      const totalParts = Math.ceil(file.size / partSize);
+      const completedParts = [];
+
+      for (let partNumber = 1; partNumber <= totalParts; partNumber += 1) {
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, file.size);
+        const blob = file.slice(start, end);
+
+        updateProcessingJobInfo({
+          status: 'uploading',
+          current_step: `Preparando parte ${partNumber} de ${totalParts}...`,
+        });
+
+        const partUrlResponse = await fetch(`${API_BASE}/api/uploads/multipart-video/part-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            key: startData.key,
+            uploadId: startData.uploadId,
+            partNumber,
+          }),
+        });
+
+        const partUrlData = await parseResponseSafely(partUrlResponse);
+
+        if (!partUrlResponse.ok) {
+          throw new Error(partUrlData.error || `Erro ao criar URL da parte ${partNumber}.`);
+        }
+
+        const uploadResult = await uploadBlobToSignedUrlWithRetry({
+          blob,
+          uploadUrl: partUrlData.uploadUrl,
+          contentType: null,
+          onProgress: ({ loaded }) => {
+            partProgressMap[partNumber] = loaded;
+
+            const uploadedBytes = Object.values(partProgressMap).reduce(
+              (sum, value) => sum + Number(value || 0),
+              0
+            );
+
+            const uploadProgress = Math.min(
+              100,
+              Math.round((uploadedBytes / file.size) * 100)
+            );
+
+            updateProcessingJobInfo({
+              status: 'uploading',
+              current_step: `Enviando parte ${partNumber} de ${totalParts}... ${uploadProgress}%`,
+              uploadProgress,
+              progress: Math.min(25, Math.max(1, Math.round(uploadProgress * 0.25))),
+            });
+          },
+        });
+
+        if (!uploadResult.etag) {
+          throw new Error(`R2 não retornou ETag da parte ${partNumber}. Verifique ExposeHeaders no CORS.`);
+        }
+
+        completedParts.push({
+          PartNumber: partNumber,
+          ETag: uploadResult.etag,
+        });
+      }
+
+      updateProcessingJobInfo({
+        status: 'uploading',
+        current_step: 'Finalizando upload multipart...',
+        uploadProgress: 100,
+        progress: 25,
+      });
+
+      const completeResponse = await fetch(`${API_BASE}/api/uploads/multipart-video/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          key: startData.key,
+          uploadId: startData.uploadId,
+          parts: completedParts,
+        }),
+      });
+
+      const completeData = await parseResponseSafely(completeResponse);
+
+      if (!completeResponse.ok) {
+        throw new Error(completeData.error || 'Erro ao completar multipart upload.');
+      }
+
+      return {
+        ...startData,
+        ...completeData,
+        key: startData.key,
+        originalFilename: startData.originalFilename || filename,
+        originalFileSize: startData.originalFileSize || file.size,
+        originalMimeType: startData.originalMimeType || contentType,
+        generateFlashcards: Boolean(generateFlashcards),
+      };
+    } catch (error) {
+      if (startData?.key && startData?.uploadId) {
+        try {
+          await fetch(`${API_BASE}/api/uploads/multipart-video/abort`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              key: startData.key,
+              uploadId: startData.uploadId,
+            }),
+          });
+        } catch (abortError) {
+          console.warn('Falha ao abortar multipart upload:', abortError.message);
+        }
+      }
+
+      throw error;
+    }
   };
 
   const waitForProcessingJob = async (jobId) => {
@@ -2204,39 +2524,53 @@ export default function AdvancedFlashcardPoC() {
 
       updateProcessingJobInfo({
         status: 'preparing_upload',
-        current_step: 'Criando URL segura de upload...',
+        current_step:
+          videoFile.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES
+            ? 'Preparando upload multipart para vídeo grande...'
+            : 'Criando URL segura de upload...',
         progress: 1,
         uploadProgress: 0,
       });
 
-      const uploadUrlResponse = await fetch(`${API_BASE}/api/uploads/direct-video-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      let uploadData = null;
+
+      if (videoFile.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES) {
+        uploadData = await uploadFileToR2Multipart({
+          file: videoFile,
           filename: videoFile.name,
           contentType,
-          size: videoFile.size,
           generateFlashcards: generateFlashcardsNow,
-        }),
-      });
+        });
+      } else {
+        const uploadUrlResponse = await fetch(`${API_BASE}/api/uploads/direct-video-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            filename: videoFile.name,
+            contentType,
+            size: videoFile.size,
+            generateFlashcards: generateFlashcardsNow,
+          }),
+        });
 
-      const uploadData = await parseResponseSafely(uploadUrlResponse);
+        uploadData = await parseResponseSafely(uploadUrlResponse);
 
-      if (!uploadUrlResponse.ok) {
-        throw new Error(uploadData.error || 'Erro ao preparar upload direto.');
+        if (!uploadUrlResponse.ok) {
+          throw new Error(uploadData.error || 'Erro ao preparar upload direto.');
+        }
+
+        if (!uploadData.uploadUrl || !uploadData.key) {
+          throw new Error('Backend não retornou URL de upload ou chave temporária do R2.');
+        }
+
+        await uploadFileToSignedUrl({
+          file: videoFile,
+          uploadUrl: uploadData.uploadUrl,
+          contentType,
+        });
       }
-
-      if (!uploadData.uploadUrl || !uploadData.key) {
-        throw new Error('Backend não retornou URL de upload ou chave temporária do R2.');
-      }
-
-      await uploadFileToSignedUrl({
-        file: videoFile,
-        uploadUrl: uploadData.uploadUrl,
-        contentType,
-      });
 
       updateProcessingJobInfo({
         status: 'creating_job',
@@ -6861,7 +7195,7 @@ export default function AdvancedFlashcardPoC() {
 
                     {processingJobInfo ? (
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
                           <div>
                             <p className="text-xs font-black uppercase tracking-[0.14em] text-indigo-500">
                               Processamento assíncrono
@@ -9629,48 +9963,48 @@ export default function AdvancedFlashcardPoC() {
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-  <h3 className="text-lg font-bold text-slate-900">Resumo da biblioteca</h3>
+                  <h3 className="text-lg font-bold text-slate-900">Resumo da biblioteca</h3>
 
-  <div className="grid grid-cols-2 gap-3">
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-      <p className="text-xs font-bold text-slate-500 uppercase">Decks</p>
-      <p className="text-2xl font-black text-slate-900 mt-1">{libraryDecks.length}</p>
-    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase">Decks</p>
+                      <p className="text-2xl font-black text-slate-900 mt-1">{libraryDecks.length}</p>
+                    </div>
 
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-      <p className="text-xs font-bold text-slate-500 uppercase">Cards</p>
-      <p className="text-2xl font-black text-slate-900 mt-1">{libraryCards.length}</p>
-    </div>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase">Cards</p>
+                      <p className="text-2xl font-black text-slate-900 mt-1">{libraryCards.length}</p>
+                    </div>
 
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-      <p className="text-xs font-bold text-slate-500 uppercase">Favoritos</p>
-      <p className="text-2xl font-black text-slate-900 mt-1">
-        {libraryCards.filter((card) => Boolean(card.is_favorite)).length}
-      </p>
-    </div>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase">Favoritos</p>
+                      <p className="text-2xl font-black text-slate-900 mt-1">
+                        {libraryCards.filter((card) => Boolean(card.is_favorite)).length}
+                      </p>
+                    </div>
 
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-      <p className="text-xs font-bold text-slate-500 uppercase">Vencidos</p>
-      <p className="text-2xl font-black text-slate-900 mt-1">
-        {libraryCards.filter((card) => {
-          const dueAt = card?.review_state?.dueAt;
-          return dueAt ? new Date(dueAt) <= new Date() : false;
-        }).length}
-      </p>
-    </div>
-  </div>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase">Vencidos</p>
+                      <p className="text-2xl font-black text-slate-900 mt-1">
+                        {libraryCards.filter((card) => {
+                          const dueAt = card?.review_state?.dueAt;
+                          return dueAt ? new Date(dueAt) <= new Date() : false;
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
 
-  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-    <p className="text-sm font-bold text-indigo-900">Dica de organização</p>
-    <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
-      Use o acervo principal abaixo para abrir pastas, visualizar temas, estudar uma pasta inteira
-      ou agendar revisão por assunto.
-    </p>
-  </div>
-</div>
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                    <p className="text-sm font-bold text-indigo-900">Dica de organização</p>
+                    <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
+                      Use o acervo principal abaixo para abrir pastas, visualizar temas, estudar uma pasta inteira
+                      ou agendar revisão por assunto.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+              <div className="bg-white border border-slate-200/60 rounded-[2rem] shadow-sm overflow-hidden p-5 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Acervo por pastas</h3>
@@ -9701,20 +10035,29 @@ export default function AdvancedFlashcardPoC() {
                   </div>
                 </div>
 
-                <input
-                  type="text"
-                  value={archiveSearch}
-                  onChange={(e) => setArchiveSearch(e.target.value)}
-                  placeholder="Buscar no acervo..."
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-sm"
-                />
+                <div className="relative w-full">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-slate-400" />
+                  </div>
 
-                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={archiveSearch}
+                    onChange={(e) => setArchiveSearch(e.target.value)}
+                    placeholder="Buscar no acervo..."
+                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200/80 rounded-2xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
+                  />
+                </div>
+
+                <div className="max-h-[68vh] overflow-y-auto pr-2 space-y-4 scroll-smooth no-visible-scrollbar">
                   {archiveTree.map((specialty) => {
                     const specialtyOpen = Boolean(expandedArchiveSpecialties[specialty.id]);
                     const specialtyCards = specialty.topics.flatMap((topic) =>
                       topic.decks.flatMap((deck) => deck.cards)
                     );
+                    const specialtyVisual = getFolderVisualForLabel(specialty.name);
+                    const SpecialtyIcon = specialtyVisual.icon;
+                    const specialtyArea = getMedicalAreaForLabel(specialty.name);
 
                     return (
                       <div key={specialty.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
@@ -9728,15 +10071,27 @@ export default function AdvancedFlashcardPoC() {
                           className="flex items-center justify-between gap-4 cursor-pointer"
                         >
                           <div className="flex items-center gap-4 text-left">
-                            <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                              {specialtyOpen ? <FolderOpen size={28} /> : <Folder size={28} />}
+                            <div
+                              className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border transition-colors duration-300 ${specialtyVisual.iconClass}`}
+                            >
+                              <SpecialtyIcon size={26} />
                             </div>
 
                             <div>
-                              <p className="text-lg font-black text-slate-900">{specialty.name}</p>
-                              <p className="text-xs font-black text-slate-400 uppercase">
-                                {specialtyCards.length} cards · {specialty.topics.length} temas
-                              </p>
+                              <p className="text-lg font-black text-slate-900 tracking-tight">{specialty.name}</p>
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                  {specialtyArea}
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                  {specialtyCards.length} cards
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                  {specialty.topics.length} temas
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -9808,7 +10163,11 @@ export default function AdvancedFlashcardPoC() {
                               return (
                                 <div
                                   key={topicKey}
-                                  className="rounded-3xl border border-slate-200 bg-white p-5"
+                                  className={`relative z-10 bg-white border rounded-2xl flex flex-col min-w-max shadow-sm transition-all duration-300 ${
+                                    topicOpen
+                                      ? 'border-indigo-100 shadow-md'
+                                      : 'border-slate-100 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-200'
+                                  }`}
                                 >
                                   <div
                                     onClick={() => {
@@ -9818,11 +10177,11 @@ export default function AdvancedFlashcardPoC() {
                                       }));
                                       selectArchiveTopic(specialty.name, topic.name);
                                     }}
-                                    className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 cursor-pointer hover:bg-slate-50 -m-5 p-5 rounded-3xl transition-colors"
+                                    className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 rounded-t-2xl transition-colors"
                                   >
                                     <div className="flex items-center gap-4 text-left">
-                                      <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-                                        {topicOpen ? <FolderOpen size={22} /> : <Folder size={22} />}
+                                      <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center shrink-0 border border-slate-100 transition-colors duration-300">
+                                        {topicOpen ? <FolderOpen size={20} /> : <Folder size={20} />}
                                       </div>
 
                                       <div>
@@ -9977,7 +10336,7 @@ export default function AdvancedFlashcardPoC() {
                                               {deck.cards.map((card) => (
                                                 <div
                                                   key={card.id}
-                                                  className="rounded-xl border border-slate-200 bg-white p-3"
+                                                  className="bg-white border border-slate-200/80 rounded-xl p-4 flex flex-col md:flex-row justify-between gap-4 hover:border-indigo-200 transition-colors shadow-sm group"
                                                 >
                                                   <div className="flex items-start justify-between gap-3">
                                                     <div>
@@ -9990,17 +10349,17 @@ export default function AdvancedFlashcardPoC() {
                                                       />
                                                     </div>
 
-                                                    <div className="flex flex-col gap-2 shrink-0">
+                                                    <div className="flex flex-row md:flex-col gap-1.5 shrink-0 self-start md:self-stretch justify-center">
                                                       <button
                                                         onClick={() => openLibraryCardPreview(card)}
-                                                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50"
+                                                        className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[10px] font-bold transition-colors"
                                                       >
                                                         Prévia
                                                       </button>
 
                                                       <button
                                                         onClick={() => startEditingLibraryCard(card)}
-                                                        className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                                                        className="px-4 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[10px] font-bold transition-colors border border-transparent"
                                                       >
                                                         Editar
                                                       </button>
@@ -11260,7 +11619,7 @@ export default function AdvancedFlashcardPoC() {
 
           <section
             ref={historySectionRef}
-            className="scroll-mt-24 min-h-screen bg-slate-50/50 flex font-sans text-slate-800 overflow-hidden rounded-3xl border border-slate-200 shadow-sm"
+            className="scroll-mt-24 h-[calc(100vh-7rem)] min-h-[680px] bg-slate-50/50 flex font-sans text-slate-800 overflow-hidden rounded-3xl border border-slate-200 shadow-sm"
           >
             {isMobileMenuOpen && (
               <div
@@ -11308,11 +11667,12 @@ export default function AdvancedFlashcardPoC() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-                <div>
+              <div className="flex-1 min-h-0 overflow-hidden p-4 flex flex-col gap-4">
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1 no-visible-scrollbar">
                   {allFolders.map((folder) => {
                     const isActive = currentFolder === folder.id;
                     const Icon = folder.icon;
+                    const folderVisual = getFolderVisualForLabel(folder.name);
 
                     return (
                       <button
@@ -11335,10 +11695,15 @@ export default function AdvancedFlashcardPoC() {
                             isHistorySidebarExpanded || isMobileMenuOpen ? 'gap-3 font-medium min-w-0' : 'justify-center'
                           }`}
                         >
-                          <Icon
-                            size={18}
-                            className={isActive ? 'text-slate-300' : 'text-slate-400'}
-                          />
+                          <span
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center border ${
+                              isActive
+                                ? 'bg-white/10 text-white border-white/10'
+                                : folderVisual.iconClass
+                            }`}
+                          >
+                            <Icon size={17} />
+                          </span>
                           {(isHistorySidebarExpanded || isMobileMenuOpen) && (
                             <span className="truncate max-w-[150px] text-left">{folder.name}</span>
                           )}
@@ -11371,7 +11736,7 @@ export default function AdvancedFlashcardPoC() {
               </div>
             </aside>
 
-            <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+            <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-slate-50">
               <div className="lg:hidden p-4 bg-white border-b border-slate-200 flex items-center justify-between z-10">
                 <div className="flex items-center gap-3">
                   <div className="bg-[#0f172a] text-white w-8 h-8 rounded-xl flex items-center justify-center font-bold">
@@ -11386,8 +11751,8 @@ export default function AdvancedFlashcardPoC() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8 min-w-0">
-                <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-6 min-h-full">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 xl:p-8 min-w-0 no-visible-scrollbar">
+                <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-6 pb-6">
                   <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                     <div>
                       <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">
@@ -11669,6 +12034,12 @@ export default function AdvancedFlashcardPoC() {
                                       </span>
                                     ) : null}
 
+                                    {item.audioUrl ? (
+                                      <span className="bg-cyan-50 text-cyan-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                        Áudio salvo
+                                      </span>
+                                    ) : null}
+
                                     {item.hasEnrichmentSupport ? (
                                       <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                                         Vídeo complementar
@@ -11691,6 +12062,15 @@ export default function AdvancedFlashcardPoC() {
                                           className="px-4 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold"
                                         >
                                           Ver vídeo
+                                        </button>
+                                      ) : null}
+
+                                      {item.audioUrl ? (
+                                        <button
+                                          onClick={() => window.open(item.audioUrl, '_blank', 'noopener,noreferrer')}
+                                          className="px-4 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-xs font-semibold"
+                                        >
+                                          Ouvir áudio
                                         </button>
                                       ) : null}
 
@@ -11739,10 +12119,12 @@ export default function AdvancedFlashcardPoC() {
                                     className={`p-2.5 rounded-xl flex-shrink-0 ${
                                       item.type === 'video'
                                         ? 'bg-blue-50 text-blue-600'
-                                        : 'bg-slate-100 text-slate-600'
+                                        : item.type === 'audio'
+                                          ? 'bg-cyan-50 text-cyan-600'
+                                          : 'bg-slate-100 text-slate-600'
                                     }`}
                                   >
-                                    {item.type === 'video' ? (
+                                    {item.type === 'video' || item.type === 'audio' ? (
                                       <PlayCircle size={20} />
                                     ) : (
                                       <FileText size={20} />
@@ -11814,6 +12196,15 @@ export default function AdvancedFlashcardPoC() {
                                         Ver vídeo
                                       </button>
                                     ) : null}
+
+                                    {item.audioUrl ? (
+                                      <button
+                                        onClick={() => window.open(item.audioUrl, '_blank', 'noopener,noreferrer')}
+                                        className="text-cyan-600 text-sm font-semibold hover:text-cyan-700 transition-colors"
+                                      >
+                                        Ouvir áudio
+                                      </button>
+                                    ) : null}
                                   </div>
 
                                   <button
@@ -11851,59 +12242,63 @@ export default function AdvancedFlashcardPoC() {
                       Se a base crescer muito, vale mover filtros, ordenação e paginação totalmente para a query do servidor.
                     </div>
                   )}
-
-                  {totalHistoryPages > 1 && (
-                    <div className="mt-auto pt-4 sticky bottom-0 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500 font-medium hidden sm:block">
-                          Página {historyPage} de {totalHistoryPages}
-                        </span>
-
-                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-full sm:w-auto justify-center">
-                          <button
-                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                            disabled={historyPage === 1}
-                            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                          >
-                            <ChevronLeft size={20} />
-                          </button>
-
-                          {Array.from({ length: Math.min(5, totalHistoryPages) }).map((_, idx) => {
-                            let pageNum;
-                            if (totalHistoryPages <= 5) pageNum = idx + 1;
-                            else if (historyPage <= 3) pageNum = idx + 1;
-                            else if (historyPage >= totalHistoryPages - 2)
-                              pageNum = totalHistoryPages - 4 + idx;
-                            else pageNum = historyPage - 2 + idx;
-
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() => setHistoryPage(pageNum)}
-                                className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
-                                  historyPage === pageNum
-                                    ? 'bg-[#0f172a] text-white shadow-md'
-                                    : 'text-slate-600 hover:bg-slate-100'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-
-                          <button
-                            onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
-                            disabled={historyPage === totalHistoryPages}
-                            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                          >
-                            <ChevronRight size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
+              {totalHistoryPages > 1 && (
+                <div className="shrink-0 border-t border-slate-200 bg-white/95 backdrop-blur px-4 md:px-6 py-4">
+                  <div className="w-full max-w-[1400px] mx-auto flex items-center justify-between gap-4">
+                    <span className="text-sm text-slate-500 font-semibold hidden sm:block">
+                      Página {historyPage} de {totalHistoryPages}
+                    </span>
+
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm w-full sm:w-auto justify-center">
+                      <button
+                        onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                        disabled={historyPage === 1}
+                        className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+
+                      {Array.from({ length: Math.min(5, totalHistoryPages) }).map((_, idx) => {
+                        let pageNum;
+
+                        if (totalHistoryPages <= 5) {
+                          pageNum = idx + 1;
+                        } else if (historyPage <= 3) {
+                          pageNum = idx + 1;
+                        } else if (historyPage >= totalHistoryPages - 2) {
+                          pageNum = totalHistoryPages - 4 + idx;
+                        } else {
+                          pageNum = historyPage - 2 + idx;
+                        }
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setHistoryPage(pageNum)}
+                            className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
+                              historyPage === pageNum
+                                ? 'bg-[#0f172a] text-white shadow-md'
+                                : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                        disabled={historyPage === totalHistoryPages}
+                        className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </main>
           </section>
         </div>
@@ -12051,6 +12446,12 @@ export default function AdvancedFlashcardPoC() {
                     Vídeo salvo
                   </span>
                 ) : null}
+
+                {quickPreviewHistoryItem.audioUrl ? (
+                  <span className="px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-semibold">
+                    Áudio salvo
+                  </span>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -12086,6 +12487,21 @@ export default function AdvancedFlashcardPoC() {
                     className="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100"
                   >
                     Ver vídeo
+                  </button>
+                ) : null}
+
+                {quickPreviewHistoryItem.audioUrl ? (
+                  <button
+                    onClick={() =>
+                      window.open(
+                        quickPreviewHistoryItem.audioUrl,
+                        '_blank',
+                        'noopener,noreferrer'
+                      )
+                    }
+                    className="px-4 py-2.5 rounded-xl bg-cyan-50 text-cyan-700 text-sm font-semibold hover:bg-cyan-100"
+                  >
+                    Ouvir áudio
                   </button>
                 ) : null}
 
