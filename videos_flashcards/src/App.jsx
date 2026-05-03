@@ -64,6 +64,7 @@ const HISTORY_FETCH_LIMIT = 120;
 const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
 const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
+const MULTIPART_UPLOAD_CONCURRENCY = 3;
 
 function normalizeFlashcards(rawFlashcards) {
   if (!Array.isArray(rawFlashcards)) return [];
@@ -2317,9 +2318,31 @@ export default function AdvancedFlashcardPoC() {
 
       const partSize = Number(startData.partSize || 64 * 1024 * 1024);
       const totalParts = Math.ceil(file.size / partSize);
-      const completedParts = [];
+      const completedParts = new Array(totalParts);
+      let nextPartNumber = 1;
 
-      for (let partNumber = 1; partNumber <= totalParts; partNumber += 1) {
+      const updateMultipartProgress = ({ partNumber, loaded }) => {
+        partProgressMap[partNumber] = loaded;
+
+        const uploadedBytes = Object.values(partProgressMap).reduce(
+          (sum, value) => sum + Number(value || 0),
+          0
+        );
+
+        const uploadProgress = Math.min(
+          100,
+          Math.round((uploadedBytes / file.size) * 100)
+        );
+
+        updateProcessingJobInfo({
+          status: 'uploading',
+          current_step: `Enviando vídeo grande em partes... parte ${partNumber} de ${totalParts} · ${uploadProgress}%`,
+          uploadProgress,
+          progress: Math.min(25, Math.max(1, Math.round(uploadProgress * 0.25))),
+        });
+      };
+
+      const uploadSinglePart = async (partNumber) => {
         const start = (partNumber - 1) * partSize;
         const end = Math.min(start + partSize, file.size);
         const blob = file.slice(start, end);
@@ -2352,35 +2375,45 @@ export default function AdvancedFlashcardPoC() {
           uploadUrl: partUrlData.uploadUrl,
           contentType: null,
           onProgress: ({ loaded }) => {
-            partProgressMap[partNumber] = loaded;
-
-            const uploadedBytes = Object.values(partProgressMap).reduce(
-              (sum, value) => sum + Number(value || 0),
-              0
-            );
-
-            const uploadProgress = Math.min(
-              100,
-              Math.round((uploadedBytes / file.size) * 100)
-            );
-
-            updateProcessingJobInfo({
-              status: 'uploading',
-              current_step: `Enviando parte ${partNumber} de ${totalParts}... ${uploadProgress}%`,
-              uploadProgress,
-              progress: Math.min(25, Math.max(1, Math.round(uploadProgress * 0.25))),
-            });
+            updateMultipartProgress({ partNumber, loaded });
           },
         });
 
         if (!uploadResult.etag) {
-          throw new Error(`R2 não retornou ETag da parte ${partNumber}. Verifique ExposeHeaders no CORS.`);
+          throw new Error(
+            `R2 não retornou ETag da parte ${partNumber}. Verifique ExposeHeaders no CORS.`
+          );
         }
 
-        completedParts.push({
+        completedParts[partNumber - 1] = {
           PartNumber: partNumber,
           ETag: uploadResult.etag,
-        });
+        };
+      };
+
+      const uploadWorker = async () => {
+        while (nextPartNumber <= totalParts) {
+          const partNumber = nextPartNumber;
+          nextPartNumber += 1;
+
+          await uploadSinglePart(partNumber);
+        }
+      };
+
+      const workerCount = Math.min(MULTIPART_UPLOAD_CONCURRENCY, totalParts);
+
+      await Promise.all(
+        Array.from({ length: workerCount }).map(() => uploadWorker())
+      );
+
+      const safeCompletedParts = completedParts
+        .filter(Boolean)
+        .sort((a, b) => a.PartNumber - b.PartNumber);
+
+      if (safeCompletedParts.length !== totalParts) {
+        throw new Error(
+          `Upload multipart incompleto: ${safeCompletedParts.length}/${totalParts} partes enviadas.`
+        );
       }
 
       updateProcessingJobInfo({
@@ -2398,7 +2431,7 @@ export default function AdvancedFlashcardPoC() {
         body: JSON.stringify({
           key: startData.key,
           uploadId: startData.uploadId,
-          parts: completedParts,
+          parts: safeCompletedParts,
         }),
       });
 

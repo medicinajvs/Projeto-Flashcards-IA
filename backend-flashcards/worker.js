@@ -12,11 +12,18 @@ const {
 const { createClient } = require('@supabase/supabase-js');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const ffprobeStatic = require('@ffprobe-installer/ffprobe');
 
 if (process.env.FFMPEG_PATH) {
   ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
 } else if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+
+if (process.env.FFPROBE_PATH) {
+  ffmpeg.setFfprobePath(process.env.FFPROBE_PATH);
+} else if (ffprobeStatic?.path) {
+  ffmpeg.setFfprobePath(ffprobeStatic.path);
 }
 
 function cleanEnv(value = '') {
@@ -40,6 +47,9 @@ const GEMINI_API_KEY = cleanEnv(process.env.GEMINI_API_KEY);
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
 const REQUEST_TIMEOUT_MS = Number(process.env.WORKER_REQUEST_TIMEOUT_MS || 10 * 60 * 1000);
+const TRANSCRIPTION_CONCURRENCY = Number(process.env.TRANSCRIPTION_CONCURRENCY || 2);
+const SAVE_AUDIO_SEGMENTS_TO_R2 =
+  String(process.env.SAVE_AUDIO_SEGMENTS_TO_R2 || 'false').toLowerCase() === 'true';
 const AUDIO_SEGMENT_SECONDS = Number(process.env.AUDIO_SEGMENT_SECONDS || 15 * 60);
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -239,6 +249,288 @@ function convertVideoToMp3(inputPath, outputPath) {
       .on('error', reject)
       .save(outputPath);
   });
+}
+
+function getAudioDurationSeconds(inputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(inputPath, (error, metadata) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      const duration = Number(metadata?.format?.duration || 0);
+      resolve(Number.isFinite(duration) ? duration : 0);
+    });
+  });
+}
+
+function cutAudioSegment(inputPath, outputPath, startSeconds, durationSeconds) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .setStartTime(startSeconds)
+      .duration(durationSeconds)
+      .noVideo()
+      .audioCodec('libmp3lame')
+      .audioBitrate('128k')
+      .format('mp3')
+      .on('end', resolve)
+      .on('error', reject)
+      .save(outputPath);
+  });
+}
+
+async function runWithConcurrency(items, concurrency, handler) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      results[currentIndex] = await handler(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: workerCount }).map(() => worker())
+  );
+
+  return results;
+}
+
+async function insertTranscriptSegment({
+  processingJobId,
+  segmentIndex,
+  startSeconds,
+  endSeconds,
+  audioObjectKey = null,
+  audioUrl = null,
+  audioMimeType = 'audio/mpeg',
+  audioSizeBytes = null,
+}) {
+  const { data, error } = await supabase
+    .from('transcript_segments')
+    .insert({
+      processing_job_id: processingJobId,
+      segment_index: segmentIndex,
+      start_seconds: startSeconds,
+      end_seconds: endSeconds,
+      audio_object_key: audioObjectKey,
+      audio_url: audioUrl,
+      audio_mime_type: audioMimeType,
+      audio_size_bytes: audioSizeBytes,
+      status: 'processing',
+      started_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao criar segmento de transcrição: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function updateTranscriptSegment(segmentId, updates) {
+  const { data, error } = await supabase
+    .from('transcript_segments')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', segmentId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao atualizar segmento de transcrição: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function attachTranscriptSegmentsToStudyRun(processingJobId, studyRunId) {
+  if (!processingJobId || !studyRunId) return;
+
+  const { error } = await supabase
+    .from('transcript_segments')
+    .update({
+      study_run_id: studyRunId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('processing_job_id', processingJobId);
+
+  if (error) {
+    throw new Error(`Falha ao vincular segmentos ao estudo: ${error.message}`);
+  }
+}
+
+async function uploadAudioSegmentToR2(localPath, jobId, segmentIndex) {
+  const key = `audio-segments/${jobId}/segment-${String(segmentIndex).padStart(3, '0')}.mp3`;
+  const stats = fs.statSync(localPath);
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: fs.createReadStream(localPath),
+      ContentType: 'audio/mpeg',
+    })
+  );
+
+  return {
+    audio_object_key: key,
+    audio_url: buildR2PublicUrl(key),
+    audio_mime_type: 'audio/mpeg',
+    audio_size_bytes: stats.size,
+  };
+}
+
+async function transcribeAudioInSegments({
+  audioPath,
+  workDir,
+  jobId,
+}) {
+  const durationSeconds = await getAudioDurationSeconds(audioPath);
+
+  if (!durationSeconds || durationSeconds <= AUDIO_SEGMENT_SECONDS) {
+    await updateJob(jobId, {
+      status: 'processing',
+      current_step: 'Transcrevendo áudio com Deepgram.',
+      progress: 45,
+    });
+
+    return await transcribeAudioWithDeepgram(audioPath);
+  }
+
+  const totalSegments = Math.ceil(durationSeconds / AUDIO_SEGMENT_SECONDS);
+
+  const segments = Array.from({ length: totalSegments }).map((_, index) => {
+    const startSeconds = index * AUDIO_SEGMENT_SECONDS;
+    const endSeconds = Math.min(startSeconds + AUDIO_SEGMENT_SECONDS, durationSeconds);
+
+    return {
+      segmentIndex: index + 1,
+      startSeconds,
+      endSeconds,
+      durationSeconds: endSeconds - startSeconds,
+      localPath: path.join(
+        workDir,
+        `segment-${String(index + 1).padStart(3, '0')}.mp3`
+      ),
+    };
+  });
+
+  await updateJob(jobId, {
+    status: 'processing',
+    current_step: `Dividindo áudio em ${totalSegments} partes para transcrição.`,
+    progress: 42,
+    audio_duration_seconds: Math.round(durationSeconds),
+  });
+
+  for (const segment of segments) {
+    await cutAudioSegment(
+      audioPath,
+      segment.localPath,
+      segment.startSeconds,
+      segment.durationSeconds
+    );
+  }
+
+  let completedCount = 0;
+
+  const transcriptResults = await runWithConcurrency(
+    segments,
+    TRANSCRIPTION_CONCURRENCY,
+    async (segment) => {
+      let segmentRow = null;
+
+      try {
+        await updateJob(jobId, {
+          status: 'processing',
+          current_step: `Transcrevendo parte ${segment.segmentIndex} de ${totalSegments}.`,
+          progress: Math.min(
+            58,
+            44 + Math.round((completedCount / totalSegments) * 14)
+          ),
+        });
+
+        let segmentAudioData = {
+          audio_object_key: null,
+          audio_url: null,
+          audio_mime_type: 'audio/mpeg',
+          audio_size_bytes: fs.statSync(segment.localPath).size,
+        };
+
+        if (SAVE_AUDIO_SEGMENTS_TO_R2) {
+          segmentAudioData = await uploadAudioSegmentToR2(
+            segment.localPath,
+            jobId,
+            segment.segmentIndex
+          );
+        }
+
+        segmentRow = await insertTranscriptSegment({
+          processingJobId: jobId,
+          segmentIndex: segment.segmentIndex,
+          startSeconds: segment.startSeconds,
+          endSeconds: segment.endSeconds,
+          audioObjectKey: segmentAudioData.audio_object_key,
+          audioUrl: segmentAudioData.audio_url,
+          audioMimeType: segmentAudioData.audio_mime_type,
+          audioSizeBytes: segmentAudioData.audio_size_bytes,
+        });
+
+        const transcript = await transcribeAudioWithDeepgram(segment.localPath);
+
+        completedCount += 1;
+
+        await updateTranscriptSegment(segmentRow.id, {
+          transcript,
+          transcript_preview: buildTranscriptPreview(transcript),
+          status: 'completed',
+          finished_at: new Date().toISOString(),
+        });
+
+        await updateJob(jobId, {
+          status: 'processing',
+          current_step: `Transcrição: ${completedCount} de ${totalSegments} partes concluídas.`,
+          progress: Math.min(
+            60,
+            44 + Math.round((completedCount / totalSegments) * 16)
+          ),
+        });
+
+        return {
+          segmentIndex: segment.segmentIndex,
+          transcript,
+        };
+      } catch (error) {
+        if (segmentRow?.id) {
+          await updateTranscriptSegment(segmentRow.id, {
+            status: 'error',
+            error_message: error.message,
+            finished_at: new Date().toISOString(),
+          });
+        }
+
+        throw error;
+      } finally {
+        safeDelete(segment.localPath);
+      }
+    }
+  );
+
+  return transcriptResults
+    .sort((a, b) => a.segmentIndex - b.segmentIndex)
+    .map((item) => item.transcript)
+    .join('\n\n')
+    .trim();
 }
 
 async function uploadAudioToR2(localPath, jobId) {
@@ -1107,26 +1399,22 @@ async function processJob(job) {
 
     await updateJob(job.id, {
       status: 'processing',
-      current_step: 'Salvando áudio permanente.',
+      current_step: 'Salvando áudio permanente e iniciando transcrição.',
       progress: 35,
     });
 
-    audioData = await uploadAudioToR2(localAudioPath, job.id);
+    const audioUploadPromise = uploadAudioToR2(localAudioPath, job.id);
+
+    const transcript = await transcribeAudioInSegments({
+      audioPath: localAudioPath,
+      workDir,
+      jobId: job.id,
+    });
+
+    audioData = await audioUploadPromise;
 
     await updateJob(job.id, {
       ...audioData,
-      status: 'processing',
-      current_step: 'Áudio salvo. Transcrevendo com Deepgram.',
-      progress: 40,
-    });
-
-    const transcript = await transcribeAudioForJob({
-      job,
-      localAudioPath,
-      workDir,
-    });
-
-    await updateJob(job.id, {
       transcript,
       transcript_preview: buildTranscriptPreview(transcript),
       status: 'processing',
@@ -1166,6 +1454,8 @@ async function processJob(job) {
       audioData,
       metadata,
     });
+
+    await attachTranscriptSegmentsToStudyRun(job.id, studyRun.id);
 
     try {
       await attachSegmentsToStudyRun(job.id, studyRun.id);
