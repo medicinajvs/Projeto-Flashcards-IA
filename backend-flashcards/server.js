@@ -33,6 +33,9 @@ const PORT = process.env.PORT || 3000;
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'imagen-4.0-fast-generate-001';
+const FLASHCARD_IMAGE_WIDTH = Number(process.env.FLASHCARD_IMAGE_WIDTH || 1080);
+const FLASHCARD_IMAGE_HEIGHT = Number(process.env.FLASHCARD_IMAGE_HEIGHT || 1920);
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -326,7 +329,19 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
     difficulty: card.difficulty || 'medium',
     specialty: card.specialty || null,
     sub_specialty: card.subSpecialty ?? card.sub_specialty ?? null,
+    theme: card.theme ?? card.tema ?? null,
+    notes: card.notes ?? null,
     tags: Array.isArray(card.tags) ? card.tags : [],
+
+    image_url: card.imageUrl ?? card.image_url ?? null,
+    image_object_key: card.imageObjectKey ?? card.image_object_key ?? null,
+    image_source: card.imageSource ?? card.image_source ?? null,
+    image_prompt: card.imagePrompt ?? card.image_prompt ?? null,
+    image_generated_at: card.imageGeneratedAt ?? card.image_generated_at ?? null,
+    card_insights: card.cardInsights ?? card.card_insights ?? {},
+    card_insights_generated_at:
+      card.cardInsightsGeneratedAt ?? card.card_insights_generated_at ?? null,
+
     review_state: card.review_state || {},
     review_stats: card.review_stats || {},
     sort_order: index,
@@ -601,6 +616,38 @@ async function updateLibraryCard(cardId, updates = {}) {
   if (updates.theme !== undefined) payload.theme = updates.theme || null;
   if (updates.notes !== undefined) payload.notes = updates.notes || null;
   if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
+  if (updates.image_url !== undefined) payload.image_url = updates.image_url || null;
+  if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl || null;
+
+  if (updates.image_object_key !== undefined) {
+    payload.image_object_key = updates.image_object_key || null;
+  }
+  if (updates.imageObjectKey !== undefined) {
+    payload.image_object_key = updates.imageObjectKey || null;
+  }
+
+  if (updates.image_source !== undefined) payload.image_source = updates.image_source || null;
+  if (updates.imageSource !== undefined) payload.image_source = updates.imageSource || null;
+
+  if (updates.image_prompt !== undefined) payload.image_prompt = updates.image_prompt || null;
+  if (updates.imagePrompt !== undefined) payload.image_prompt = updates.imagePrompt || null;
+
+  if (updates.image_generated_at !== undefined) {
+    payload.image_generated_at = updates.image_generated_at || null;
+  }
+  if (updates.imageGeneratedAt !== undefined) {
+    payload.image_generated_at = updates.imageGeneratedAt || null;
+  }
+
+  if (updates.card_insights !== undefined) payload.card_insights = updates.card_insights || {};
+  if (updates.cardInsights !== undefined) payload.card_insights = updates.cardInsights || {};
+
+  if (updates.card_insights_generated_at !== undefined) {
+    payload.card_insights_generated_at = updates.card_insights_generated_at || null;
+  }
+  if (updates.cardInsightsGeneratedAt !== undefined) {
+    payload.card_insights_generated_at = updates.cardInsightsGeneratedAt || null;
+  }
 
   const { data, error } = await supabase
     .from('flashcards_library')
@@ -736,6 +783,15 @@ async function saveFlashcardsToLibrary({
       theme: card.theme || theme || null,
       tags: Array.isArray(card.tags) ? card.tags : [],
       notes: card.notes || null,
+
+      image_url: card.image_url || null,
+      image_object_key: card.image_object_key || null,
+      image_source: card.image_source || null,
+      image_prompt: card.image_prompt || null,
+      image_generated_at: card.image_generated_at || null,
+      card_insights: card.card_insights || {},
+      card_insights_generated_at: card.card_insights_generated_at || null,
+
       review_state: card.review_state || {},
       review_stats: card.review_stats || {},
       sort_order: index,
@@ -1045,6 +1101,490 @@ async function createR2PresignedUploadUrl({
     uploadUrl,
     publicUrl: buildR2PublicUrl(key),
     expiresIn,
+  };
+}
+
+function sanitizeObjectKeyPart(value = 'item') {
+  const safe = String(value || 'item')
+    .normalize('NFD')
+    .replace(/[\/:*?"<>|]+/g, '-')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .toLowerCase()
+    .trim();
+
+  return safe || 'item';
+}
+
+function getImageExtensionFromContentType(contentType = '') {
+  const safeType = String(contentType || '').toLowerCase();
+
+  if (safeType.includes('jpeg') || safeType.includes('jpg')) return 'jpg';
+  if (safeType.includes('webp')) return 'webp';
+  if (safeType.includes('gif')) return 'gif';
+  return 'png';
+}
+
+function buildFlashcardImageKey({
+  runId,
+  cardIndex,
+  filename = '',
+  contentType = 'image/png',
+}) {
+  const extension =
+    filename && filename.includes('.')
+      ? sanitizeObjectKeyPart(filename.split('.').pop())
+      : getImageExtensionFromContentType(contentType);
+
+  return `flashcard-images/run-${sanitizeObjectKeyPart(runId)}/card-${
+    Number(cardIndex) + 1
+  }-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension || 'png'}`;
+}
+
+function getFlashcardsColumnForRun(run = {}, origin = 'current') {
+  const normalizedOrigin = String(origin || 'current').toLowerCase();
+
+  if (normalizedOrigin === 'original' || normalizedOrigin === 'flashcards') {
+    return 'flashcards';
+  }
+
+  if (
+    normalizedOrigin === 'enriched' ||
+    normalizedOrigin === 'mnemonic' ||
+    normalizedOrigin === 'enriched_flashcards'
+  ) {
+    return 'enriched_flashcards';
+  }
+
+  if (Array.isArray(run.enriched_flashcards) && run.enriched_flashcards.length > 0) {
+    return 'enriched_flashcards';
+  }
+
+  return 'flashcards';
+}
+
+function normalizeFlashcardPatch(updates = {}) {
+  const payload = {};
+
+  if (updates.question !== undefined) payload.question = String(updates.question || '').trim();
+  if (updates.answer !== undefined) payload.answer = String(updates.answer || '').trim();
+
+  if (updates.preceptorNote !== undefined || updates.preceptor_note !== undefined) {
+    const value = updates.preceptorNote ?? updates.preceptor_note ?? '';
+    payload.preceptorNote = value || '';
+    payload.preceptor_note = value || '';
+  }
+
+  if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty || 'medium';
+  if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
+
+  if (updates.imageUrl !== undefined || updates.image_url !== undefined) {
+    const value = updates.imageUrl ?? updates.image_url ?? '';
+    payload.imageUrl = value || '';
+    payload.image_url = value || '';
+  }
+
+  if (updates.imageObjectKey !== undefined || updates.image_object_key !== undefined) {
+    const value = updates.imageObjectKey ?? updates.image_object_key ?? '';
+    payload.imageObjectKey = value || '';
+    payload.image_object_key = value || '';
+  }
+
+  if (updates.imageSource !== undefined || updates.image_source !== undefined) {
+    const value = updates.imageSource ?? updates.image_source ?? '';
+    payload.imageSource = value || '';
+    payload.image_source = value || '';
+  }
+
+  if (updates.imagePrompt !== undefined || updates.image_prompt !== undefined) {
+    const value = updates.imagePrompt ?? updates.image_prompt ?? '';
+    payload.imagePrompt = value || '';
+    payload.image_prompt = value || '';
+  }
+
+  if (updates.imageGeneratedAt !== undefined || updates.image_generated_at !== undefined) {
+    const value = updates.imageGeneratedAt ?? updates.image_generated_at ?? null;
+    payload.imageGeneratedAt = value;
+    payload.image_generated_at = value;
+  }
+
+  if (updates.cardInsights !== undefined || updates.card_insights !== undefined) {
+    const value = updates.cardInsights ?? updates.card_insights ?? {};
+    payload.cardInsights = value || {};
+    payload.card_insights = value || {};
+  }
+
+  if (
+    updates.cardInsightsGeneratedAt !== undefined ||
+    updates.card_insights_generated_at !== undefined
+  ) {
+    const value = updates.cardInsightsGeneratedAt ?? updates.card_insights_generated_at ?? null;
+    payload.cardInsightsGeneratedAt = value;
+    payload.card_insights_generated_at = value;
+  }
+
+  return payload;
+}
+
+function buildLibraryUpdateFromFlashcardPatch(patch = {}) {
+  const payload = {};
+
+  if (patch.question !== undefined) payload.question = patch.question;
+  if (patch.answer !== undefined) payload.answer = patch.answer;
+  if (patch.preceptor_note !== undefined) payload.preceptor_note = patch.preceptor_note;
+  if (patch.difficulty !== undefined) payload.difficulty = patch.difficulty;
+  if (patch.tags !== undefined) payload.tags = Array.isArray(patch.tags) ? patch.tags : [];
+
+  if (patch.image_url !== undefined) payload.image_url = patch.image_url || null;
+  if (patch.image_object_key !== undefined) payload.image_object_key = patch.image_object_key || null;
+  if (patch.image_source !== undefined) payload.image_source = patch.image_source || null;
+  if (patch.image_prompt !== undefined) payload.image_prompt = patch.image_prompt || null;
+  if (patch.image_generated_at !== undefined) payload.image_generated_at = patch.image_generated_at || null;
+  if (patch.card_insights !== undefined) payload.card_insights = patch.card_insights || {};
+
+  if (patch.card_insights_generated_at !== undefined) {
+    payload.card_insights_generated_at = patch.card_insights_generated_at || null;
+  }
+
+  return payload;
+}
+
+async function syncLibraryFlashcardFromRun({ runId, cardIndex, patch = {} }) {
+  if (!supabase || !runId) return [];
+
+  const payload = buildLibraryUpdateFromFlashcardPatch(patch);
+  if (!Object.keys(payload).length) return [];
+
+  payload.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('flashcards_library')
+    .update(payload)
+    .eq('source_run_id', runId)
+    .eq('sort_order', Number(cardIndex))
+    .select('*');
+
+  if (error) {
+    console.warn('⚠️ Não foi possível sincronizar card na biblioteca:', error.message);
+    return [];
+  }
+
+  return data || [];
+}
+
+async function updateRunFlashcardAtIndex({
+  runId,
+  cardIndex,
+  origin = 'current',
+  updates = {},
+}) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado no backend.');
+  }
+
+  const run = await getStudyRunById(runId);
+  const column = getFlashcardsColumnForRun(run, origin);
+  const cards = Array.isArray(run[column]) ? [...run[column]] : [];
+  const normalizedIndex = Number(cardIndex);
+
+  if (
+    !Number.isInteger(normalizedIndex) ||
+    normalizedIndex < 0 ||
+    normalizedIndex >= cards.length
+  ) {
+    throw new Error('Índice do flashcard inválido.');
+  }
+
+  const patch = normalizeFlashcardPatch(updates);
+  const currentCard = cards[normalizedIndex] || {};
+  const updatedCard = {
+    ...currentCard,
+    ...patch,
+  };
+
+  cards[normalizedIndex] = updatedCard;
+
+  const { data: updatedRun, error } = await supabase
+    .from('study_runs')
+    .update({
+      [column]: cards,
+    })
+    .eq('id', runId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao atualizar flashcard do histórico: ${error.message}`);
+  }
+
+  const syncedLibraryCards = await syncLibraryFlashcardFromRun({
+    runId,
+    cardIndex: normalizedIndex,
+    patch,
+  });
+
+  return {
+    run: updatedRun,
+    flashcards: cards,
+    flashcard: updatedCard,
+    column,
+    origin: column === 'enriched_flashcards' ? 'enriched' : 'original',
+    syncedLibraryCards,
+  };
+}
+
+function escapeSvgText(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function wrapTextForSvg(value = '', maxChars = 36, maxLines = 4) {
+  const words = String(value || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+
+    if (lines.length >= maxLines) break;
+  }
+
+  if (current && lines.length < maxLines) lines.push(current);
+
+  if (words.join(' ').length > lines.join(' ').length && lines.length) {
+    lines[lines.length - 1] = `${lines[lines.length - 1].replace(/\.{3}$/, '')}...`;
+  }
+
+  return lines.length ? lines : ['Flashcard médico'];
+}
+
+function pickFlashcardImageKeyword(card = {}) {
+  const insights = card.cardInsights || card.card_insights || {};
+  const insightKeyword = insights.image_keyword || insights.imageKeyword;
+
+  if (insightKeyword) return String(insightKeyword).trim();
+
+  const firstTag = Array.isArray(card.tags) ? card.tags.find(Boolean) : '';
+  if (firstTag) return String(firstTag).replace(/^origem:/i, '').trim();
+
+  const question = String(card.question || card.pergunta || '').replace(/[?.!:;]+/g, ' ').trim();
+  return question.split(/\s+/).slice(0, 4).join(' ') || 'medical learning concept';
+}
+
+function buildFlashcardImagePrompt(card = {}) {
+  const insights = card.cardInsights || card.card_insights || {};
+  const existingPrompt = card.imagePrompt || card.image_prompt || insights.image_prompt || insights.imagePrompt;
+
+  if (existingPrompt && String(existingPrompt).trim()) {
+    return String(existingPrompt).trim();
+  }
+
+  const keyword = pickFlashcardImageKeyword(card);
+  const question = String(card.question || card.pergunta || '').replace(/\s+/g, ' ').trim();
+
+  return [
+    `Create a clean, high-quality educational medical illustration about: ${keyword}.`,
+    question ? `Clinical learning context: ${question.slice(0, 220)}.` : '',
+    'Style: modern medical infographic illustration, dark background, high contrast, no text, no logos, no watermark, no real patient identity, suitable for a medical flashcard poster.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 1800);
+}
+
+async function generateImagenIllustrationBuffer(prompt) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY não definida no .env.');
+  }
+
+  const { GoogleGenAI } = await import('@google/genai');
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  const response = await ai.models.generateImages({
+    model: GEMINI_IMAGE_MODEL,
+    prompt,
+    config: {
+      numberOfImages: 1,
+      aspectRatio: '3:4',
+      personGeneration: 'dont_allow',
+    },
+  });
+
+  const imageBytes = response?.generatedImages?.[0]?.image?.imageBytes;
+
+  if (!imageBytes) {
+    throw new Error('O modelo de imagem não retornou bytes de imagem.');
+  }
+
+  return Buffer.from(imageBytes, 'base64');
+}
+
+async function composeFlashcardPosterImage({ illustrationBuffer, card = {}, keyword = '' }) {
+  const sharp = require('sharp');
+
+  const titleLines = wrapTextForSvg(
+    card.question || card.pergunta || 'Flashcard médico',
+    33,
+    5
+  );
+
+  const keywordText = String(keyword || pickFlashcardImageKeyword(card) || 'MEDICINA')
+    .toUpperCase()
+    .slice(0, 48);
+
+  const illustration = await sharp(illustrationBuffer)
+    .resize(FLASHCARD_IMAGE_WIDTH, 1040, {
+      fit: 'cover',
+      position: 'centre',
+    })
+    .png()
+    .toBuffer();
+
+  const titleTspans = titleLines
+    .map(
+      (line, index) =>
+        `<tspan x="70" dy="${index === 0 ? 0 : 62}">${escapeSvgText(line)}</tspan>`
+    )
+    .join('');
+
+  const overlaySvg = Buffer.from(`
+    <svg width="${FLASHCARD_IMAGE_WIDTH}" height="${FLASHCARD_IMAGE_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#020617"/>
+      <rect x="54" y="54" width="${FLASHCARD_IMAGE_WIDTH - 108}" height="${
+        FLASHCARD_IMAGE_HEIGHT - 108
+      }" rx="44" fill="none" stroke="#1e293b" stroke-width="3"/>
+      <text x="70" y="118" fill="#facc15" font-size="28" font-family="Arial, Helvetica, sans-serif" font-weight="800" letter-spacing="4">FLASHCARD MÉDICO</text>
+      <text x="70" y="205" fill="#f8fafc" font-size="48" font-family="Arial, Helvetica, sans-serif" font-weight="800">${titleTspans}</text>
+      <rect x="70" y="500" width="${FLASHCARD_IMAGE_WIDTH - 140}" height="56" rx="28" fill="#facc15"/>
+      <text x="100" y="538" fill="#111827" font-size="24" font-family="Arial, Helvetica, sans-serif" font-weight="900" letter-spacing="2">${escapeSvgText(keywordText)}</text>
+      <linearGradient id="fade" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#020617" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#020617" stop-opacity="0.94"/>
+      </linearGradient>
+      <rect x="0" y="1330" width="${FLASHCARD_IMAGE_WIDTH}" height="430" fill="url(#fade)"/>
+      <text x="70" y="1740" fill="#94a3b8" font-size="25" font-family="Arial, Helvetica, sans-serif" font-weight="700">Gerado para revisão ativa</text>
+      <text x="70" y="1790" fill="#64748b" font-size="22" font-family="Arial, Helvetica, sans-serif">Use junto da pergunta e resposta do card.</text>
+    </svg>
+  `);
+
+  return await sharp({
+    create: {
+      width: FLASHCARD_IMAGE_WIDTH,
+      height: FLASHCARD_IMAGE_HEIGHT,
+      channels: 4,
+      background: '#020617',
+    },
+  })
+    .composite([
+      { input: illustration, top: 620, left: 0 },
+      { input: overlaySvg, top: 0, left: 0 },
+    ])
+    .png()
+    .toBuffer();
+}
+
+async function uploadBufferToR2({ buffer, key, contentType = 'image/png' }) {
+  if (!r2) {
+    throw new Error('Cloudflare R2 não configurado.');
+  }
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    })
+  );
+
+  return {
+    key,
+    publicUrl: buildR2PublicUrl(key),
+  };
+}
+
+async function generateFlashcardInsights({ run = {}, card = {}, cardIndex = 0 }) {
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      gap: { type: 'string' },
+      improvement: { type: 'string' },
+      corrected_answer: { type: 'string' },
+      preceptor_note_suggestion: { type: 'string' },
+      image_keyword: { type: 'string' },
+      image_prompt: { type: 'string' },
+      suggested_tags: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+    },
+    required: [
+      'gap',
+      'improvement',
+      'corrected_answer',
+      'preceptor_note_suggestion',
+      'image_keyword',
+      'image_prompt',
+      'suggested_tags',
+    ],
+  };
+
+  const evidenceText = [
+    run.evidence_analysis ? JSON.stringify(run.evidence_analysis).slice(0, 4000) : '',
+    run.enriched_summary ? JSON.stringify(run.enriched_summary).slice(0, 3000) : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const result = await generateStructuredObjectWithGemini({
+    systemInstructionText:
+      'Você é um preceptor médico sênior. Analise um único flashcard com foco em residência médica, precisão conceitual, lacunas e melhoria pedagógica. Responda apenas no JSON solicitado.',
+    userText: `
+FLASHCARD ${Number(cardIndex) + 1}
+Pergunta: ${card.question || card.pergunta || ''}
+Resposta atual: ${card.answer || card.resposta || ''}
+Nota do preceptor atual: ${card.preceptorNote || card.preceptor_note || card.nota_preceptor || ''}
+Tags: ${Array.isArray(card.tags) ? card.tags.join(', ') : ''}
+
+TRANSCRIÇÃO DA AULA, para contexto:
+${String(run.transcript || '').slice(0, 12000)}
+
+ANÁLISE MACRO / TEXTO ENRIQUECIDO, se existir:
+${evidenceText || 'Não disponível.'}
+
+Tarefa:
+1. Aponte a principal lacuna do flashcard.
+2. Sugira melhoria objetiva.
+3. Escreva uma resposta corrigida, mais completa e didática, mas sem ficar prolixa.
+4. Sugira nota de preceptor.
+5. Sugira uma palavra-chave visual para imagem.
+6. Gere um prompt em inglês para Imagen, sem texto dentro da imagem, com estilo de ilustração médica educacional.
+7. Sugira tags curtas.
+`,
+    responseSchema,
+  });
+
+  return {
+    gap: result.gap || '',
+    improvement: result.improvement || '',
+    corrected_answer: result.corrected_answer || '',
+    preceptor_note_suggestion: result.preceptor_note_suggestion || '',
+    image_keyword: result.image_keyword || '',
+    image_prompt: result.image_prompt || '',
+    suggested_tags: Array.isArray(result.suggested_tags) ? result.suggested_tags : [],
   };
 }
 
@@ -2949,6 +3489,184 @@ app.get('/api/history/:id', async (req, res) => {
     return res.json({ run });
   } catch (error) {
     console.error('❌ Erro ao carregar item do histórico:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/history/:id/flashcards/:cardIndex', async (req, res) => {
+  try {
+    const { id, cardIndex } = req.params;
+    const { origin = 'current', updates = {} } = req.body || {};
+
+    const result = await updateRunFlashcardAtIndex({
+      runId: id,
+      cardIndex: Number(cardIndex),
+      origin,
+      updates,
+    });
+
+    return res.json(result);
+  } catch (error) {
+    console.error('❌ Erro ao editar flashcard do histórico:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/history/:id/flashcards/:cardIndex/image-upload-url', async (req, res) => {
+  try {
+    const { id, cardIndex } = req.params;
+    const { filename = 'flashcard-image.png', contentType = 'image/png' } = req.body || {};
+
+    if (!String(contentType || '').startsWith('image/')) {
+      return res.status(400).json({ error: 'O arquivo precisa ser uma imagem.' });
+    }
+
+    await getStudyRunById(id);
+
+    const key = buildFlashcardImageKey({
+      runId: id,
+      cardIndex: Number(cardIndex),
+      filename,
+      contentType,
+    });
+
+    const upload = await createR2PresignedUploadUrl({
+      key,
+      contentType,
+      expiresIn: 60 * 20,
+    });
+
+    return res.json(upload);
+  } catch (error) {
+    console.error('❌ Erro ao criar URL de upload de imagem do flashcard:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/history/:id/flashcards/:cardIndex/insights', async (req, res) => {
+  try {
+    const { id, cardIndex } = req.params;
+    const { origin = 'current' } = req.body || {};
+
+    const run = await getStudyRunById(id);
+    const column = getFlashcardsColumnForRun(run, origin);
+    const cards = Array.isArray(run[column]) ? run[column] : [];
+    const normalizedIndex = Number(cardIndex);
+
+    if (
+      !Number.isInteger(normalizedIndex) ||
+      normalizedIndex < 0 ||
+      normalizedIndex >= cards.length
+    ) {
+      return res.status(400).json({ error: 'Índice do flashcard inválido.' });
+    }
+
+    const card = cards[normalizedIndex];
+
+    const insights = await generateFlashcardInsights({
+      run,
+      card,
+      cardIndex: normalizedIndex,
+    });
+
+    const generatedAt = new Date().toISOString();
+
+    const result = await updateRunFlashcardAtIndex({
+      runId: id,
+      cardIndex: normalizedIndex,
+      origin,
+      updates: {
+        cardInsights: insights,
+        card_insights: insights,
+        cardInsightsGeneratedAt: generatedAt,
+        card_insights_generated_at: generatedAt,
+        imagePrompt: insights.image_prompt || '',
+        image_prompt: insights.image_prompt || '',
+      },
+    });
+
+    return res.json({
+      ...result,
+      insights,
+      generatedAt,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar insights do flashcard:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, res) => {
+  try {
+    const { id, cardIndex } = req.params;
+    const { origin = 'current', prompt = '' } = req.body || {};
+
+    const run = await getStudyRunById(id);
+    const column = getFlashcardsColumnForRun(run, origin);
+    const cards = Array.isArray(run[column]) ? run[column] : [];
+    const normalizedIndex = Number(cardIndex);
+
+    if (
+      !Number.isInteger(normalizedIndex) ||
+      normalizedIndex < 0 ||
+      normalizedIndex >= cards.length
+    ) {
+      return res.status(400).json({ error: 'Índice do flashcard inválido.' });
+    }
+
+    const card = cards[normalizedIndex];
+    const finalPrompt = String(prompt || '').trim() || buildFlashcardImagePrompt(card);
+    const keyword = pickFlashcardImageKeyword({ ...card, imagePrompt: finalPrompt });
+
+    const illustrationBuffer = await generateImagenIllustrationBuffer(finalPrompt);
+    const posterBuffer = await composeFlashcardPosterImage({
+      illustrationBuffer,
+      card,
+      keyword,
+    });
+
+    const key = buildFlashcardImageKey({
+      runId: id,
+      cardIndex: normalizedIndex,
+      filename: 'ai-flashcard-poster.png',
+      contentType: 'image/png',
+    });
+
+    const uploaded = await uploadBufferToR2({
+      buffer: posterBuffer,
+      key,
+      contentType: 'image/png',
+    });
+
+    const generatedAt = new Date().toISOString();
+
+    const result = await updateRunFlashcardAtIndex({
+      runId: id,
+      cardIndex: normalizedIndex,
+      origin,
+      updates: {
+        imageUrl: uploaded.publicUrl || '',
+        image_url: uploaded.publicUrl || '',
+        imageObjectKey: uploaded.key,
+        image_object_key: uploaded.key,
+        imageSource: 'ai',
+        image_source: 'ai',
+        imagePrompt: finalPrompt,
+        image_prompt: finalPrompt,
+        imageGeneratedAt: generatedAt,
+        image_generated_at: generatedAt,
+      },
+    });
+
+    return res.json({
+      ...result,
+      imageUrl: uploaded.publicUrl,
+      imageObjectKey: uploaded.key,
+      imagePrompt: finalPrompt,
+      generatedAt,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar imagem do flashcard:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });

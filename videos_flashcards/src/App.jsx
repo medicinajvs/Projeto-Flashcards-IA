@@ -66,6 +66,38 @@ const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
 const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
 const MULTIPART_UPLOAD_CONCURRENCY = 3;
 
+const UI = {
+  page: 'bg-slate-50 text-slate-900',
+  section:
+    'bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden',
+  sectionSoft:
+    'bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden',
+  sectionHeader:
+    'p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4',
+  sectionBody: 'p-6 md:p-8 bg-slate-50/40 space-y-6',
+
+  eyebrow:
+    'text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2',
+  title: 'text-2xl font-black text-slate-900',
+  description: 'text-sm text-slate-500 mt-2 leading-relaxed',
+
+  primaryButton:
+    'inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-100 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+  secondaryButton:
+    'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+  softButton:
+    'inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+  dangerButton:
+    'inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+
+  input:
+    'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100',
+  chip:
+    'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600',
+  chipRed:
+    'inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-bold text-red-700',
+};
+
 function normalizeFlashcards(rawFlashcards) {
   if (!Array.isArray(rawFlashcards)) return [];
 
@@ -83,6 +115,16 @@ function normalizeFlashcards(rawFlashcards) {
         null,
       difficulty: card.difficulty || 'medium',
       tags,
+
+      imageUrl: card.imageUrl || card.image_url || '',
+      imageObjectKey: card.imageObjectKey || card.image_object_key || '',
+      imageSource: card.imageSource || card.image_source || '',
+      imagePrompt: card.imagePrompt || card.image_prompt || '',
+      imageGeneratedAt: card.imageGeneratedAt || card.image_generated_at || null,
+      cardInsights: card.cardInsights || card.card_insights || {},
+      cardInsightsGeneratedAt:
+        card.cardInsightsGeneratedAt || card.card_insights_generated_at || null,
+
       origin:
         card.origin ||
         card.source_type ||
@@ -151,25 +193,25 @@ function getFolderVisualForLabel(label = '') {
 
   const visualMap = {
     Cardiologia: { icon: HeartPulse, iconClass: 'bg-red-50 text-red-600 border-red-100' },
-    Neurologia: { icon: Brain, iconClass: 'bg-violet-50 text-violet-600 border-violet-100' },
-    Gastroenterologia: { icon: Activity, iconClass: 'bg-amber-50 text-amber-700 border-amber-100' },
-    Pneumologia: { icon: Stethoscope, iconClass: 'bg-sky-50 text-sky-600 border-sky-100' },
-    Nefrologia: { icon: Droplets, iconClass: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
-    Hematologia: { icon: Droplets, iconClass: 'bg-rose-50 text-rose-600 border-rose-100' },
-    Infectologia: { icon: Syringe, iconClass: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    Endocrinologia: { icon: Pill, iconClass: 'bg-purple-50 text-purple-600 border-purple-100' },
-    Reumatologia: { icon: ShieldCheck, iconClass: 'bg-orange-50 text-orange-700 border-orange-100' },
-    Psiquiatria: { icon: Brain, iconClass: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100' },
-    Pediatria: { icon: Baby, iconClass: 'bg-pink-50 text-pink-600 border-pink-100' },
-    'Ginecologia e Obstetrícia': { icon: Baby, iconClass: 'bg-pink-50 text-pink-700 border-pink-100' },
-    Cirurgia: { icon: Scissors, iconClass: 'bg-slate-100 text-slate-700 border-slate-200' },
-    Ortopedia: { icon: Bone, iconClass: 'bg-stone-100 text-stone-700 border-stone-200' },
-    Dermatologia: { icon: Microscope, iconClass: 'bg-orange-50 text-orange-600 border-orange-100' },
-    Oftalmologia: { icon: Eye, iconClass: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
-    Otorrinolaringologia: { icon: Ear, iconClass: 'bg-teal-50 text-teal-700 border-teal-100' },
-    'Medicina Preventiva': { icon: ShieldCheck, iconClass: 'bg-green-50 text-green-700 border-green-100' },
+    Neurologia: { icon: Brain, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Gastroenterologia: { icon: Activity, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Pneumologia: { icon: Stethoscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Nefrologia: { icon: Droplets, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Hematologia: { icon: Droplets, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Infectologia: { icon: Syringe, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Endocrinologia: { icon: Pill, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Reumatologia: { icon: ShieldCheck, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Psiquiatria: { icon: Brain, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Pediatria: { icon: Baby, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    'Ginecologia e Obstetrícia': { icon: Baby, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Cirurgia: { icon: Scissors, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Ortopedia: { icon: Bone, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Dermatologia: { icon: Microscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Oftalmologia: { icon: Eye, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Otorrinolaringologia: { icon: Ear, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    'Medicina Preventiva': { icon: ShieldCheck, iconClass: 'bg-red-50 text-red-600 border-red-100' },
     'Urgência e Terapia Intensiva': { icon: Activity, iconClass: 'bg-red-50 text-red-700 border-red-100' },
-    'Clínica Médica': { icon: Stethoscope, iconClass: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+    'Clínica Médica': { icon: Stethoscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
     Outros: { icon: Folder, iconClass: 'bg-slate-100 text-slate-600 border-slate-200' },
   };
 
@@ -277,18 +319,21 @@ function SmartDropdown({
         onClick={() => setIsOpen((prev) => !prev)}
         className={`w-full flex items-center justify-between bg-white border px-4 py-3 rounded-xl shadow-sm transition-all ${
           isOpen
-            ? 'border-indigo-500 ring-2 ring-indigo-100'
-            : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
+            ? 'border-red-500 ring-2 ring-red-100'
+            : 'border-slate-200 hover:border-red-200 hover:shadow-md'
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
           {selected?.groupIcon ? (
-            <span className="text-indigo-500 shrink-0">{selected.groupIcon}</span>
+            <span className="text-red-500 shrink-0">{selected.groupIcon}</span>
           ) : (
-            <Layers className="w-5 h-5 text-indigo-500 shrink-0" />
+            <Layers className="w-5 h-5 text-red-500 shrink-0" />
           )}
 
-          <span className="font-medium text-slate-700 truncate">
+          <span
+            className="font-semibold text-slate-700 truncate"
+            title={selected?.label || placeholder}
+          >
             {selected?.label || placeholder}
           </span>
         </div>
@@ -301,7 +346,7 @@ function SmartDropdown({
       </button>
 
       <div
-        className={`absolute z-50 min-w-full w-max max-w-[min(520px,calc(100vw-2rem))] mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden transition-all ${
+        className={`absolute z-50 left-0 right-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden transition-all ${
           isOpen
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
@@ -327,14 +372,14 @@ function SmartDropdown({
                     }
                   }}
                   className={`w-full flex items-center justify-between gap-4 p-3 rounded-lg transition-colors text-left ${
-                    isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                    isSelected ? 'bg-red-50' : 'hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={`flex items-center justify-center w-8 h-8 rounded-full ${
                         isSelected || isExpanded
-                          ? 'bg-indigo-100 text-indigo-600'
+                          ? 'bg-red-100 text-red-600'
                           : 'bg-slate-100 text-slate-500'
                       }`}
                     >
@@ -342,11 +387,14 @@ function SmartDropdown({
                     </div>
 
                     <div className="text-left">
-                      <p className="text-sm font-medium text-slate-700 whitespace-normal leading-snug">
+                      <p
+                        className="text-sm font-semibold text-slate-700 leading-snug line-clamp-2"
+                        title={option.label}
+                      >
                         {option.label}
                       </p>
                       {option.description ? (
-                        <p className="text-xs text-slate-500 whitespace-normal leading-snug">
+                        <p className="text-xs text-slate-500 leading-snug line-clamp-2">
                           {option.description}
                         </p>
                       ) : null}
@@ -360,7 +408,7 @@ function SmartDropdown({
                       }`}
                     />
                   ) : (
-                    isSelected && <Check className="w-5 h-5 text-indigo-600" />
+                    <Check className="w-5 h-5 text-red-600" />
                   )}
                 </button>
 
@@ -379,12 +427,14 @@ function SmartDropdown({
                           }}
                           className={`flex items-center justify-between p-2 rounded-md text-sm transition-colors ${
                             isSubSelected
-                              ? 'bg-indigo-50 text-indigo-700 font-medium'
+                              ? 'bg-red-50 text-red-700 font-medium'
                               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                           }`}
                         >
-                          <span>{sub.label}</span>
-                          {isSubSelected ? <Check className="w-4 h-4 text-indigo-600" /> : null}
+                          <span className="min-w-0 flex-1 truncate text-left" title={sub.label}>
+                            {sub.label}
+                          </span>
+                          {isSubSelected ? <Check className="w-4 h-4 text-red-600" /> : null}
                         </button>
                       );
                     })}
@@ -394,6 +444,221 @@ function SmartDropdown({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function filterFolderTree(nodes = [], rawTerm = '') {
+  const term = String(rawTerm || '').trim().toLowerCase();
+
+  if (!term) return nodes;
+
+  return nodes
+    .map((node) => {
+      const children = filterFolderTree(node.children || [], term);
+      const matches = String(node.label || '').toLowerCase().includes(term);
+
+      if (matches || children.length > 0) {
+        return {
+          ...node,
+          children,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function FolderTreeNode({
+  node,
+  selectedId,
+  onSelect,
+  level = 0,
+  defaultOpen = false,
+}) {
+  const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+  const isSelected = selectedId === node.id;
+  const [isOpen, setIsOpen] = useState(defaultOpen || level < 1);
+  const Icon = node.icon || Folder;
+
+  const handleClick = () => {
+    if (hasChildren) {
+      setIsOpen((prev) => !prev);
+    }
+
+    if (node.selectable === false) return;
+
+    if (node.onSelect) {
+      node.onSelect(node);
+      return;
+    }
+
+    onSelect?.(node);
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={node.disabled}
+        className={`group w-full flex items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+          isSelected
+            ? 'bg-red-600 text-white shadow-sm shadow-red-100'
+            : 'text-slate-700 hover:bg-slate-100'
+        }`}
+        style={{ paddingLeft: `${10 + level * 16}px` }}
+        title={node.label}
+      >
+        <span className="w-5 h-5 flex items-center justify-center shrink-0">
+          {hasChildren ? (
+            <ChevronDown
+              size={15}
+              className={`transition-transform ${
+                isOpen ? 'rotate-0' : '-rotate-90'
+              } ${isSelected ? 'text-white' : 'text-slate-400'}`}
+            />
+          ) : (
+            <span className="w-[15px]" />
+          )}
+        </span>
+
+        <span
+          className={`w-8 h-8 mt-0.5 rounded-xl border flex items-center justify-center shrink-0 ${
+            isSelected
+              ? 'bg-white/15 border-white/15 text-white'
+              : node.iconClass || 'bg-red-50 text-red-600 border-red-100'
+          }`}
+        >
+          <Icon size={16} />
+        </span>
+
+        <span className="min-w-0 flex-1 overflow-hidden">
+          <span
+            className={`block text-sm font-bold leading-snug ${
+              level >= 2 ? 'line-clamp-2' : 'truncate'
+            }`}
+            title={node.label}
+          >
+            {node.label}
+          </span>
+
+          {node.description ? (
+            <span
+              className={`block text-[11px] truncate ${
+                isSelected ? 'text-white/75' : 'text-slate-400'
+              }`}
+            >
+              {node.description}
+            </span>
+          ) : null}
+        </span>
+
+        {node.count !== undefined && node.count !== null ? (
+          <span
+            className={`text-[11px] font-black rounded-full px-2 py-0.5 shrink-0 ${
+              isSelected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {node.count}
+          </span>
+        ) : null}
+      </button>
+
+      {hasChildren && isOpen ? (
+        <div className="mt-1 space-y-1">
+          {node.children.map((child) => (
+            <FolderTreeNode
+              key={child.id}
+              node={child}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              level={level + 1}
+              defaultOpen={defaultOpen}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FolderTreePanel({
+  title = 'Pastas',
+  description = '',
+  nodes = [],
+  selectedId = '',
+  onSelect,
+  searchValue = '',
+  onSearchChange,
+  emptyLabel = 'Nenhuma pasta encontrada.',
+  className = '',
+}) {
+  const filteredNodes = useMemo(
+    () => filterFolderTree(nodes, searchValue),
+    [nodes, searchValue]
+  );
+
+  return (
+    <div className={`bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm ${className}`}>
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-1">
+              Navegação
+            </p>
+
+            <h3 className="text-lg font-black text-slate-900">
+              {title}
+            </h3>
+
+            {description ? (
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                {description}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center shrink-0">
+            <FolderOpen size={18} />
+          </div>
+        </div>
+
+        {onSearchChange ? (
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+
+            <input
+              type="text"
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Buscar pasta..."
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="p-3 max-h-[520px] overflow-y-auto space-y-1">
+        {filteredNodes.length > 0 ? (
+          filteredNodes.map((node) => (
+            <FolderTreeNode
+              key={node.id}
+              node={node}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              defaultOpen
+            />
+          ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+            <p className="text-sm font-semibold text-slate-500">
+              {emptyLabel}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -437,7 +702,7 @@ function AnimatedTopicCloud({ topics = [] }) {
           {safeTopics.map((topic, index) => (
             <div
               key={`${topic}-${index}`}
-              className="w-full rounded-full border border-indigo-100 bg-indigo-50 px-6 py-4 text-sm md:text-base leading-[1.55] text-indigo-700 shadow-sm"
+              className="w-full rounded-full border border-red-100 bg-red-50 px-6 py-4 text-sm md:text-base leading-[1.55] text-red-700 shadow-sm"
             >
               {topic}
             </div>
@@ -484,7 +749,7 @@ function EvidenceApplyButton({
       } ${
         showSuccess
           ? 'bg-emerald-500'
-          : 'bg-[#5C55E9] hover:bg-[#4A44C9]'
+          : 'bg-red-600 hover:bg-red-700'
       } ${className}`}
     >
       {!showSuccess ? (
@@ -538,7 +803,7 @@ function SuggestionAddedPreview({ visible = false }) {
           <div
             className={`bg-white border-2 rounded-2xl shadow-sm w-full h-full px-8 py-7 flex flex-col relative overflow-hidden z-10 transition-all duration-500 ${
               visible
-                ? 'border-indigo-100 bg-gradient-to-tr from-indigo-50/40 to-emerald-50/40'
+                ? 'border-red-100 bg-gradient-to-tr from-red-50/50 to-emerald-50/40'
                 : 'border-slate-100 bg-slate-50/80'
             }`}
           >
@@ -612,7 +877,7 @@ function formatAiTextToHtml(text = '') {
       .replace(/\*\*([\s\S]*?)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>')
       .replace(/==([\s\S]*?)==/g, '<mark class="bg-yellow-200 text-yellow-900 px-1 py-0.5 rounded">$1</mark>')
       .replace(/~~([\s\S]*?)~~/g, '<span class="line-through">$1</span>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="text-indigo-600 underline underline-offset-4">$1</a>');
+      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="text-red-600 underline underline-offset-4">$1</a>');
   };
 
   const blocks = raw
@@ -1017,7 +1282,7 @@ function PremiumRichTextEditor({
         }
 
         .premium-editor-content a {
-          color: #4f46e5;
+          color: #dc2626;
           text-decoration: underline;
           text-underline-offset: 4px;
         }
@@ -1071,7 +1336,7 @@ function PremiumRichTextEditor({
           <span
             className={`text-xs font-medium flex items-center gap-1.5 transition-colors duration-300 ${
               autoSaveStatus === 'saving'
-                ? 'text-indigo-500'
+                ? 'text-red-500'
                 : autoSaveStatus === 'error'
                   ? 'text-red-500'
                   : 'text-slate-400'
@@ -1080,7 +1345,7 @@ function PremiumRichTextEditor({
             <span
               className={`w-2 h-2 rounded-full ${
                 autoSaveStatus === 'saving'
-                  ? 'bg-indigo-400 animate-pulse'
+                  ? 'bg-red-400 animate-pulse'
                   : autoSaveStatus === 'error'
                     ? 'bg-red-400'
                     : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
@@ -1095,7 +1360,7 @@ function PremiumRichTextEditor({
             className={`px-6 py-2.5 text-white text-sm font-medium rounded-full shadow-lg shadow-black/10 transition-all flex items-center gap-2 ${
               saveButtonStatus === 'saved'
                 ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-[#18181b] hover:bg-[#27272a]'
+                : 'bg-red-600 hover:bg-red-700'
             }`}
           >
             {saveButtonStatus === 'saving' ? (
@@ -1234,7 +1499,7 @@ function PremiumRichTextEditor({
             <button
               type="button"
               onMouseDown={(event) => handleToolbarMouseDown(event, insertLink)}
-              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-red-500 hover:text-red-600 hover:bg-red-50"
               title="Inserir link"
             >
               🔗
@@ -1287,6 +1552,7 @@ export default function AdvancedFlashcardPoC() {
   const spacedReviewSectionRef = useRef(null);
   const studyCardAreaRef = useRef(null);
   const [isSectionSidebarExpanded, setIsSectionSidebarExpanded] = useState(false);
+  const [activeMainSection, setActiveMainSection] = useState('upload');
   const [isClosing, setIsClosing] = useState(false);
   const [videoFile, setVideoFile] = useState(null);
   const [enrichmentVideoFile, setEnrichmentVideoFile] = useState(null);
@@ -1363,6 +1629,20 @@ export default function AdvancedFlashcardPoC() {
   const [isSavingCardsToLibrary, setIsSavingCardsToLibrary] = useState(false);
   const [flashcardsOrigin, setFlashcardsOrigin] = useState('original');
   const [flashcardsLibrarySaveStatus, setFlashcardsLibrarySaveStatus] = useState('idle');
+  const [editingFlashcardIndex, setEditingFlashcardIndex] = useState(null);
+  const [editingFlashcardForm, setEditingFlashcardForm] = useState({
+    question: '',
+    answer: '',
+    preceptorNote: '',
+    difficulty: 'medium',
+    tags: '',
+  });
+  const [isSavingFlashcardEdit, setIsSavingFlashcardEdit] = useState(false);
+  const [isUploadingFlashcardImage, setIsUploadingFlashcardImage] = useState(false);
+  const [isGeneratingFlashcardImage, setIsGeneratingFlashcardImage] = useState(false);
+  const [isGeneratingFlashcardInsights, setIsGeneratingFlashcardInsights] = useState(false);
+  const [expandedFlashcardInsights, setExpandedFlashcardInsights] = useState({});
+  const [flashcardActionIndex, setFlashcardActionIndex] = useState(null);
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckSpecialty, setNewDeckSpecialty] = useState('');
   const [newDeckSubSpecialty, setNewDeckSubSpecialty] = useState('');
@@ -1414,7 +1694,7 @@ export default function AdvancedFlashcardPoC() {
   const [error, setError] = useState(null);
 
   const [isAnalyzingEvidence, setIsAnalyzingEvidence] = useState(false);
-  const [autoAnalyzeEvidence, setAutoAnalyzeEvidence] = useState(false);
+  const [autoAnalyzeEvidence, setAutoAnalyzeEvidence] = useState(true);
   const [evidenceAnalysis, setEvidenceAnalysis] = useState(null);
   const [evidenceSources, setEvidenceSources] = useState([]);
   const [referenceVideos, setReferenceVideos] = useState([]);
@@ -1454,11 +1734,11 @@ export default function AdvancedFlashcardPoC() {
   const editorSaveButtonTimeoutRef = useRef(null);
   const [isExportingStudyPack, setIsExportingStudyPack] = useState(false);
   const [studyCoverageMetrics, setStudyCoverageMetrics] = useState(null);
-  const [automationPreset, setAutomationPreset] = useState('manual');
-  const [autoRunOnProcess, setAutoRunOnProcess] = useState(false);
-  const [autoRunOnOpenHistory, setAutoRunOnOpenHistory] = useState(false);
-  const [autoGenerateEnrichment, setAutoGenerateEnrichment] = useState(false);
-  const [autoGenerateBetterFlashcards, setAutoGenerateBetterFlashcards] = useState(false);
+  const [automationPreset, setAutomationPreset] = useState('deep');
+  const [autoRunOnProcess, setAutoRunOnProcess] = useState(true);
+  const [autoRunOnOpenHistory, setAutoRunOnOpenHistory] = useState(true);
+  const [autoGenerateEnrichment, setAutoGenerateEnrichment] = useState(true);
+  const [autoGenerateBetterFlashcards, setAutoGenerateBetterFlashcards] = useState(true);
   const [currentSpecialty, setCurrentSpecialty] = useState('');
   const [currentSecondaryTopics, setCurrentSecondaryTopics] = useState([]);
   const [currentAutoTags, setCurrentAutoTags] = useState([]);
@@ -1510,7 +1790,14 @@ export default function AdvancedFlashcardPoC() {
     setEnrichmentSupportVideoUrl('');
     setEnrichmentSupportProcessedAt(null);
 
+    setActiveMainSection('upload');
     setGenerateFlashcardsNow(true);
+    setAutomationPreset('deep');
+    setAutoRunOnProcess(true);
+    setAutoRunOnOpenHistory(true);
+    setAutoAnalyzeEvidence(true);
+    setAutoGenerateEnrichment(true);
+    setAutoGenerateBetterFlashcards(true);
     setIsProcessing(false);
     setProcessingJobInfo(null);
     setIsGeneratingSavedFlashcards(false);
@@ -1520,6 +1807,16 @@ export default function AdvancedFlashcardPoC() {
     setFlashcards([]);
     setFlashcardsOrigin('original');
     setFlashcardsLibrarySaveStatus('idle');
+    setEditingFlashcardIndex(null);
+    setEditingFlashcardForm({
+      question: '',
+      answer: '',
+      preceptorNote: '',
+      difficulty: 'medium',
+      tags: '',
+    });
+    setExpandedFlashcardInsights({});
+    setFlashcardActionIndex(null);
     setCurrentRunId(null);
     setCurrentFilename('');
     setEditingAppliedBlockId(null);
@@ -1684,6 +1981,19 @@ export default function AdvancedFlashcardPoC() {
     setCurrentStudyIndex(0);
     setIsFlipped(false);
   }, [flashcards]);
+
+  useEffect(() => {
+    if (isProcessing) return;
+
+    if (flashcards.length > 0) {
+      setActiveMainSection('flashcards');
+      return;
+    }
+
+    if (transcript && currentRunId) {
+      setActiveMainSection('transcript');
+    }
+  }, [isProcessing, flashcards.length, transcript, currentRunId]);
 
   const transcriptWordCount = useMemo(() => {
     return transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
@@ -2751,14 +3061,7 @@ export default function AdvancedFlashcardPoC() {
       await openHistoryItem(id);
 
       setIsHistoryDetailsOpen(true);
-
-      // ✅ garante scroll só até a seção de transcrição
-      setTimeout(() => {
-        transcriptSectionRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-      }, 250);
+      openMainSection('exclusive-item-session');
     } catch {
       setIsHistoryDetailsOpen(false);
     }
@@ -3537,13 +3840,7 @@ export default function AdvancedFlashcardPoC() {
 
       if (scrollToExclusiveSession) {
         setIsHistoryDetailsOpen(true);
-
-        setTimeout(() => {
-          historyDetailsSectionRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          });
-        }, 180);
+        openMainSection('exclusive-item-session');
       }
 
       return data;
@@ -3851,6 +4148,299 @@ export default function AdvancedFlashcardPoC() {
       setError(`Falha ao salvar na biblioteca: ${err.message}`);
     } finally {
       setIsSavingCardsToLibrary(false);
+    }
+  };
+
+  const getCurrentFlashcardStorageOrigin = () => {
+    if (flashcardsOrigin === 'enriched' || flashcardsOrigin === 'mnemonic') {
+      return flashcardsOrigin;
+    }
+
+    return 'original';
+  };
+
+  const updateFlashcardViaServer = async ({
+    index,
+    updates = {},
+    origin = getCurrentFlashcardStorageOrigin(),
+  }) => {
+    if (!currentRunId) {
+      throw new Error('Abra ou processe um estudo salvo antes de editar o flashcard.');
+    }
+
+    const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards/${index}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin,
+        updates,
+      }),
+    });
+
+    const data = await parseResponseSafely(response);
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro ao atualizar flashcard.');
+    }
+
+    const updatedFlashcards = normalizeFlashcards(data.flashcards || []);
+    setFlashcards(updatedFlashcards);
+    setFlashcardsOrigin(data.origin || origin || 'original');
+    loadHistoryDebounced(historySearch);
+
+    if (selectedDeckId) {
+      loadLibraryCards({ deckId: selectedDeckId });
+    } else {
+      loadLibraryCards();
+    }
+
+    loadDeckTree();
+    loadLibraryAnalytics();
+
+    return {
+      ...data,
+      flashcards: updatedFlashcards,
+      flashcard: updatedFlashcards[index],
+    };
+  };
+
+  const openFlashcardEditor = (index) => {
+    const card = flashcards[index];
+    if (!card) return;
+
+    setEditingFlashcardIndex(index);
+    setEditingFlashcardForm({
+      question: card.question || '',
+      answer: card.answer || '',
+      preceptorNote: card.preceptorNote || '',
+      difficulty: card.difficulty || 'medium',
+      tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
+    });
+  };
+
+  const closeFlashcardEditor = () => {
+    setEditingFlashcardIndex(null);
+    setEditingFlashcardForm({
+      question: '',
+      answer: '',
+      preceptorNote: '',
+      difficulty: 'medium',
+      tags: '',
+    });
+  };
+
+  const saveFlashcardEdit = async () => {
+    if (editingFlashcardIndex === null) return;
+
+    try {
+      setIsSavingFlashcardEdit(true);
+      setError(null);
+
+      const tags = String(editingFlashcardForm.tags || '')
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      await updateFlashcardViaServer({
+        index: editingFlashcardIndex,
+        updates: {
+          question: editingFlashcardForm.question,
+          answer: editingFlashcardForm.answer,
+          preceptorNote: editingFlashcardForm.preceptorNote,
+          preceptor_note: editingFlashcardForm.preceptorNote,
+          difficulty: editingFlashcardForm.difficulty,
+          tags,
+        },
+      });
+
+      closeFlashcardEditor();
+    } catch (err) {
+      setError(`Falha ao salvar flashcard: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardEdit(false);
+    }
+  };
+
+  const uploadManualFlashcardImage = async (index, file) => {
+    if (!file) return;
+
+    try {
+      setIsUploadingFlashcardImage(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const contentType = file.type || 'image/png';
+
+      const uploadResponse = await fetch(
+        `${API_BASE}/api/history/${currentRunId}/flashcards/${index}/image-upload-url`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name || 'flashcard-image.png',
+            contentType,
+          }),
+        }
+      );
+
+      const uploadData = await parseResponseSafely(uploadResponse);
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadData.error || 'Erro ao preparar upload da imagem.');
+      }
+
+      const putResponse = await fetch(uploadData.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+
+      if (!putResponse.ok) {
+        throw new Error('Falha ao enviar imagem para o R2. Confira o CORS do bucket.');
+      }
+
+      const uploadedAt = new Date().toISOString();
+
+      await updateFlashcardViaServer({
+        index,
+        updates: {
+          imageUrl: uploadData.publicUrl || '',
+          image_url: uploadData.publicUrl || '',
+          imageObjectKey: uploadData.key || '',
+          image_object_key: uploadData.key || '',
+          imageSource: 'manual',
+          image_source: 'manual',
+          imageGeneratedAt: uploadedAt,
+          image_generated_at: uploadedAt,
+        },
+      });
+    } catch (err) {
+      setError(`Falha ao enviar imagem do flashcard: ${err.message}`);
+    } finally {
+      setIsUploadingFlashcardImage(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const generateFlashcardInsights = async (index) => {
+    if (!currentRunId) {
+      setError('Abra ou processe um estudo salvo antes de gerar insights.');
+      return;
+    }
+
+    try {
+      setIsGeneratingFlashcardInsights(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards/${index}/insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: getCurrentFlashcardStorageOrigin(),
+        }),
+      });
+
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao gerar insights do flashcard.');
+      }
+
+      const updatedFlashcards = normalizeFlashcards(data.flashcards || []);
+      setFlashcards(updatedFlashcards);
+      setFlashcardsOrigin(data.origin || getCurrentFlashcardStorageOrigin());
+      setExpandedFlashcardInsights((prev) => ({ ...prev, [index]: true }));
+      loadHistoryDebounced(historySearch);
+      loadLibraryCards();
+      loadDeckTree();
+      loadLibraryAnalytics();
+    } catch (err) {
+      setError(`Falha ao gerar insights: ${err.message}`);
+    } finally {
+      setIsGeneratingFlashcardInsights(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const generateFlashcardImage = async (index) => {
+    if (!currentRunId) {
+      setError('Abra ou processe um estudo salvo antes de gerar imagem.');
+      return;
+    }
+
+    try {
+      setIsGeneratingFlashcardImage(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const card = flashcards[index] || {};
+
+      const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards/${index}/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: getCurrentFlashcardStorageOrigin(),
+          prompt: card.imagePrompt || card.cardInsights?.image_prompt || '',
+        }),
+      });
+
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao gerar imagem do flashcard.');
+      }
+
+      const updatedFlashcards = normalizeFlashcards(data.flashcards || []);
+      setFlashcards(updatedFlashcards);
+      setFlashcardsOrigin(data.origin || getCurrentFlashcardStorageOrigin());
+      loadHistoryDebounced(historySearch);
+      loadLibraryCards();
+      loadDeckTree();
+      loadLibraryAnalytics();
+    } catch (err) {
+      setError(`Falha ao gerar imagem com IA: ${err.message}`);
+    } finally {
+      setIsGeneratingFlashcardImage(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const applyFlashcardInsightSuggestion = async (index) => {
+    const card = flashcards[index];
+    const insights = card?.cardInsights || {};
+
+    if (!card || !insights.corrected_answer) {
+      setError('Este flashcard ainda não possui uma resposta corrigida nos insights.');
+      return;
+    }
+
+    try {
+      setIsSavingFlashcardEdit(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const mergedTags = Array.from(
+        new Set([
+          ...(Array.isArray(card.tags) ? card.tags : []),
+          ...(Array.isArray(insights.suggested_tags) ? insights.suggested_tags : []),
+        ].map((tag) => String(tag).trim()).filter(Boolean))
+      );
+
+      await updateFlashcardViaServer({
+        index,
+        updates: {
+          answer: insights.corrected_answer,
+          preceptorNote: insights.preceptor_note_suggestion || card.preceptorNote || '',
+          preceptor_note: insights.preceptor_note_suggestion || card.preceptorNote || '',
+          tags: mergedTags,
+        },
+      });
+    } catch (err) {
+      setError(`Falha ao aplicar melhoria: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardEdit(false);
+      setFlashcardActionIndex(null);
     }
   };
 
@@ -4715,7 +5305,39 @@ export default function AdvancedFlashcardPoC() {
     }).length;
   }, [reviewState]);
 
+  const openMainSection = (sectionId) => {
+    setActiveMainSection(sectionId);
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  };
+
+  const getSectionIdFromRef = (ref) => {
+    if (ref === uploadSectionRef) return 'upload';
+    if (ref === transcriptSectionRef) return 'transcript';
+    if (ref === flashcardsSectionRef) return 'flashcards';
+    if (ref === evidenceSectionRef) return 'evidence';
+    if (ref === enrichedSectionRef) return 'enriched';
+    if (ref === metricsSectionRef) return 'metrics';
+    if (ref === historyDetailsSectionRef) return 'exclusive-item-session';
+    if (ref === librarySectionRef) return 'library';
+    if (ref === studySessionSectionRef) return 'study-session';
+    if (ref === spacedReviewSectionRef) return 'spaced-review';
+    if (ref === historySectionRef) return 'history';
+
+    return null;
+  };
+
   const scrollToSection = (ref) => {
+    const sectionId = getSectionIdFromRef(ref);
+
+    if (sectionId) {
+      openMainSection(sectionId);
+      return;
+    }
+
     if (!ref?.current) return;
 
     ref.current.scrollIntoView({
@@ -4723,6 +5345,9 @@ export default function AdvancedFlashcardPoC() {
       block: 'start',
     });
   };
+
+  const sectionVisibilityClass = (sectionId) =>
+    activeMainSection === sectionId ? 'block' : 'hidden';
 
   const smartDeckCounters = useMemo(() => {
     const now = new Date();
@@ -4846,7 +5471,7 @@ export default function AdvancedFlashcardPoC() {
       deckMap.set(deck.id, deck);
     });
 
-    smartFilteredCards.forEach((card) => {
+    libraryCards.forEach((card) => {
       const deck = deckMap.get(card.deck_id);
       const specialtyName = card.specialty || deck?.specialty || 'Sem especialidade';
       const topicName = card.sub_specialty || deck?.sub_specialty || '';
@@ -4880,7 +5505,7 @@ export default function AdvancedFlashcardPoC() {
             ),
           })),
       }));
-  }, [libraryDecks, smartFilteredCards]);
+  }, [libraryDecks, libraryCards]);
 
   const openLibraryCardPreview = (card) => {
     if (!card) return;
@@ -5310,76 +5935,74 @@ export default function AdvancedFlashcardPoC() {
     if (!currentRunId) return;
 
     setIsHistoryDetailsOpen(true);
-
-    setTimeout(() => {
-      historyDetailsSectionRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    }, 180);
+    openMainSection('exclusive-item-session');
   };
 
   const sectionNavItems = [
     {
       id: 'upload',
-      label: 'Novo Estudo',
-      icon: LayoutTemplate,
+      label: 'Novo estudo',
+      description: 'Enviar aula',
+      icon: Activity,
       ref: uploadSectionRef,
       alwaysVisible: true,
     },
     {
-      id: 'transcript',
-      label: 'Transcrição',
-      icon: FileText,
-      ref: transcriptSectionRef,
-      visible: Boolean(transcript),
-    },
-    {
       id: 'flashcards',
       label: 'Flashcards',
+      description: flashcards.length ? `${flashcards.length} cards` : 'Aguardando vídeo',
       icon: BookOpen,
       ref: flashcardsSectionRef,
-      visible: Boolean(transcript),
+      alwaysVisible: true,
+      disabled: !flashcards.length && !transcript,
+    },
+    {
+      id: 'transcript',
+      label: 'Transcrição',
+      description: transcript ? 'Texto da aula' : 'Aguardando vídeo',
+      icon: FileText,
+      ref: transcriptSectionRef,
+      alwaysVisible: true,
+      disabled: !transcript,
     },
     {
       id: 'evidence',
-      label: 'Evidência',
+      label: 'Evidências',
+      description: evidenceAnalysis ? 'Análise pronta' : 'Automático',
       icon: Sparkles,
       ref: evidenceSectionRef,
-      visible: Boolean(transcript),
+      alwaysVisible: true,
+      disabled: !transcript,
     },
     {
       id: 'enriched',
-      label: 'Enriquecido',
+      label: 'Texto melhorado',
+      description: enrichedTranscript ? 'Pronto' : 'Automático',
       icon: Wand2,
       ref: enrichedSectionRef,
-      visible: Boolean(transcript),
-    },
-    {
-      id: 'exclusive-item-session',
-      label: 'Sessão do Item',
-      icon: PlayCircle,
-      ref: historyDetailsSectionRef,
-      visible: Boolean(currentRunId),
-      onClick: openExclusiveItemSession,
+      alwaysVisible: true,
+      disabled: !transcript,
     },
     {
       id: 'library',
       label: 'Biblioteca',
+      description: `${libraryCards.length} cards`,
       icon: Folder,
       ref: librarySectionRef,
       alwaysVisible: true,
     },
     {
       id: 'study-session',
-      label: 'Sessão de Estudo',
+      label: 'Modo estudo',
+      description: 'Praticar cards',
       icon: Lightbulb,
       ref: studySessionSectionRef,
       alwaysVisible: true,
     },
     {
       id: 'spaced-review',
-      label: 'Revisão Espaçada',
+      label: 'Revisar hoje',
+      description: `${cardsDueCount} pendentes`,
       icon: RefreshCw,
       ref: spacedReviewSectionRef,
       alwaysVisible: true,
@@ -5387,9 +6010,20 @@ export default function AdvancedFlashcardPoC() {
     {
       id: 'history',
       label: 'Histórico',
+      description: `${historyData.length} aulas`,
       icon: FolderOpen,
       ref: historySectionRef,
       alwaysVisible: true,
+    },
+    {
+      id: 'exclusive-item-session',
+      label: 'Aula atual',
+      description: currentRunId ? 'Aberta agora' : 'Nenhuma aberta',
+      icon: PlayCircle,
+      ref: historyDetailsSectionRef,
+      alwaysVisible: Boolean(currentRunId),
+      disabled: !currentRunId,
+      onClick: openExclusiveItemSession,
     },
   ].filter((item) => item.alwaysVisible || item.visible);
 
@@ -6171,6 +6805,56 @@ export default function AdvancedFlashcardPoC() {
     setSelectedDeckId(deckId === 'sem-deck' ? '' : deckId);
   };
 
+  const selectedArchiveTreeId = useMemo(() => {
+    if (selectedArchiveDeckId) {
+      return `archive:deck:${selectedArchiveSpecialty}:${selectedArchiveTopic}:${selectedArchiveDeckId}`;
+    }
+
+    if (selectedArchiveTopic) {
+      return `archive:topic:${selectedArchiveSpecialty}:${selectedArchiveTopic}`;
+    }
+
+    if (selectedArchiveSpecialty) {
+      return `archive:specialty:${selectedArchiveSpecialty}`;
+    }
+
+    return '';
+  }, [selectedArchiveDeckId, selectedArchiveTopic, selectedArchiveSpecialty]);
+
+  const archiveFolderTree = useMemo(() => {
+    return archiveTree.map((specialty) => {
+      const visual = getFolderVisualForLabel(specialty.name);
+
+      return {
+        id: `archive:specialty:${specialty.name}`,
+        label: specialty.name,
+        description: 'Especialidade',
+        icon: visual.icon || Folder,
+        iconClass: visual.iconClass,
+        count: specialty.cardCount || 0,
+        onSelect: () => selectArchiveSpecialty(specialty.name),
+        children: (specialty.topics || []).map((topic) => ({
+          id: `archive:topic:${specialty.name}:${topic.name}`,
+          label: topic.name,
+          description: 'Tema',
+          icon: FolderOpen,
+          iconClass: 'bg-red-50 text-red-600 border-red-100',
+          count: topic.cardCount || 0,
+          onSelect: () => selectArchiveTopic(specialty.name, topic.name),
+          children: (topic.decks || []).map((deck) => ({
+            id: `archive:deck:${specialty.name}:${topic.name}:${deck.id}`,
+            label: deck.name,
+            description: 'Deck',
+            icon: BookOpen,
+            iconClass: 'bg-slate-100 text-slate-600 border-slate-200',
+            count: Array.isArray(deck.cards) ? deck.cards.length : 0,
+            onSelect: () => selectArchiveDeck(specialty.name, topic.name, deck.id),
+          })),
+        })),
+      };
+    });
+  }, [archiveTree, selectedArchiveSpecialty, selectedArchiveTopic, selectedArchiveDeckId]);
+
   const startStudyFromArchiveCards = (cards) => {
     if (!Array.isArray(cards) || cards.length === 0) {
       setError('Nenhum flashcard disponível nesta pasta do acervo.');
@@ -6685,7 +7369,7 @@ export default function AdvancedFlashcardPoC() {
         regex.test(part) ? (
           <span
             key={index}
-            className="bg-indigo-100 text-indigo-700 px-1 rounded"
+            className="bg-red-100 text-red-700 px-1 rounded"
           >
             {part}
           </span>
@@ -6823,9 +7507,9 @@ export default function AdvancedFlashcardPoC() {
     `}</style>
     <div className="min-h-screen bg-[#f5f7fb] font-sans text-slate-800">
       <aside
-        className={`hidden lg:flex fixed top-6 left-6 z-40 h-[calc(100vh-48px)] ${
-          isSectionSidebarExpanded ? 'w-60' : 'w-20'
-        } flex-col rounded-[28px] border border-slate-200 bg-white/95 backdrop-blur shadow-xl shadow-slate-200/60 transition-all duration-300 overflow-hidden`}
+        className={`hidden lg:flex fixed inset-y-0 left-0 z-40 h-screen ${
+          isSectionSidebarExpanded ? 'w-72' : 'w-20'
+        } flex-col border-r border-slate-200 bg-white text-slate-800 shadow-[12px_0_40px_rgba(15,23,42,0.04)] transition-all duration-300 overflow-hidden`}
         onMouseEnter={() => setIsSectionSidebarExpanded(true)}
         onMouseLeave={() => setIsSectionSidebarExpanded(false)}
       >
@@ -6836,16 +7520,16 @@ export default function AdvancedFlashcardPoC() {
               : 'grid place-items-center py-5 min-h-[76px]'
           }`}
         >
-          <div className="w-11 h-11 rounded-2xl bg-[#0f172a] text-white flex items-center justify-center shrink-0">
-            <LayoutTemplate size={20} />
+          <div className="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-red-200">
+            <Activity size={22} />
           </div>
 
           {isSectionSidebarExpanded && (
             <div className="transition-all duration-300">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Navegação
+                Medicina JVS
               </p>
-              <h2 className="text-sm font-bold text-slate-900">Seções do estudo</h2>
+              <h2 className="text-sm font-bold text-slate-900">Flashcards IA</h2>
             </div>
           )}
         </div>
@@ -6863,7 +7547,10 @@ export default function AdvancedFlashcardPoC() {
             return (
               <button
                 key={item.id}
+                disabled={item.disabled}
                 onClick={() => {
+                  if (item.disabled) return;
+
                   if (item.onClick) {
                     item.onClick();
                     return;
@@ -6871,23 +7558,43 @@ export default function AdvancedFlashcardPoC() {
 
                   scrollToSection(item.ref);
                 }}
-                className={`text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 ${
+                className={`transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  activeMainSection === item.id
+                    ? 'bg-red-600 text-white shadow-md shadow-red-100'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                } ${
                   isSectionSidebarExpanded
-                    ? 'w-full flex items-center justify-start gap-3 rounded-2xl px-3 py-3'
-                    : 'w-16 h-16 flex items-center justify-center rounded-2xl mx-auto'
+                    ? 'w-full flex items-center justify-start gap-3 rounded-xl px-4 py-3'
+                    : 'w-14 h-14 flex items-center justify-center rounded-xl mx-auto'
                 }`}
               >
                 <div
-                  className={`rounded-2xl bg-slate-100 flex items-center justify-center shrink-0 transition-all duration-300 ${
-                    isSectionSidebarExpanded ? 'w-11 h-11' : 'w-12 h-12'
+                  className={`rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
+                    activeMainSection === item.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-100 text-slate-500'
+                  } ${
+                    isSectionSidebarExpanded ? 'w-10 h-10' : 'w-11 h-11'
                   }`}
                 >
                   <Icon size={18} />
                 </div>
 
                 {isSectionSidebarExpanded && (
-                  <span className="text-sm font-semibold whitespace-nowrap">
-                    {item.label}
+                  <span className="min-w-0 text-left">
+                    <span className="block text-sm font-semibold whitespace-nowrap">
+                      {item.label}
+                    </span>
+
+                    {item.description ? (
+                      <span
+                        className={`block text-[11px] truncate ${
+                          activeMainSection === item.id ? 'text-white/75' : 'text-slate-400'
+                        }`}
+                      >
+                        {item.description}
+                      </span>
+                    ) : null}
                   </span>
                 )}
               </button>
@@ -6897,89 +7604,57 @@ export default function AdvancedFlashcardPoC() {
       </aside>
 
       <div
-        className={`w-full transition-[padding] duration-300 ease-out ${
-          isSectionSidebarExpanded ? 'lg:pl-[304px]' : 'lg:pl-[96px]'
+        className={`w-full min-h-screen bg-slate-50 transition-[padding] duration-300 ease-out ${
+          isSectionSidebarExpanded ? 'lg:pl-[288px]' : 'lg:pl-[80px]'
         }`}
       >
         <div className="w-full px-4 md:px-5 lg:px-5 pt-7">
-
-        <div className="mb-6">
-          <div className="rounded-[28px] border border-slate-200 bg-white px-4 py-4 md:px-6 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {[
-                {
-                  title: '1. Enviar',
-                  subtitle: 'Seu vídeo',
-                  icon: Video,
-                  iconWrap: 'bg-indigo-50 text-indigo-600',
-                },
-                {
-                  title: '2. Transcrever',
-                  subtitle: 'Lendo o conteúdo',
-                  icon: FileText,
-                  iconWrap: 'bg-violet-50 text-violet-600',
-                },
-                {
-                  title: '3. IA em Ação',
-                  subtitle: 'Criando material',
-                  icon: Sparkles,
-                  iconWrap: 'bg-amber-50 text-amber-600',
-                },
-                {
-                  title: '4. Estudar',
-                  subtitle: 'Tudo salvo',
-                  icon: BookOpen,
-                  iconWrap: 'bg-emerald-50 text-emerald-600',
-                },
-              ].map((step, index) => {
-                const Icon = step.icon;
-
-                return (
-                  <div
-                    key={step.title}
-                    className="flex items-center gap-4 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-4"
-                  >
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${step.iconWrap}`}>
-                      <Icon size={20} />
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="text-base font-bold text-slate-900 leading-none">{step.title}</p>
-                      <p className="text-sm text-slate-500 mt-1">{step.subtitle}</p>
-                    </div>
-
-                    {index < 3 && (
-                      <ChevronRight size={18} className="hidden xl:block ml-auto text-slate-300 shrink-0" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 gap-6">
-          <section
-            ref={uploadSectionRef}
-            className="scroll-mt-24 rounded-[32px] border border-slate-200 bg-white shadow-sm overflow-hidden"
-          >
-            <div className="p-4 md:p-5 bg-slate-50/70">
-              <div className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.06),_transparent_38%),linear-gradient(to_bottom,_#f8fafc,_#f5f7fb)] p-6 md:p-8">
 
-              <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_1fr] gap-6">
-                <div className="rounded-[32px] border border-slate-200 bg-white p-6 md:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.05)] flex flex-col h-full">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-violet-600 text-white flex items-center justify-center font-bold shadow-md">
-                      1
+            <section
+              ref={uploadSectionRef}
+              className={`${sectionVisibilityClass('upload')} scroll-mt-24 rounded-[32px] border border-slate-200 bg-white shadow-sm overflow-hidden`}
+            >
+              <div className="min-h-[calc(100vh-96px)] bg-[radial-gradient(circle_at_top,_rgba(239,68,68,0.08),_transparent_34%),linear-gradient(to_bottom,_#ffffff,_#f8fafc)] px-4 py-10 md:py-14">
+                <div className="mx-auto max-w-2xl">
+                  <div className="text-center mb-7">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 text-white shadow-lg shadow-red-200">
+                      <Activity size={34} />
                     </div>
-                    <h2 className="text-2xl font-black text-slate-900">Mídia Base</h2>
+
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-red-500 mb-2">
+                      Medicina JVS
+                    </p>
+
+                    <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-950">
+                      Flashcards IA
+                    </h1>
+
+                    <p className="mt-3 text-sm md:text-base text-slate-500">
+                      Transforme aulas em transcrição, análise, flashcards e revisão médica estruturada.
+                    </p>
                   </div>
 
-                  
-                  <div
-                    onClick={() => videoInputRef.current?.click()}
-                    className="flex-1 border-2 border-dashed border-indigo-100 rounded-[30px] min-h-[420px] bg-[linear-gradient(to_bottom,_rgba(248,250,252,0.96),_rgba(241,245,249,0.92))] hover:bg-[linear-gradient(to_bottom,_rgba(245,243,255,0.98),_rgba(237,233,254,0.94))] hover:border-violet-300 transition-all cursor-pointer flex flex-col items-center justify-center text-center px-6 md:px-10 group shadow-inner"
-                  >
+                  <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-left shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white">
+                        <Sparkles size={18} />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          Modo automático ativado
+                        </p>
+
+                        <p className="mt-1 text-sm leading-6 text-slate-600">
+                          Envie a aula e o sistema tenta fazer tudo por você: transcrição, flashcards,
+                          análise, enriquecimento e organização no acervo.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-6 rounded-[28px] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/70">
                     <input
                       type="file"
                       ref={videoInputRef}
@@ -6992,38 +7667,6 @@ export default function AdvancedFlashcardPoC() {
                       }}
                     />
 
-                    <div className="w-24 h-24 rounded-[28px] bg-white border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.06)] flex items-center justify-center mb-8 group-hover:scale-105 transition-transform">
-                      <Upload className="text-slate-400 group-hover:text-violet-600 transition-colors" size={38} />
-                    </div>
-
-                    <p className="text-3xl md:text-4xl font-black text-slate-900 leading-tight">
-                      {videoFile ? 'Arquivo selecionado' : 'Selecione a aula para começar'}
-                    </p>
-
-                    <p className="text-base text-slate-500 mt-4">
-                      {videoFile ? videoFile.name : (
-                        <>
-                          ou <span className="text-violet-600 font-semibold underline">clique para procurar</span>
-                        </>
-                      )}
-                    </p>
-
-                    <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-                      {['MP4', 'MOV', 'AVI', 'MKV', 'WebM'].map((format) => (
-                        <span
-                          key={format}
-                          className="px-3 py-1 rounded-full bg-white border border-slate-200 text-xs font-medium text-slate-500"
-                        >
-                          {format}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div
-                    onClick={() => enrichmentVideoInputRef.current?.click()}
-                    className="mt-5 border border-dashed border-violet-200 rounded-[24px] bg-violet-50/40 hover:bg-violet-50 transition-all cursor-pointer p-5"
-                  >
                     <input
                       type="file"
                       ref={enrichmentVideoInputRef}
@@ -7036,265 +7679,317 @@ export default function AdvancedFlashcardPoC() {
                       }}
                     />
 
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-500 mb-2">
-                          Vídeo complementar opcional
-                        </p>
-                        <p className="text-sm font-bold text-slate-900">
-                          {enrichmentVideoFile ? enrichmentVideoFile.name : 'Adicionar segunda aula como base de enriquecimento'}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Esse vídeo não substitui a mídia principal. Ele será transcrito e usado apenas para enriquecer a geração dos flashcards.
-                        </p>
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => videoInputRef.current?.click()}
+                        className="flex min-h-[64px] flex-1 items-center gap-3 rounded-2xl bg-slate-50 px-4 text-left transition-all hover:bg-red-50"
+                      >
+                        <Search className="h-5 w-5 shrink-0 text-slate-400" />
+
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-base md:text-lg font-semibold ${
+                            videoFile ? 'text-slate-900' : 'text-slate-400'
+                          }`}>
+                            {videoFile ? videoFile.name : 'Selecione a aula que você quer transformar em flashcards...'}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            MP4, MOV, AVI, MKV ou WebM
+                          </p>
+                        </div>
+                      </button>
 
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (enrichmentVideoFile) {
-                            setEnrichmentVideoFile(null);
-                            if (enrichmentVideoInputRef.current) enrichmentVideoInputRef.current.value = '';
-                          } else {
-                            enrichmentVideoInputRef.current?.click();
+                        onClick={() => {
+                          if (!videoFile) {
+                            videoInputRef.current?.click();
+                            return;
                           }
+
+                          processVideo();
                         }}
-                        className="px-4 py-2 rounded-xl border border-violet-200 bg-white text-violet-700 text-xs font-bold hover:bg-violet-50"
+                        disabled={isProcessing}
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-md shadow-red-100 transition-all hover:bg-red-700 disabled:opacity-50"
+                        title={videoFile ? 'Gerar estudo automaticamente' : 'Selecionar aula'}
                       >
-                        {enrichmentVideoFile ? 'Remover vídeo' : 'Selecionar vídeo'}
+                        {isProcessing ? (
+                          <Loader2 className="animate-spin" size={20} />
+                        ) : videoFile ? (
+                          <Sparkles size={20} />
+                        ) : (
+                          <Upload size={20} />
+                        )}
                       </button>
                     </div>
-                  </div>
 
-                  <div className="mt-auto pt-5">
                     {videoFile ? (
-                      <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 md:p-5">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 mb-2">
-                              Arquivo pronto
-                            </p>
-                            <p className="text-base font-bold text-slate-900 truncate">
-                              {videoFile.name}
-                            </p>
-                            <p className="text-sm text-slate-500 mt-1">
-                              Revise as configurações ao lado e inicie o processamento.
-                            </p>
-                          </div>
+                      <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-4 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-red-500">
+                            Arquivo pronto
+                          </p>
 
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="inline-flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                              <Video size={14} />
-                              Vídeo carregado
-                            </span>
-                          </div>
+                          <p className="mt-1 truncate text-sm font-bold text-slate-900">
+                            {videoFile.name}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Clique no botão vermelho para gerar o estudo automaticamente.
+                          </p>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoFile(null);
+                            if (videoInputRef.current) videoInputRef.current.value = '';
+                          }}
+                          className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50"
+                        >
+                          Trocar arquivo
+                        </button>
                       </div>
                     ) : null}
-                  </div>
 
-                  {(videoFile || transcript || flashcards.length > 0 || error) && !isProcessing && (
-                    <div className="flex items-center justify-between mt-5">
-                      <button
-                        onClick={resetAll}
-                        className="text-sm font-medium text-slate-500 hover:text-red-600 transition-colors"
-                      >
-                        Limpar tudo
-                      </button>
+                    <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                            Aula complementar opcional
+                          </p>
 
-                      {(transcript || flashcards.length > 0) && (
-                        <div className="flex items-center gap-2 text-emerald-600 font-semibold text-sm">
-                          <CheckCircle2 size={18} />
-                          Processado
+                          <p className="mt-1 truncate text-sm font-bold text-slate-800">
+                            {enrichmentVideoFile
+                              ? enrichmentVideoFile.name
+                              : 'Adicionar segundo vídeo para enriquecer o estudo'}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Use quando quiser comparar duas aulas ou complementar uma transcrição.
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                <div className="rounded-[32px] border border-slate-200 bg-white p-6 md:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.05)] flex flex-col">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold shadow-md">
-                      2
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (enrichmentVideoFile) {
+                              setEnrichmentVideoFile(null);
+                              if (enrichmentVideoInputRef.current) {
+                                enrichmentVideoInputRef.current.value = '';
+                              }
+                              return;
+                            }
+
+                            enrichmentVideoInputRef.current?.click();
+                          }}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          {enrichmentVideoFile ? 'Remover complementar' : 'Selecionar complementar'}
+                        </button>
+                      </div>
                     </div>
-                    <h2 className="text-2xl font-black text-slate-900">Configuração da IA</h2>
                   </div>
 
-                  <div className="space-y-5 flex-1">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
-                        Preset de Automação
-                      </label>
-                      <SmartDropdown
-                        value={automationPreset}
-                        onChange={applyAutomationPreset}
-                        placeholder="Manual"
-                        options={[
-                          {
-                            id: 'automation_group',
-                            label: 'Preset de Automação',
-                            icon: <Sparkles className="w-4 h-4" />,
-                            description: 'Como a IA deve trabalhar',
-                            subOptions: [
-                              { id: 'manual', label: 'Manual' },
-                              { id: 'standard', label: 'Padrão (Flashcards Automáticos)' },
-                              { id: 'deep', label: 'Profundo' },
-                              { id: 'reopen-smart', label: 'Profundo + reabrir histórico' },
-                            ],
+                  <section className="mb-7">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-red-500" />
+                      <h2 className="text-sm font-black text-red-500">
+                        Acesso rápido
+                      </h2>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        {
+                          label: 'Enviar aula',
+                          icon: Video,
+                          onClick: () => videoInputRef.current?.click(),
+                        },
+                        {
+                          label: 'Flashcards',
+                          icon: BookOpen,
+                          onClick: () => {
+                            if (flashcards.length > 0 || transcript) {
+                              openMainSection('flashcards');
+                            } else if (currentRunId) {
+                              generateFlashcardsFromSavedRun(false);
+                            }
                           },
-                        ]}
-                      />
-                    </div>
+                          disabled: !flashcards.length && !transcript && !currentRunId,
+                        },
+                        {
+                          label: 'Histórico',
+                          icon: FolderOpen,
+                          onClick: () => openMainSection('history'),
+                        },
+                        {
+                          label: 'Biblioteca',
+                          icon: Folder,
+                          onClick: () => openMainSection('library'),
+                        },
+                        {
+                          label: 'Revisar hoje',
+                          icon: RefreshCw,
+                          onClick: () => openMainSection('spaced-review'),
+                        },
+                        {
+                          label: 'Evidências',
+                          icon: Sparkles,
+                          onClick: () => openMainSection('evidence'),
+                          disabled: !transcript,
+                        },
+                      ].map((action) => {
+                        const Icon = action.icon;
 
-                    <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(to_bottom,_#f8fafc,_#f4f6fb)] p-5">
-                      <div className="mb-3 text-xs text-amber-600 font-medium">
-                        Defina se a IA deve rodar automaticamente após o processamento.
-                      </div>
-                      
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400 mb-5">
-                        Execução automática
-                      </p>
-
-                      <div className="space-y-4">
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoRunOnProcess}
-                            onChange={(e) => setAutoRunOnProcess(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Rodar automação ao processar</span>
-                        </label>
-
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoAnalyzeEvidence}
-                            onChange={(e) => setAutoAnalyzeEvidence(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Analisar evidências no PubMed</span>
-                        </label>
-
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoGenerateEnrichment}
-                            onChange={(e) => setAutoGenerateEnrichment(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Gerar texto enriquecido</span>
-                        </label>
-
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoGenerateBetterFlashcards}
-                            onChange={(e) => setAutoGenerateBetterFlashcards(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Gerar flashcards aprimorados</span>
-                        </label>
-
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoRunOnOpenHistory}
-                            onChange={(e) => setAutoRunOnOpenHistory(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Rodar automação ao abrir no histórico</span>
-                        </label>
-
-                        <label className="flex items-start gap-3 text-base text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={generateFlashcardsNow}
-                            onChange={(e) => setGenerateFlashcardsNow(e.target.checked)}
-                            className="mt-1 w-5 h-5 rounded"
-                          />
-                          <span>Gerar flashcards junto com a transcrição</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 text-xs text-slate-500">
-                      Modo atual: {automationPreset === 'manual' ? 'Manual' :
-                                  automationPreset === 'standard' ? 'Automático padrão' :
-                                  automationPreset === 'deep' ? 'Automático profundo' :
-                                  'Reopen inteligente'}
-                    </div>
-
-                    {processingJobInfo ? (
-                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
-                        <div className="flex-1">
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-[0.14em] text-indigo-500">
-                              Processamento assíncrono
-                            </p>
-
-                            <p className="text-sm font-bold text-slate-800 mt-1">
-                              {processingJobInfo.current_step || 'Preparando processamento...'}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] border ${
-                              processingJobInfo.status === 'completed'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : processingJobInfo.status === 'error'
-                                  ? 'bg-red-50 text-red-700 border-red-100'
-                                  : 'bg-white text-indigo-700 border-indigo-100'
-                            }`}
+                        return (
+                          <button
+                            key={action.label}
+                            type="button"
+                            onClick={action.onClick}
+                            disabled={action.disabled}
+                            className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-left text-sm font-bold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
                           >
-                            {processingJobInfo.status === 'completed' ? (
-                              <Check className="w-3.5 h-3.5" />
-                            ) : processingJobInfo.status === 'error' ? (
-                              <AlertCircle className="w-3.5 h-3.5" />
-                            ) : (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            )}
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{action.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
 
-                            {processingJobInfo.status === 'completed'
-                              ? 'Concluído'
-                              : processingJobInfo.status === 'error'
-                                ? 'Erro'
-                                : 'Em andamento'}
-                          </span>
+                  <section>
+                    <div className="mb-3 flex items-center gap-2">
+                      <Folder className="h-4 w-4 text-slate-400" />
+                      <h2 className="text-sm font-black text-slate-500">
+                        Todas as ferramentas
+                      </h2>
+                    </div>
+
+                    <div className="space-y-2">
+                      {[
+                        {
+                          title: 'Processamento da aula',
+                          icon: Video,
+                          count: videoFile ? 1 : 0,
+                          items: [
+                            videoFile ? `Arquivo principal: ${videoFile.name}` : 'Selecionar vídeo principal',
+                            enrichmentVideoFile
+                              ? `Complementar: ${enrichmentVideoFile.name}`
+                              : 'Vídeo complementar opcional',
+                            generateFlashcardsNow
+                              ? 'Gerar flashcards junto com a transcrição'
+                              : 'Gerar flashcards depois',
+                          ],
+                        },
+                        {
+                          title: 'Automação da IA',
+                          icon: Sparkles,
+                          count: [
+                            autoRunOnProcess,
+                            autoAnalyzeEvidence,
+                            autoGenerateEnrichment,
+                            autoGenerateBetterFlashcards,
+                            autoRunOnOpenHistory,
+                          ].filter(Boolean).length,
+                          items: [
+                            `Preset atual: ${
+                              automationPreset === 'manual'
+                                ? 'Manual'
+                                : automationPreset === 'standard'
+                                  ? 'Automático padrão'
+                                  : automationPreset === 'deep'
+                                    ? 'Profundo'
+                                    : 'Reopen inteligente'
+                            }`,
+                            autoAnalyzeEvidence ? 'Análise de evidência ativa' : 'Análise de evidência manual',
+                            autoGenerateEnrichment ? 'Texto enriquecido automático' : 'Texto enriquecido manual',
+                            autoGenerateBetterFlashcards ? 'Flashcards aprimorados automáticos' : 'Flashcards aprimorados manuais',
+                          ],
+                        },
+                        {
+                          title: 'Acervo e revisão',
+                          icon: BookOpen,
+                          count: libraryCards.length,
+                          items: [
+                            `${libraryCards.length} cards na biblioteca`,
+                            `${cardsDueCount} cards vencidos`,
+                            `${historyData.length} itens recentes no histórico`,
+                          ],
+                        },
+                      ].map((group, index) => {
+                        const Icon = group.icon;
+
+                        return (
+                          <details
+                            key={group.title}
+                            open={index === 0}
+                            className="group rounded-2xl border border-slate-200 bg-white shadow-sm"
+                          >
+                            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl p-4 transition-colors hover:bg-slate-50">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500">
+                                <Icon size={17} />
+                              </div>
+
+                              <span className="flex-1 text-sm font-bold text-slate-800">
+                                {group.title}
+                              </span>
+
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">
+                                {group.count}
+                              </span>
+
+                              <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
+                            </summary>
+
+                            <div className="ml-14 mr-4 mb-4 space-y-1 border-l border-slate-100 pl-4">
+                              {group.items.map((item) => (
+                                <div
+                                  key={item}
+                                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                                >
+                                  <FileText className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="flex-1">{item}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {processingJobInfo ? (
+                    <div className="mt-6 rounded-2xl border border-red-100 bg-red-50/70 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-red-500">
+                          {processingJobInfo.status === 'completed' ? (
+                            <Check size={17} />
+                          ) : processingJobInfo.status === 'error' ? (
+                            <AlertCircle size={17} />
+                          ) : (
+                            <Loader2 size={17} className="animate-spin" />
+                          )}
                         </div>
 
-                        <div>
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1">
-                            <span>
-                              {processingJobInfo.status === 'uploading'
-                                ? 'Upload direto para o R2'
-                                : 'Progresso do job'}
-                            </span>
-                            <span>
-                              {Math.max(
-                                0,
-                                Math.min(
-                                  100,
-                                  Number(
-                                    processingJobInfo.status === 'uploading'
-                                      ? processingJobInfo.uploadProgress
-                                      : processingJobInfo.progress
-                                  ) || 0
-                                )
-                              )}
-                              %
-                            </span>
-                          </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-red-500">
+                            Processamento assíncrono
+                          </p>
 
-                          <div className="h-2 rounded-full bg-white border border-indigo-100 overflow-hidden">
+                          <p className="mt-1 text-sm font-bold text-slate-800">
+                            {processingJobInfo.current_step || 'Preparando processamento...'}
+                          </p>
+
+                          <div className="mt-3 h-2 overflow-hidden rounded-full border border-red-100 bg-white">
                             <div
                               className={`h-full rounded-full transition-all duration-500 ${
                                 processingJobInfo.status === 'error'
                                   ? 'bg-red-500'
                                   : processingJobInfo.status === 'completed'
                                     ? 'bg-emerald-500'
-                                    : 'bg-indigo-500'
+                                    : 'bg-red-500'
                               }`}
                               style={{
                                 width: `${Math.max(
@@ -7311,64 +8006,28 @@ export default function AdvancedFlashcardPoC() {
                               }}
                             />
                           </div>
+
+                          {processingJobInfo.error_message ? (
+                            <p className="mt-2 text-xs font-medium text-red-600">
+                              {processingJobInfo.error_message}
+                            </p>
+                          ) : null}
                         </div>
-
-                        {processingJobInfo.id ? (
-                          <p className="text-[11px] text-slate-400">
-                            Job: {processingJobInfo.id}
-                          </p>
-                        ) : null}
-
-                        {processingJobInfo.status === 'completed' && !processingJobInfo.study_run_id ? (
-                          <p className="text-xs text-emerald-700 font-medium">
-                            Fase 1 concluída: áudio extraído e vídeo temporário removido. A criação automática do estudo entra na Fase 2.
-                          </p>
-                        ) : null}
-
-                        {processingJobInfo.status === 'error' && processingJobInfo.error_message ? (
-                          <p className="text-xs text-red-600 font-medium">
-                            {processingJobInfo.error_message}
-                          </p>
-                        ) : null}
                       </div>
-                    ) : null}
-
-                    <button
-                      onClick={processVideo}
-                      disabled={!videoFile || isProcessing}
-                      className="w-full mt-2 bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-2xl font-bold shadow-[0_14px_30px_rgba(15,23,42,0.18)] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-base"
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="animate-spin" size={20} />
-                          Processando em segundo plano...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={18} />
-                          Iniciar Processamento
-                        </>
-                      )}
-                    </button>
-
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Presets aplicam uma configuração inicial, mas você pode ajustar cada etapa manualmente.
-                    </p>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
 
-          {transcript && (
+          {transcript && activeMainSection === 'transcript' && (
             <section
               ref={transcriptSectionRef}
               className="scroll-mt-24 bg-[url('data:image/svg+xml,%3Csvg width=\\'60\\' height=\\'60\\' viewBox=\\'0 0 60 60\\' xmlns=\\'http://www.w3.org/2000/svg\\'%3E%3Cg fill=\\'none\\' fill-rule=\\'evenodd\\'%3E%3Cg fill=\\'%23e2e8f0\\' fill-opacity=\\'0.35\\'%3E%3Cpath d=\\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] rounded-[32px] border border-slate-200 bg-slate-50/80 p-4 md:p-8 shadow-sm"
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-200 shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-red-100 shrink-0">
                     2
                   </div>
 
@@ -7388,7 +8047,7 @@ export default function AdvancedFlashcardPoC() {
                 </div>
 
                 <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200/60 flex items-center gap-3 text-sm">
-                  <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-500">
+                  <div className="p-1.5 bg-red-50 rounded-lg text-red-500">
                     <Video className="w-4 h-4" />
                   </div>
 
@@ -7405,10 +8064,10 @@ export default function AdvancedFlashcardPoC() {
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start lg:h-[700px]">
                 <div className="lg:col-span-4 lg:h-full min-h-0 overflow-y-auto pr-1 space-y-6 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-3xl p-1 shadow-lg shadow-indigo-200">
+                  <div className="bg-gradient-to-br from-red-500 to-red-700 rounded-3xl p-1 shadow-lg shadow-red-100">
                     <div className="bg-white/95 backdrop-blur-xl rounded-[1.4rem] p-6 h-full">
                       <div className="flex items-center gap-2 mb-4">
-                        <Sparkles className="w-5 h-5 text-indigo-500" />
+                        <Sparkles className="w-5 h-5 text-red-500" />
 
                         <h3 className="font-bold text-slate-800 text-sm tracking-wide">
                           Resumo da IA
@@ -7422,10 +8081,10 @@ export default function AdvancedFlashcardPoC() {
                   </div>
 
                   {(enrichmentSupportTranscript || enrichmentSupportVideoUrl) && (
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-indigo-100 space-y-4 shrink-0">
+                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-red-100 space-y-4 shrink-0">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">
+                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
                             Base complementar
                           </p>
 
@@ -7438,7 +8097,7 @@ export default function AdvancedFlashcardPoC() {
                           </p>
                         </div>
 
-                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                           <Video size={18} />
                         </div>
                       </div>
@@ -7469,7 +8128,7 @@ export default function AdvancedFlashcardPoC() {
                         <button
                           type="button"
                           onClick={() => window.open(enrichmentSupportVideoUrl, '_blank', 'noopener,noreferrer')}
-                          className="w-full px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors"
+                          className="w-full px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100"
                         >
                           Ver vídeo complementar
                         </button>
@@ -7590,7 +8249,7 @@ export default function AdvancedFlashcardPoC() {
                         value={transcriptSearchTerm}
                         onChange={(e) => setTranscriptSearchTerm(e.target.value)}
                         placeholder="Pesquisar na transcrição..."
-                        className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all"
                       />
                     </div>
 
@@ -7641,14 +8300,14 @@ export default function AdvancedFlashcardPoC() {
             </section>
           )}
 
-          {transcript && (
+          {transcript && activeMainSection === 'flashcards' && (
             <section
               ref={flashcardsSectionRef}
               className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
             >
               <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="bg-[#0f172a] text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
                     3
                   </div>
                   <h2 className="text-2xl font-bold text-slate-900">Flashcards</h2>
@@ -7658,7 +8317,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(false)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#0f172a] hover:bg-[#1e293b] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
                   >
                     {isGeneratingSavedFlashcards ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -7680,7 +8339,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
-                    className="flex items-center justify-center gap-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
                   >
                     {isAnalyzingEvidence ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -7738,7 +8397,7 @@ export default function AdvancedFlashcardPoC() {
                             className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col h-full"
                           >
                             <div className="flex justify-between items-center mb-4">
-                              <span className="text-[#6366f1] text-xs font-bold tracking-wider uppercase">
+                              <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
                                 Flashcard {String(index + 1).padStart(2, '0')}
                               </span>
                               <span
@@ -7763,6 +8422,67 @@ export default function AdvancedFlashcardPoC() {
                                 </span>
                               )}
                             </div>
+
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              <button
+                                type="button"
+                                onClick={() => openFlashcardEditor(index)}
+                                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+                              >
+                                Editar
+                              </button>
+
+                              <label className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
+                                {isUploadingFlashcardImage && flashcardActionIndex === index
+                                  ? 'Enviando...'
+                                  : 'Imagem manual'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={isUploadingFlashcardImage}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = '';
+                                    uploadManualFlashcardImage(index, file);
+                                  }}
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                disabled
+                                title="Geração de imagem por IA exige plano pago/billing ativo no Gemini."
+                                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed"
+                              >
+                                Imagem IA indisponível
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => generateFlashcardInsights(index)}
+                                disabled={isGeneratingFlashcardInsights}
+                                className="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors disabled:opacity-50"
+                              >
+                                {isGeneratingFlashcardInsights && flashcardActionIndex === index
+                                  ? 'Analisando...'
+                                  : 'Insights'}
+                              </button>
+                            </div>
+
+                            {card.imageUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => window.open(card.imageUrl, '_blank', 'noopener,noreferrer')}
+                                className="mb-5 overflow-hidden rounded-2xl border border-slate-100 bg-slate-950 group"
+                              >
+                                <img
+                                  src={card.imageUrl}
+                                  alt={`Imagem do flashcard ${index + 1}`}
+                                  className="h-56 w-full object-cover group-hover:scale-[1.02] transition-transform"
+                                />
+                              </button>
+                            ) : null}
 
                             <h3 className="text-lg font-bold text-slate-900 mb-6 leading-snug">
                               {card.question}
@@ -7791,6 +8511,77 @@ export default function AdvancedFlashcardPoC() {
                                   />
                                 </div>
                               )}
+
+                              {card.cardInsights && Object.keys(card.cardInsights || {}).length > 0 ? (
+                                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50/60 p-4">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedFlashcardInsights((prev) => ({
+                                        ...prev,
+                                        [index]: !prev[index],
+                                      }))
+                                    }
+                                    className="w-full flex items-center justify-between gap-3 text-left"
+                                  >
+                                    <span className="text-red-700 text-[10px] font-black tracking-widest uppercase">
+                                      Insights deste flashcard
+                                    </span>
+
+                                    <ChevronDown
+                                      size={16}
+                                      className={`text-red-500 transition-transform ${
+                                        expandedFlashcardInsights[index] ? 'rotate-180' : ''
+                                      }`}
+                                    />
+                                  </button>
+
+                                  {expandedFlashcardInsights[index] ? (
+                                    <div className="mt-4 space-y-3 text-sm text-red-950/80 leading-relaxed">
+                                      {card.cardInsights.gap ? (
+                                        <div>
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
+                                            Lacuna
+                                          </p>
+                                          <p>{card.cardInsights.gap}</p>
+                                        </div>
+                                      ) : null}
+
+                                      {card.cardInsights.improvement ? (
+                                        <div>
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
+                                            Melhoria sugerida
+                                          </p>
+                                          <p>{card.cardInsights.improvement}</p>
+                                        </div>
+                                      ) : null}
+
+                                      {card.cardInsights.corrected_answer ? (
+                                        <div>
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
+                                            Resposta corrigida
+                                          </p>
+                                          <FormattedAiText
+                                            text={card.cardInsights.corrected_answer}
+                                            className="[&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-red-950"
+                                          />
+                                        </div>
+                                      ) : null}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => applyFlashcardInsightSuggestion(index)}
+                                        disabled={isSavingFlashcardEdit && flashcardActionIndex === index}
+                                        className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white hover:bg-red-700 disabled:opacity-50"
+                                      >
+                                        {isSavingFlashcardEdit && flashcardActionIndex === index
+                                          ? 'Aplicando...'
+                                          : 'Aplicar melhoria ao card'}
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -7825,12 +8616,19 @@ export default function AdvancedFlashcardPoC() {
                             }`}
                           >
                             <div className="absolute inset-0 w-full h-full bg-white border border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center [backface-visibility:hidden]">
-                              <span className="absolute top-6 left-6 text-[#6366f1] text-xs font-bold tracking-wider uppercase">
+                              <span className="absolute top-6 left-6 text-red-500 text-xs font-bold tracking-wider uppercase">
                                 Flashcard {String(currentStudyIndex + 1).padStart(2, '0')}
                               </span>
                               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 text-blue-500">
                                 <Lightbulb size={32} />
                               </div>
+                              {currentStudyCard.imageUrl ? (
+                                <img
+                                  src={currentStudyCard.imageUrl}
+                                  alt="Imagem do flashcard atual"
+                                  className="mb-5 max-h-32 w-full max-w-xs rounded-2xl object-cover border border-slate-100"
+                                />
+                              ) : null}
                               <h3 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight">
                                 {currentStudyCard.question}
                               </h3>
@@ -7888,7 +8686,7 @@ export default function AdvancedFlashcardPoC() {
                           <button
                             onClick={handleNextStudyCard}
                             disabled={currentStudyIndex === flashcards.length - 1}
-                            className="p-3 rounded-full bg-[#0f172a] text-white hover:bg-[#1e293b] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            className="p-3 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm shadow-red-100"
                           >
                             <ChevronRight size={24} />
                           </button>
@@ -7911,7 +8709,7 @@ export default function AdvancedFlashcardPoC() {
 
                           <button
                             onClick={() => rateStudyCard(3)}
-                            className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 transition-colors"
+                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"
                           >
                             Bom
                           </button>
@@ -7937,1263 +8735,1263 @@ export default function AdvancedFlashcardPoC() {
             </section>
           )}
 
-          {transcript && (
-  <section
-    ref={evidenceSectionRef}
-    className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
-  >
-    <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="bg-[#0f172a] text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-          4
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900">Análise de Evidência</h2>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => generateEnrichedTranscriptFromCurrentRun()}
-          disabled={!currentRunId || !evidenceAnalysis || isGeneratingEnrichedTranscript}
-          className="flex items-center justify-center gap-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
-        >
-          {isGeneratingEnrichedTranscript ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Sparkles size={16} />
-          )}
-          Gerar texto enriquecido
-        </button>
-
-        <button
-          onClick={() => generateFlashcardsFromEnrichedRun()}
-          disabled={!currentRunId || !enrichedTranscript || isGeneratingEnrichedFlashcards}
-          className="flex items-center justify-center gap-2 bg-[#0f172a] hover:bg-[#1e293b] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          {isGeneratingEnrichedFlashcards ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Wand2 size={16} />
-          )}
-          Gerar flashcards melhores
-        </button>
-
-        {isAnalyzingEvidence && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <Loader2 size={16} className="animate-spin" />
-            Analisando...
-          </div>
-        )}
-      </div>
-    </div>
-
-    <div className="p-6 md:p-8 bg-slate-50/30">
-      {evidenceAnalysis && (
-        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <p className="text-sm font-semibold text-emerald-700">
-            Análise carregada automaticamente
-          </p>
-          <p className="text-xs text-emerald-600 mt-1">
-            Esta execução já possuía uma análise salva e ela foi aberta junto com o estudo.
-          </p>
-        </div>
-      )}
-      {!evidenceAnalysis ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <Sparkles className="mx-auto mb-4 text-slate-300" size={30} />
-          <h3 className="text-lg font-semibold text-slate-800">
-            Nenhuma análise gerada ainda
-          </h3>
-          <p className="text-sm text-slate-500 mt-2 max-w-2xl mx-auto">
-            Clique em <span className="font-medium">Analisar evidência</span> para comparar a transcrição
-            com referências médicas e identificar lacunas, sugestões de melhoria e possíveis mnemônicos.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <AnimatedTopicCloud topics={evidenceAnalysis.topics_detected || []} />
-
-          <div className="bg-white border border-amber-200 rounded-2xl p-5 xl:col-span-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700 mb-4">
-              Lacunas identificadas
-            </h3>
-
-            {(evidenceAnalysis.missing_topics || []).length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma lacuna importante identificada.</p>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 auto-rows-fr">
-                {(evidenceAnalysis.missing_topics || []).map((item, index) => {
-                  const title = getMissingTopicTitle(item, index);
-                  const fixText = getMissingTopicFixText(item, index);
-
-                  return (
-                    <div
-                      key={index}
-                      className="rounded-2xl border border-amber-200 bg-amber-50 p-5 min-h-[520px] h-full flex flex-col overflow-hidden"
-                    >
-                     <div className="flex-1 min-h-0 flex flex-col gap-4">
-                      <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700 mb-2">
-                          Lacuna identificada
-                        </p>
-
-                        <h4 className="text-base font-bold text-amber-950 leading-7">
-                          {title}
-                        </h4>
-                      </div>
-
-                      <div className="flex-1 min-h-0 rounded-2xl border border-amber-100 bg-white/80 p-4 overflow-y-auto">
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700 mb-3">
-                          Como corrigir no texto enriquecido
-                        </p>
-
-                        <FormattedAiText
-                          text={fixText}
-                          className="text-sm text-amber-900/90 leading-7"
-                        />
-                      </div>
-                    </div>
-
-                    {typeof applyMissingTopicToEnrichedText === 'function' && (
-                      <div className="mt-4 pt-4 border-t border-amber-100 flex justify-center">
-                        <EvidenceApplyButton
-                          added={Boolean(appliedEvidenceActionIds[`lacuna-${index}`])}
-                          disabled={!currentRunId}
-                          label="Adicionar correção ao texto enriquecido"
-                          onApply={() => applyMissingTopicToEnrichedText(item, index)}
-                        />
-                      </div>
-                    )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {referenceVideos.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-              Vídeos de referência usados
-            </h3>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {referenceVideos.map((video, index) => (
-                <div
-                  key={video.id || index}
-                  className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">
-                        {video.title}
-                      </p>
-                      <p className="text-xs text-violet-700 font-semibold mt-1">
-                        {video.specialty || 'Sem especialidade'}
-                      </p>
-                    </div>
-
-                    {typeof video.score === 'number' && (
-                      <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white border border-violet-200 text-violet-700">
-                        score {video.score}
-                      </span>
-                    )}
+          {transcript && activeMainSection === 'evidence' && (
+            <section
+              ref={evidenceSectionRef}
+              className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
+            >
+              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
+                    4
                   </div>
+                  <h2 className="text-2xl font-bold text-slate-900">Análise de Evidência</h2>
+                </div>
 
-                  {video.summary ? (
-                    <p className="text-sm text-slate-600 mt-3 leading-relaxed">
-                      {video.summary}
-                    </p>
-                  ) : null}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={() => generateEnrichedTranscriptFromCurrentRun()}
+                    disabled={!currentRunId || !evidenceAnalysis || isGeneratingEnrichedTranscript}
+                    className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {isGeneratingEnrichedTranscript ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                    Gerar texto enriquecido
+                  </button>
 
-                  {Array.isArray(video.key_points) && video.key_points.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                        Pontos-chave
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {video.key_points.map((point, pointIndex) => (
-                          <span
-                            key={pointIndex}
-                            className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-700"
-                          >
-                            {point}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => generateFlashcardsFromEnrichedRun()}
+                    disabled={!currentRunId || !enrichedTranscript || isGeneratingEnrichedFlashcards}
+                    className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
+                  >
+                    {isGeneratingEnrichedFlashcards ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Wand2 size={16} />
+                    )}
+                    Gerar flashcards melhores
+                  </button>
 
-                  {Array.isArray(video.common_pitfalls) && video.common_pitfalls.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                        Armadilhas comuns
-                      </p>
-                      <ul className="space-y-1.5">
-                        {video.common_pitfalls.slice(0, 3).map((pitfall, pitfallIndex) => (
-                          <li key={pitfallIndex} className="text-sm text-slate-700 flex gap-2">
-                            <span className="text-amber-500 mt-0.5">•</span>
-                            <span>{pitfall}</span>
-                          </li>
-                        ))}
-                      </ul>
+                  {isAnalyzingEvidence && (
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Loader2 size={16} className="animate-spin" />
+                      Analisando...
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-              Sugestões de melhoria
-            </h3>
-
-            {(evidenceAnalysis.improvement_suggestions || []).length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma sugestão adicional retornada.</p>
-            ) : (
-              <div className="space-y-4">
-                {(evidenceAnalysis.improvement_suggestions || []).map((item, index) => {
-                  const suggestion = getSuggestionImplementation(item, index);
-                  const isExpanded = Boolean(expandedImprovementSuggestions[index]);
-
-                  return (
-                    <div
-                      key={index}
-                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm overflow-hidden"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="min-w-0">
-                          <h4 className="font-semibold text-slate-900">
-                            {suggestion.title}
-                          </h4>
-
-                          <FormattedAiText
-                            text={suggestion.content}
-                            className="text-sm text-slate-700 mt-2 leading-7"
-                          />
-
-                          {suggestion.why ? (
-                            <div className="text-xs text-slate-500 mt-3 leading-6">
-                              <span className="font-semibold">Como isso melhora: </span>
-                              <FormattedAiText
-                                text={suggestion.why}
-                                className="inline"
-                              />
-                            </div>
-                          ) : null}
-
-                          {getSourceNumbers(item).length > 0 && (
-                            <p className="text-xs text-slate-400 mt-2">
-                              Fontes relacionadas: {getSourceNumbers(item).join(', ')}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="w-full lg:w-[520px] shrink-0 flex flex-col items-center">
-                          <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleImprovementSuggestionDetails(index)}
-                              className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center"
-                            >
-                              {isExpanded ? 'Ocultar detalhe' : 'Detalhar melhoria'}
-                            </button>
-
-                            <EvidenceApplyButton
-                              added={Boolean(appliedEvidenceActionIds[`sugestao-${index}`])}
-                              disabled={!currentRunId}
-                              compact
-                              stretch
-                              label="Adicionar melhoria"
-                              onApply={() => applySuggestionToEnrichedText(item, index)}
-                            />
-                          </div>
-
-                          <div className="w-full">
-                            <SuggestionAddedPreview
-                              visible={Boolean(appliedEvidenceActionIds[`sugestao-${index}`])}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {isExpanded ? (
-                        <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
-                          <p className="text-xs font-black uppercase tracking-wider text-indigo-700 mb-2">
-                            Como aplicar essa melhoria
-                          </p>
-
-                          <FormattedAiText
-                            text={suggestion.howToApply}
-                            className="text-sm text-indigo-950 leading-6"
-                          />
-
-                          <div className="mt-4 rounded-xl bg-white border border-indigo-100 p-5 text-center">
-                            <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
-                              Texto que será adicionado
-                            </p>
-
-                            <FormattedAiText
-                              text={suggestion.finalText}
-                              className="text-sm text-slate-700 leading-7 font-normal [&_p]:mb-0 [&_strong]:font-normal [&_strong]:text-slate-700"
-                            />
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
               </div>
-            )}
-          </div>
 
-          <div className="bg-white border border-amber-200 rounded-2xl p-5 min-w-0 max-h-[640px] overflow-y-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700">
-                Mnemônicos sugeridos
-              </h3>
-
-              <button
-                type="button"
-                onClick={generateMnemonicFlashcardsFromCurrentRun}
-                disabled={
-                  !currentRunId ||
-                  !(evidenceAnalysis.mnemonics || []).length ||
-                  isGeneratingMnemonicFlashcards ||
-                  mnemonicFlashcardsCreated
-                }
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all disabled:cursor-default ${
-                  mnemonicFlashcardsCreated
-                    ? 'bg-emerald-500'
-                    : 'bg-amber-600 hover:bg-amber-700 disabled:opacity-50'
-                }`}
-              >
-                {isGeneratingMnemonicFlashcards ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : mnemonicFlashcardsCreated ? (
-                  <Check size={14} />
-                ) : (
-                  <Wand2 size={14} />
-                )}
-
-                {isGeneratingMnemonicFlashcards
-                  ? 'Criando flashcards...'
-                  : mnemonicFlashcardsCreated
-                    ? 'Flashcards criados'
-                    : 'Criar flashcards dos mnemônicos'}
-              </button>
-            </div>
-
-            {(evidenceAnalysis.mnemonics || []).length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhum mnemônico sugerido.</p>
-            ) : (
-              <div className="space-y-4">
-                {(evidenceAnalysis.mnemonics || []).map((item, index) => (
-                  <div
-                    key={index}
-                    className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
-                  >
-                    <h4 className="font-semibold text-amber-900">{item.title}</h4>
-
-                    <FormattedAiText
-                      text={`**Mnemônico:** ${item.mnemonic || ''}`}
-                      className="text-sm text-amber-800 mt-2 leading-6 [&_p]:mb-0 [&_strong]:font-bold [&_strong]:text-amber-900"
-                    />
-
-                    <FormattedAiText
-                      text={item.explanation || ''}
-                      className="text-sm text-amber-900/90 mt-2 leading-6 [&_p]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950"
-                    />
-
-                    <FormattedAiText
-                      text={`**Uso:** ${item.use_case || ''}`}
-                      className="text-xs text-amber-700 mt-3 leading-6 [&_p]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-800"
-                    />
-
-                    <p className="text-[11px] text-amber-700 mt-3">
-                      Ao clicar no botão acima, o sistema cria flashcards exclusivos a partir dos
-                      mnemônicos desta seção.
+              <div className="p-6 md:p-8 bg-slate-50/30">
+                {evidenceAnalysis && (
+                  <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-emerald-700">
+                      Análise carregada automaticamente
+                    </p>
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Esta execução já possuía uma análise salva e ela foi aberta junto com o estudo.
                     </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 min-w-0 max-h-[640px] overflow-y-auto">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-              Fontes encontradas
-            </h3>
-
-            {evidenceSources.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma fonte retornada.</p>
-            ) : (
-              <div className="space-y-3 pr-2 w-full">
-                {evidenceSources.map((source, index) => (
-                  <a
-                    key={source.id || index}
-                    href={source.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4 hover:bg-slate-100 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-slate-900 break-words">
-                      [{index + 1}] {source.title}
+                )}
+                {!evidenceAnalysis ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                    <Sparkles className="mx-auto mb-4 text-slate-300" size={30} />
+                    <h3 className="text-lg font-semibold text-slate-800">
+                      Nenhuma análise gerada ainda
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-2 max-w-2xl mx-auto">
+                      Clique em <span className="font-medium">Analisar evidência</span> para comparar a transcrição
+                      com referências médicas e identificar lacunas, sugestões de melhoria e possíveis mnemônicos.
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">{source.source_name}</p>
-                    <p className="text-xs text-indigo-600 mt-2 break-all">{source.url}</p>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  </section>
-)}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <AnimatedTopicCloud topics={evidenceAnalysis.topics_detected || []} />
 
-{transcript && (
-  <section
-    ref={enrichedSectionRef}
-    className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
-  >
-    <div className="p-6 md:p-8 border-b border-slate-100 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="bg-[#0f172a] text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-          5
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900">Texto enriquecido</h2>
-      </div>
+                    <div className="bg-white border border-amber-200 rounded-2xl p-5 xl:col-span-2">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700 mb-4">
+                        Lacunas identificadas
+                      </h3>
 
-      <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mt-4 md:mt-0">
-        <button
-          onClick={() => setComparisonMode('original')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-            comparisonMode === 'original'
-              ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-              : 'text-slate-500'
-          }`}
-        >
-          Original
-        </button>
+                      {(evidenceAnalysis.missing_topics || []).length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhuma lacuna importante identificada.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 auto-rows-fr">
+                          {(evidenceAnalysis.missing_topics || []).map((item, index) => {
+                            const title = getMissingTopicTitle(item, index);
+                            const fixText = getMissingTopicFixText(item, index);
 
-        <button
-          onClick={() => setComparisonMode('enriched')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-            comparisonMode === 'enriched'
-              ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-              : 'text-slate-500'
-          }`}
-        >
-          Enriquecido
-        </button>
+                            return (
+                              <div
+                                key={index}
+                                className="rounded-2xl border border-amber-200 bg-amber-50 p-5 min-h-[520px] h-full flex flex-col overflow-hidden"
+                              >
+                              <div className="flex-1 min-h-0 flex flex-col gap-4">
+                                <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
+                                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700 mb-2">
+                                    Lacuna identificada
+                                  </p>
 
-        <button
-          onClick={() => setComparisonMode('split')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-            comparisonMode === 'split'
-              ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-              : 'text-slate-500'
-          }`}
-        >
-          Comparar
-        </button>
-      </div>
+                                  <h4 className="text-base font-bold text-amber-950 leading-7">
+                                    {title}
+                                  </h4>
+                                </div>
 
-      <div className="flex flex-col items-end gap-1">
-        {enrichedGeneratedAt ? (
-          <span className="text-xs text-slate-400">
-            Atualizado em {new Date(enrichedGeneratedAt).toLocaleString('pt-BR')}
-          </span>
-        ) : null}
+                                <div className="flex-1 min-h-0 rounded-2xl border border-amber-100 bg-white/80 p-4 overflow-y-auto">
+                                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700 mb-3">
+                                    Como corrigir no texto enriquecido
+                                  </p>
 
-        {enrichedTranscript ? (
-          <span
-            className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-              enrichedAutoSaveStatus === 'saving'
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : enrichedAutoSaveStatus === 'error'
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : enrichedAutoSaveStatus === 'saved'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-50 text-slate-500 border-slate-200'
-            }`}
-          >
-            {enrichedAutoSaveStatus === 'saving'
-              ? 'Salvando automaticamente...'
-              : enrichedAutoSaveStatus === 'error'
-                ? 'Erro ao salvar'
-                : enrichedAutoSaveStatus === 'saved'
-                  ? 'Salvo automaticamente'
-                  : 'Editor pronto'}
-          </span>
-        ) : null}
-      </div>
-    </div>
+                                  <FormattedAiText
+                                    text={fixText}
+                                    className="text-sm text-amber-900/90 leading-7"
+                                  />
+                                </div>
+                              </div>
 
-    <div className="p-6 md:p-8 bg-slate-50/30">
-
-      {!enrichedTranscript ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <FileText className="mx-auto mb-4 text-slate-300" size={30} />
-          <h3 className="text-lg font-semibold text-slate-800">
-            Nenhum texto enriquecido gerado ainda
-          </h3>
-          <p className="text-sm text-slate-500 mt-2 max-w-2xl mx-auto">
-            Gere o texto enriquecido para transformar a análise em uma versão mais completa da aula.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {comparisonMode === 'original' && enrichedManualBlocks.length > 0 && (
-            <div className="bg-white border border-indigo-200 rounded-2xl p-5">
-              <div className="text-center space-y-1 mb-5">
-                <h3 className="text-[15px] font-bold text-indigo-800 uppercase tracking-widest">
-                  Adições aplicadas ao texto enriquecido
-                </h3>
-                <p className="text-sm text-slate-500">
-                  Edite ou remova qualquer bloco aplicado pela Análise de Evidência.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {[
-                  {
-                    id: 'lacuna',
-                    title: 'Correções de Lacuna',
-                    count: enrichedManualBlocks.filter((block) => block.type === 'lacuna').length,
-                    blocks: enrichedManualBlocks.filter((block) => block.type === 'lacuna'),
-                    border: 'border-yellow-200',
-                    headerBg: 'bg-yellow-50/70 hover:bg-yellow-50',
-                    iconBg: 'bg-yellow-100 text-yellow-700',
-                    titleColor: 'text-yellow-900',
-                    cardBg: 'bg-yellow-50',
-                    cardBorder: 'border-yellow-200',
-                    textBorder: 'border-yellow-200',
-                    label: 'Correção de Lacuna',
-                    Icon: AlertCircle,
-                  },
-                  {
-                    id: 'sugestao',
-                    title: 'Sugestões Aplicadas',
-                    count: enrichedManualBlocks.filter((block) => block.type === 'sugestao').length,
-                    blocks: enrichedManualBlocks.filter((block) => block.type === 'sugestao'),
-                    border: 'border-indigo-100',
-                    headerBg: 'bg-indigo-50/70 hover:bg-indigo-50',
-                    iconBg: 'bg-indigo-100 text-indigo-600',
-                    titleColor: 'text-indigo-900',
-                    cardBg: 'bg-indigo-50',
-                    cardBorder: 'border-indigo-200',
-                    textBorder: 'border-indigo-100',
-                    label: 'Sugestão Aplicada',
-                    Icon: Lightbulb,
-                  },
-                ].map((panel) => {
-                  const isOpen = Boolean(expandedAppliedPanels[panel.id]);
-                  const Icon = panel.Icon;
-
-                  if (panel.count === 0) return null;
-
-                  return (
-                    <div
-                      key={panel.id}
-                      className={`bg-white border ${panel.border} rounded-xl shadow-sm overflow-hidden`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleAppliedPanel(panel.id)}
-                        className={`w-full px-6 py-4 flex items-center justify-between transition-colors ${panel.headerBg}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`${panel.iconBg} p-1.5 rounded-lg`}>
-                            <Icon size={20} />
-                          </div>
-
-                          <div className="text-left">
-                            <h4 className={`text-sm font-bold uppercase tracking-wide ${panel.titleColor}`}>
-                              {panel.title} ({panel.count})
-                            </h4>
-                          </div>
+                              {typeof applyMissingTopicToEnrichedText === 'function' && (
+                                <div className="mt-4 pt-4 border-t border-amber-100 flex justify-center">
+                                  <EvidenceApplyButton
+                                    added={Boolean(appliedEvidenceActionIds[`lacuna-${index}`])}
+                                    disabled={!currentRunId}
+                                    label="Adicionar correção ao texto enriquecido"
+                                    onApply={() => applyMissingTopicToEnrichedText(item, index)}
+                                  />
+                                </div>
+                              )}
+                              </div>
+                            );
+                          })}
                         </div>
+                      )}
+                    </div>
 
-                        <ChevronDown
-                          className={`w-5 h-5 transition-transform duration-300 ${
-                            isOpen ? 'rotate-180' : ''
-                          } ${panel.id === 'lacuna' ? 'text-yellow-500' : 'text-indigo-400'}`}
-                        />
-                      </button>
+                    {referenceVideos.length > 0 && (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                        Vídeos de referência usados
+                      </h3>
 
-                      <div
-                        className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-                          isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                        }`}
-                      >
-                        <div className="overflow-hidden">
-                          <div className="p-6 bg-slate-50/30 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {panel.blocks.map((block) => {
-                              const isEditing = editingAppliedBlockId === block.id;
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {referenceVideos.map((video, index) => (
+                          <div
+                            key={video.id || index}
+                            className="rounded-2xl border border-red-100 bg-red-50/60 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">
+                                  {video.title}
+                                </p>
+                                <p className="text-xs text-red-700 font-semibold mt-1">
+                                  {video.specialty || 'Sem especialidade'}
+                                </p>
+                              </div>
 
-                              return (
-                                <div
-                                  key={block.id}
-                                  className={`${panel.cardBg} border ${panel.cardBorder} rounded-xl p-5 flex flex-col shadow-sm h-full`}
-                                >
-                                  <div className="flex flex-col flex-1 mb-3">
-                                    <div className="flex justify-between items-start gap-3 mb-2">
-                                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                        {panel.label}
-                                      </span>
+                              {typeof video.score === 'number' && (
+                                <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white border border-red-100 text-red-700">
+                                  score {video.score}
+                                </span>
+                              )}
+                            </div>
 
-                                      <span className="text-[11px] text-slate-400 font-medium text-right">
-                                        {block.created_at
-                                          ? `Adicionado em ${new Date(block.created_at).toLocaleString('pt-BR')}`
-                                          : ''}
-                                      </span>
-                                    </div>
+                            {video.summary ? (
+                              <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                                {video.summary}
+                              </p>
+                            ) : null}
 
-                                    <h5 className="text-sm font-bold text-slate-800 leading-snug">
-                                      {block.title}
-                                    </h5>
+                            {Array.isArray(video.key_points) && video.key_points.length > 0 && (
+                              <div className="mt-4">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                  Pontos-chave
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {video.key_points.map((point, pointIndex) => (
+                                    <span
+                                      key={pointIndex}
+                                      className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-700"
+                                    >
+                                      {point}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {Array.isArray(video.common_pitfalls) && video.common_pitfalls.length > 0 && (
+                              <div className="mt-4">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                  Armadilhas comuns
+                                </p>
+                                <ul className="space-y-1.5">
+                                  {video.common_pitfalls.slice(0, 3).map((pitfall, pitfallIndex) => (
+                                    <li key={pitfallIndex} className="text-sm text-slate-700 flex gap-2">
+                                      <span className="text-amber-500 mt-0.5">•</span>
+                                      <span>{pitfall}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                        Sugestões de melhoria
+                      </h3>
+
+                      {(evidenceAnalysis.improvement_suggestions || []).length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhuma sugestão adicional retornada.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {(evidenceAnalysis.improvement_suggestions || []).map((item, index) => {
+                            const suggestion = getSuggestionImplementation(item, index);
+                            const isExpanded = Boolean(expandedImprovementSuggestions[index]);
+
+                            return (
+                              <div
+                                key={index}
+                                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm overflow-hidden"
+                              >
+                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                                  <div className="min-w-0">
+                                    <h4 className="font-semibold text-slate-900">
+                                      {suggestion.title}
+                                    </h4>
+
+                                    <FormattedAiText
+                                      text={suggestion.content}
+                                      className="text-sm text-slate-700 mt-2 leading-7"
+                                    />
+
+                                    {suggestion.why ? (
+                                      <div className="text-xs text-slate-500 mt-3 leading-6">
+                                        <span className="font-semibold">Como isso melhora: </span>
+                                        <FormattedAiText
+                                          text={suggestion.why}
+                                          className="inline"
+                                        />
+                                      </div>
+                                    ) : null}
+
+                                    {getSourceNumbers(item).length > 0 && (
+                                      <p className="text-xs text-slate-400 mt-2">
+                                        Fontes relacionadas: {getSourceNumbers(item).join(', ')}
+                                      </p>
+                                    )}
                                   </div>
 
-                                  {isEditing ? (
-                                    <div className="space-y-3">
-                                      <textarea
-                                        value={editingAppliedBlockContent}
-                                        onChange={(e) => setEditingAppliedBlockContent(e.target.value)}
-                                        className="w-full h-[180px] rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 leading-7 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                      />
-
-                                      <div className="flex gap-2 pt-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => saveEditingAppliedBlock(block.id)}
-                                          className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
-                                        >
-                                          Salvar edição
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={cancelEditingAppliedBlock}
-                                          className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-lg transition"
-                                        >
-                                          Cancelar
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <div
-                                        className={`bg-white border ${panel.textBorder} rounded-2xl p-4 shadow-inner`}
+                                  <div className="w-full lg:w-[520px] shrink-0 flex flex-col items-center">
+                                    <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleImprovementSuggestionDetails(index)}
+                                        className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center"
                                       >
-                                        <p className="text-sm text-slate-700 leading-7">
-                                          {buildAppliedBlockPreviewText(block.content)}
-                                        </p>
-                                      </div>
+                                        {isExpanded ? 'Ocultar detalhe' : 'Detalhar melhoria'}
+                                      </button>
 
-                                      <div className="flex flex-wrap gap-2 pt-4 shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setPreviewAppliedBlock({
-                                              ...block,
-                                              panelTitle: panel.title,
-                                              panelLabel: panel.label,
-                                              panelTone: panel.id,
-                                            })
-                                          }
-                                          className="px-4 py-1.5 bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold rounded-lg transition"
-                                        >
-                                          Visualizar
-                                        </button>
+                                      <EvidenceApplyButton
+                                        added={Boolean(appliedEvidenceActionIds[`sugestao-${index}`])}
+                                        disabled={!currentRunId}
+                                        compact
+                                        stretch
+                                        label="Adicionar melhoria"
+                                        onApply={() => applySuggestionToEnrichedText(item, index)}
+                                      />
+                                    </div>
 
-                                        <button
-                                          type="button"
-                                          onClick={() => startEditingAppliedBlock(block)}
-                                          className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-lg transition"
-                                        >
-                                          Editar
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => removeAppliedEnrichmentBlock(block.id)}
-                                          className="px-4 py-1.5 bg-white border border-slate-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition"
-                                        >
-                                          Remover
-                                        </button>
-                                      </div>
-                                    </>
-                                  )}
+                                    <div className="w-full">
+                                      <SuggestionAddedPreview
+                                        visible={Boolean(appliedEvidenceActionIds[`sugestao-${index}`])}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
-                              );
-                            })}
+
+                                {isExpanded ? (
+                                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+                                    <p className="text-xs font-black uppercase tracking-wider text-red-700 mb-2">
+                                      Como aplicar essa melhoria
+                                    </p>
+
+                                    <FormattedAiText
+                                      text={suggestion.howToApply}
+                                      className="text-sm text-red-950 leading-6"
+                                    />
+
+                                    <div className="mt-4 rounded-xl bg-white border border-red-100 p-5 text-center">
+                                      <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
+                                        Texto que será adicionado
+                                      </p>
+
+                                      <FormattedAiText
+                                        text={suggestion.finalText}
+                                        className="text-sm text-slate-700 leading-7 font-normal [&_p]:mb-0 [&_strong]:font-normal [&_strong]:text-slate-700"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white border border-amber-200 rounded-2xl p-5 min-w-0 max-h-[640px] overflow-y-auto">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700">
+                          Mnemônicos sugeridos
+                        </h3>
+
+                        <button
+                          type="button"
+                          onClick={generateMnemonicFlashcardsFromCurrentRun}
+                          disabled={
+                            !currentRunId ||
+                            !(evidenceAnalysis.mnemonics || []).length ||
+                            isGeneratingMnemonicFlashcards ||
+                            mnemonicFlashcardsCreated
+                          }
+                          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all disabled:cursor-default ${
+                            mnemonicFlashcardsCreated
+                              ? 'bg-emerald-500'
+                              : 'bg-amber-600 hover:bg-amber-700 disabled:opacity-50'
+                          }`}
+                        >
+                          {isGeneratingMnemonicFlashcards ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : mnemonicFlashcardsCreated ? (
+                            <Check size={14} />
+                          ) : (
+                            <Wand2 size={14} />
+                          )}
+
+                          {isGeneratingMnemonicFlashcards
+                            ? 'Criando flashcards...'
+                            : mnemonicFlashcardsCreated
+                              ? 'Flashcards criados'
+                              : 'Criar flashcards dos mnemônicos'}
+                        </button>
+                      </div>
+
+                      {(evidenceAnalysis.mnemonics || []).length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhum mnemônico sugerido.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {(evidenceAnalysis.mnemonics || []).map((item, index) => (
+                            <div
+                              key={index}
+                              className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                            >
+                              <h4 className="font-semibold text-amber-900">{item.title}</h4>
+
+                              <FormattedAiText
+                                text={`**Mnemônico:** ${item.mnemonic || ''}`}
+                                className="text-sm text-amber-800 mt-2 leading-6 [&_p]:mb-0 [&_strong]:font-bold [&_strong]:text-amber-900"
+                              />
+
+                              <FormattedAiText
+                                text={item.explanation || ''}
+                                className="text-sm text-amber-900/90 mt-2 leading-6 [&_p]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950"
+                              />
+
+                              <FormattedAiText
+                                text={`**Uso:** ${item.use_case || ''}`}
+                                className="text-xs text-amber-700 mt-3 leading-6 [&_p]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-800"
+                              />
+
+                              <p className="text-[11px] text-amber-700 mt-3">
+                                Ao clicar no botão acima, o sistema cria flashcards exclusivos a partir dos
+                                mnemônicos desta seção.
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 min-w-0 max-h-[640px] overflow-y-auto">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                        Fontes encontradas
+                      </h3>
+
+                      {evidenceSources.length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhuma fonte retornada.</p>
+                      ) : (
+                        <div className="space-y-3 pr-2 w-full">
+                          {evidenceSources.map((source, index) => (
+                            <a
+                              key={source.id || index}
+                              href={source.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4 hover:bg-slate-100 transition-colors"
+                            >
+                              <p className="text-sm font-semibold text-slate-900 break-words">
+                                [{index + 1}] {source.title}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">{source.source_name}</p>
+                              <p className="text-xs text-red-600 mt-2 break-all">{source.url}</p>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {transcript && activeMainSection === 'enriched' && (
+            <section
+              ref={enrichedSectionRef}
+              className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
+            >
+              <div className="p-6 md:p-8 border-b border-slate-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
+                    5
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">Texto enriquecido</h2>
+                </div>
+
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mt-4 md:mt-0">
+                  <button
+                    onClick={() => setComparisonMode('original')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      comparisonMode === 'original'
+                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                        : 'text-slate-500'
+                    }`}
+                  >
+                    Original
+                  </button>
+
+                  <button
+                    onClick={() => setComparisonMode('enriched')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      comparisonMode === 'enriched'
+                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                        : 'text-slate-500'
+                    }`}
+                  >
+                    Enriquecido
+                  </button>
+
+                  <button
+                    onClick={() => setComparisonMode('split')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      comparisonMode === 'split'
+                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                        : 'text-slate-500'
+                    }`}
+                  >
+                    Comparar
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-end gap-1">
+                  {enrichedGeneratedAt ? (
+                    <span className="text-xs text-slate-400">
+                      Atualizado em {new Date(enrichedGeneratedAt).toLocaleString('pt-BR')}
+                    </span>
+                  ) : null}
+
+                  {enrichedTranscript ? (
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                        enrichedAutoSaveStatus === 'saving'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : enrichedAutoSaveStatus === 'error'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : enrichedAutoSaveStatus === 'saved'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}
+                    >
+                      {enrichedAutoSaveStatus === 'saving'
+                        ? 'Salvando automaticamente...'
+                        : enrichedAutoSaveStatus === 'error'
+                          ? 'Erro ao salvar'
+                          : enrichedAutoSaveStatus === 'saved'
+                            ? 'Salvo automaticamente'
+                            : 'Editor pronto'}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="p-6 md:p-8 bg-slate-50/30">
+
+                {!enrichedTranscript ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                    <FileText className="mx-auto mb-4 text-slate-300" size={30} />
+                    <h3 className="text-lg font-semibold text-slate-800">
+                      Nenhum texto enriquecido gerado ainda
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-2 max-w-2xl mx-auto">
+                      Gere o texto enriquecido para transformar a análise em uma versão mais completa da aula.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {comparisonMode === 'original' && enrichedManualBlocks.length > 0 && (
+                      <div className="bg-white border border-red-100 rounded-2xl p-5">
+                        <div className="text-center space-y-1 mb-5">
+                          <h3 className="text-[15px] font-bold text-red-800 uppercase tracking-widest">
+                            Adições aplicadas ao texto enriquecido
+                          </h3>
+                          <p className="text-sm text-slate-500">
+                            Edite ou remova qualquer bloco aplicado pela Análise de Evidência.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4">
+                          {[
+                            {
+                              id: 'lacuna',
+                              title: 'Correções de Lacuna',
+                              count: enrichedManualBlocks.filter((block) => block.type === 'lacuna').length,
+                              blocks: enrichedManualBlocks.filter((block) => block.type === 'lacuna'),
+                              border: 'border-yellow-200',
+                              headerBg: 'bg-yellow-50/70 hover:bg-yellow-50',
+                              iconBg: 'bg-yellow-100 text-yellow-700',
+                              titleColor: 'text-yellow-900',
+                              cardBg: 'bg-yellow-50',
+                              cardBorder: 'border-yellow-200',
+                              textBorder: 'border-yellow-200',
+                              label: 'Correção de Lacuna',
+                              Icon: AlertCircle,
+                            },
+                            {
+                              id: 'sugestao',
+                              title: 'Sugestões Aplicadas',
+                              count: enrichedManualBlocks.filter((block) => block.type === 'sugestao').length,
+                              blocks: enrichedManualBlocks.filter((block) => block.type === 'sugestao'),
+                              border: 'border-red-100',
+                              headerBg: 'bg-red-50/70 hover:bg-red-50',
+                              iconBg: 'bg-red-100 text-red-600',
+                              titleColor: 'text-red-900',
+                              cardBg: 'bg-red-50',
+                              cardBorder: 'border-red-200',
+                              textBorder: 'border-red-100',
+                              label: 'Sugestão Aplicada',
+                              Icon: Lightbulb,
+                            },
+                          ].map((panel) => {
+                            const isOpen = Boolean(expandedAppliedPanels[panel.id]);
+                            const Icon = panel.Icon;
+
+                            if (panel.count === 0) return null;
+
+                            return (
+                              <div
+                                key={panel.id}
+                                className={`bg-white border ${panel.border} rounded-xl shadow-sm overflow-hidden`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAppliedPanel(panel.id)}
+                                  className={`w-full px-6 py-4 flex items-center justify-between transition-colors ${panel.headerBg}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`${panel.iconBg} p-1.5 rounded-lg`}>
+                                      <Icon size={20} />
+                                    </div>
+
+                                    <div className="text-left">
+                                      <h4 className={`text-sm font-bold uppercase tracking-wide ${panel.titleColor}`}>
+                                        {panel.title} ({panel.count})
+                                      </h4>
+                                    </div>
+                                  </div>
+
+                                  <ChevronDown
+                                    className={`w-5 h-5 transition-transform duration-300 ${
+                                      isOpen ? 'rotate-180' : ''
+                                    } ${panel.id === 'lacuna' ? 'text-yellow-500' : 'text-red-400'}`}
+                                  />
+                                </button>
+
+                                <div
+                                  className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                                    isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                  }`}
+                                >
+                                  <div className="overflow-hidden">
+                                    <div className="p-6 bg-slate-50/30 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                      {panel.blocks.map((block) => {
+                                        const isEditing = editingAppliedBlockId === block.id;
+
+                                        return (
+                                          <div
+                                            key={block.id}
+                                            className={`${panel.cardBg} border ${panel.cardBorder} rounded-xl p-5 flex flex-col shadow-sm h-full`}
+                                          >
+                                            <div className="flex flex-col flex-1 mb-3">
+                                              <div className="flex justify-between items-start gap-3 mb-2">
+                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                  {panel.label}
+                                                </span>
+
+                                                <span className="text-[11px] text-slate-400 font-medium text-right">
+                                                  {block.created_at
+                                                    ? `Adicionado em ${new Date(block.created_at).toLocaleString('pt-BR')}`
+                                                    : ''}
+                                                </span>
+                                              </div>
+
+                                              <h5 className="text-sm font-bold text-slate-800 leading-snug">
+                                                {block.title}
+                                              </h5>
+                                            </div>
+
+                                            {isEditing ? (
+                                              <div className="space-y-3">
+                                                <textarea
+                                                  value={editingAppliedBlockContent}
+                                                  onChange={(e) => setEditingAppliedBlockContent(e.target.value)}
+                                                  className="w-full h-[180px] rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 leading-7 focus:outline-none focus:ring-2 focus:ring-red-100"
+                                                />
+
+                                                <div className="flex gap-2 pt-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => saveEditingAppliedBlock(block.id)}
+                                                    className="px-4 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition shadow-sm shadow-red-100"
+                                                  >
+                                                    Salvar edição
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={cancelEditingAppliedBlock}
+                                                    className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-lg transition"
+                                                  >
+                                                    Cancelar
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <div
+                                                  className={`bg-white border ${panel.textBorder} rounded-2xl p-4 shadow-inner`}
+                                                >
+                                                  <p className="text-sm text-slate-700 leading-7">
+                                                    {buildAppliedBlockPreviewText(block.content)}
+                                                  </p>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2 pt-4 shrink-0">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setPreviewAppliedBlock({
+                                                        ...block,
+                                                        panelTitle: panel.title,
+                                                        panelLabel: panel.label,
+                                                        panelTone: panel.id,
+                                                      })
+                                                    }
+                                                    className="px-4 py-1.5 bg-red-600 text-white hover:bg-red-700 text-xs font-bold rounded-lg transition shadow-sm shadow-red-100"
+                                                  >
+                                                    Visualizar
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => startEditingAppliedBlock(block)}
+                                                    className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-lg transition"
+                                                  >
+                                                    Editar
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => removeAppliedEnrichmentBlock(block.id)}
+                                                    className="px-4 py-1.5 bg-white border border-slate-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition"
+                                                  >
+                                                    Remover
+                                                  </button>
+                                                </div>
+                                              </>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {enrichedSummary?.applied_topics?.length > 0 && comparisonMode === 'original' && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                          Pontos adicionados
+                        </h3>
+
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {(enrichedSummary?.applied_topics || []).map((topic, index) => (
+                            <span
+                              key={index}
+                              className="px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-sm font-medium border border-red-100"
+                            >
+                              {topic}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {enrichedSummary?.applied_mnemonics?.length > 0 && comparisonMode === 'original' && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                          Mnemônicos incorporados
+                        </h3>
+
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {enrichedSummary.applied_mnemonics.map((item, index) => (
+                            <span
+                              key={index}
+                              className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-sm font-medium"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {enrichmentReferenceVideos.length > 0 && comparisonMode === 'original' && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">
+                          Base pedagógica usada no enriquecimento
+                        </h3>
+
+                        <div className="flex flex-wrap gap-2">
+                          {enrichmentReferenceVideos.map((video, index) => (
+                            <span
+                              key={video.id || index}
+                              className="px-3 py-1.5 rounded-full bg-violet-50 text-violet-700 text-sm font-medium"
+                            >
+                              {video.title}
+                            </span>
+                          ))}
+                        </div>
+
+                        <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                          Estes vídeos de referência foram usados como apoio didático para reforçar explicações,
+                          organização do conteúdo e cobertura dos pontos mais relevantes.
+                        </p>
+                      </div>
+                    )}
+
+                    {comparisonMode === 'original' && (
+                      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="px-6 md:px-10 pt-6 pb-4 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-100">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400 mb-2">
+                              Edição de documento
+                            </p>
+                            <h3 className="text-2xl font-semibold text-slate-800 tracking-tight">
+                              Texto Enriquecido
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center gap-5">
+                            <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5 transition-colors duration-300">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  enrichedAutoSaveStatus === 'saving'
+                                    ? 'bg-red-400 animate-pulse'
+                                    : enrichedAutoSaveStatus === 'error'
+                                      ? 'bg-red-400'
+                                      : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
+                                }`}
+                              />
+                              {enrichedAutoSaveStatus === 'saving'
+                                ? 'Salvando alterações...'
+                                : enrichedAutoSaveStatus === 'error'
+                                  ? 'Erro ao salvar'
+                                  : 'Sincronizado'}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={concludeEnrichedTextEditing}
+                              disabled={!currentRunId || enrichedAutoSaveStatus === 'saving' || editorSaveButtonStatus === 'saving'}
+                              className={`px-6 py-2.5 text-white text-sm font-medium rounded-full shadow-lg shadow-black/10 transition-all flex items-center gap-2 disabled:opacity-50 ${
+                                editorSaveButtonStatus === 'saved'
+                                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                                  : 'bg-red-600 hover:bg-red-700'
+                              }`}
+                            >
+                              {editorSaveButtonStatus === 'saving' ? (
+                                <>
+                                  <Loader2 size={16} className="animate-spin text-white/80" />
+                                  Finalizando...
+                                </>
+                              ) : editorSaveButtonStatus === 'saved' ? (
+                                <>
+                                  <Check size={16} />
+                                  Edição concluída
+                                </>
+                              ) : (
+                                'Concluir Edição'
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="px-4 sm:px-8 md:px-10 lg:px-12 py-8 bg-[#fcfcfd]">
+                          <div className="relative bg-white rounded-[30px] shadow-sm ring-1 ring-slate-900/5 px-4 sm:px-10 md:px-16 lg:px-20 py-10">
+                            <div className="sticky top-6 z-20 flex justify-center mb-10 pointer-events-none">
+                              <div className="pointer-events-auto bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] rounded-full px-2 py-1.5 flex flex-wrap items-center justify-center gap-1 transition-all max-w-full overflow-x-auto">
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorUndo();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Desfazer"
+                                >
+                                  <Undo2 className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorRedo();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Refazer"
+                                >
+                                  <Redo2 className="w-4 h-4" />
+                                </button>
+
+                                <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorBold();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Negrito"
+                                >
+                                  <Bold className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorItalic();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Itálico"
+                                >
+                                  <Italic className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorUnderline();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Sublinhado"
+                                >
+                                  <Underline className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorStrike();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Tachado"
+                                >
+                                  <Strikethrough className="w-4 h-4" />
+                                </button>
+
+                                <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorHeading();
+                                  }}
+                                  className="px-2.5 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Título H2"
+                                >
+                                  <Heading2 className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorParagraph();
+                                  }}
+                                  className="px-2.5 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Parágrafo"
+                                >
+                                  <Pilcrow className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorQuote();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Citação"
+                                >
+                                  <Quote className="w-4 h-4" />
+                                </button>
+
+                                <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorList();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Lista com marcadores"
+                                >
+                                  <ListIcon className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorOrderedList();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                                  title="Lista numerada"
+                                >
+                                  <ListOrdered className="w-4 h-4" />
+                                </button>
+
+                                <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorHighlight();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                                  title="Destacar"
+                                >
+                                  <Highlighter className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorLink();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                  title="Inserir link"
+                                >
+                                  <Link2 className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyEditorRemoveFormat();
+                                  }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-red-400 hover:text-red-500 hover:bg-red-50"
+                                  title="Limpar formatação"
+                                >
+                                  <Eraser className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div
+                              ref={baseTranscriptEditorRef}
+                              id="base-transcript-editor"
+                              contentEditable
+                              suppressContentEditableWarning
+                              onInput={syncRichEditorToState}
+                              onBlur={syncRichEditorToState}
+                              className="w-full min-h-[680px] text-[17px] leading-[1.85] text-slate-700 focus:outline-none max-w-none
+                                [&_h2]:font-serif [&_h2]:text-[1.75rem] [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h2]:mt-12 [&_h2]:mb-5
+                                [&_p]:mb-6
+                                [&_strong]:font-semibold [&_strong]:text-slate-900
+                                [&_b]:font-semibold [&_b]:text-slate-900
+                                [&_em]:italic
+                                [&_i]:italic
+                                [&_u]:underline
+                                [&_s]:line-through
+                                [&_strike]:line-through
+                                [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6
+                                [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-6
+                                [&_li]:mb-2
+                                [&_blockquote]:border-l-4 [&_blockquote]:border-slate-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-500 [&_blockquote]:mb-6
+                                [&_mark]:bg-yellow-200 [&_mark]:text-yellow-900 [&_mark]:px-1 [&_mark]:py-0.5 [&_mark]:rounded
+                                [&_a]:text-red-600 [&_a]:underline [&_a]:underline-offset-4"
+                            />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {enrichedSummary?.applied_topics?.length > 0 && comparisonMode === 'original' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-                Pontos adicionados
-              </h3>
-
-              <div className="flex flex-wrap justify-center gap-2">
-                {(enrichedSummary?.applied_topics || []).map((topic, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-sm font-medium"
-                  >
-                    {topic}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {enrichedSummary?.applied_mnemonics?.length > 0 && comparisonMode === 'original' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-                Mnemônicos incorporados
-              </h3>
-
-              <div className="flex flex-wrap justify-center gap-2">
-                {enrichedSummary.applied_mnemonics.map((item, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-sm font-medium"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {enrichmentReferenceVideos.length > 0 && comparisonMode === 'original' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">
-                Base pedagógica usada no enriquecimento
-              </h3>
-
-              <div className="flex flex-wrap gap-2">
-                {enrichmentReferenceVideos.map((video, index) => (
-                  <span
-                    key={video.id || index}
-                    className="px-3 py-1.5 rounded-full bg-violet-50 text-violet-700 text-sm font-medium"
-                  >
-                    {video.title}
-                  </span>
-                ))}
-              </div>
-
-              <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                Estes vídeos de referência foram usados como apoio didático para reforçar explicações,
-                organização do conteúdo e cobertura dos pontos mais relevantes.
-              </p>
-            </div>
-          )}
-
-          {comparisonMode === 'original' && (
-            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 md:px-10 pt-6 pb-4 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-100">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400 mb-2">
-                    Edição de documento
-                  </p>
-                  <h3 className="text-2xl font-semibold text-slate-800 tracking-tight">
-                    Texto Enriquecido
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-5">
-                  <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5 transition-colors duration-300">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        enrichedAutoSaveStatus === 'saving'
-                          ? 'bg-indigo-400 animate-pulse'
-                          : enrichedAutoSaveStatus === 'error'
-                            ? 'bg-red-400'
-                            : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
-                      }`}
-                    />
-                    {enrichedAutoSaveStatus === 'saving'
-                      ? 'Salvando alterações...'
-                      : enrichedAutoSaveStatus === 'error'
-                        ? 'Erro ao salvar'
-                        : 'Sincronizado'}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={concludeEnrichedTextEditing}
-                    disabled={!currentRunId || enrichedAutoSaveStatus === 'saving' || editorSaveButtonStatus === 'saving'}
-                    className={`px-6 py-2.5 text-white text-sm font-medium rounded-full shadow-lg shadow-black/10 transition-all flex items-center gap-2 disabled:opacity-50 ${
-                      editorSaveButtonStatus === 'saved'
-                        ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-[#18181b] hover:bg-[#27272a]'
-                    }`}
-                  >
-                    {editorSaveButtonStatus === 'saving' ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin text-white/80" />
-                        Finalizando...
-                      </>
-                    ) : editorSaveButtonStatus === 'saved' ? (
-                      <>
-                        <Check size={16} />
-                        Edição concluída
-                      </>
-                    ) : (
-                      'Concluir Edição'
                     )}
-                  </button>
-                </div>
-              </div>
 
-              <div className="px-4 sm:px-8 md:px-10 lg:px-12 py-8 bg-[#fcfcfd]">
-                <div className="relative bg-white rounded-[30px] shadow-sm ring-1 ring-slate-900/5 px-4 sm:px-10 md:px-16 lg:px-20 py-10">
-                  <div className="sticky top-6 z-20 flex justify-center mb-10 pointer-events-none">
-                    <div className="pointer-events-auto bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] rounded-full px-2 py-1.5 flex flex-wrap items-center justify-center gap-1 transition-all max-w-full overflow-x-auto">
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorUndo();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Desfazer"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                      </button>
+                    {comparisonMode === 'enriched' && (
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                            Prévia com adições destacadas
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Texto enriquecido renderizado com formatação e blocos vindos da Análise de Evidência destacados.
+                          </p>
+                        </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorRedo();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Refazer"
-                      >
-                        <Redo2 className="w-4 h-4" />
-                      </button>
+                        <div className="p-6 max-h-[760px] overflow-y-auto">
+                          {renderStructuredStudyText(enrichedTranscript || transcript, true)}
+                        </div>
+                      </div>
+                    )}
 
-                      <div className="w-px h-5 bg-slate-200 mx-1" />
+                    {comparisonMode === 'split' && (
+                      <div className="w-full max-w-6xl mx-auto">
+                        <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] ring-1 ring-slate-900/5 overflow-hidden flex flex-col">
+                          <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 bg-white z-20 relative">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-red-50 p-2 rounded-xl text-red-600">
+                                <Sparkles className="w-5 h-5" />
+                              </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorBold();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Negrito"
-                      >
-                        <Bold className="w-4 h-4" />
-                      </button>
+                              <div>
+                                <h2 className="text-sm font-bold text-slate-800 tracking-tight">
+                                  Análise de Diferenças
+                                </h2>
+                                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider mt-0.5">
+                                  Passe o mouse sobre os destaques verdes
+                                </p>
+                              </div>
+                            </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorItalic();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Itálico"
-                      >
-                        <Italic className="w-4 h-4" />
-                      </button>
+                            <div
+                              className={`relative flex p-1.5 bg-slate-100/80 rounded-full w-full md:w-[340px] shadow-inner transition-all ${
+                                isCompareSplitView ? 'opacity-50 pointer-events-none' : ''
+                              }`}
+                            >
+                              <div
+                                className={`absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.375rem)] bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/50 transition-transform duration-300 ${
+                                  compareInnerMode === 'enriched'
+                                    ? 'translate-x-[calc(100%+0.375rem)]'
+                                    : 'translate-x-0'
+                                }`}
+                              />
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorUnderline();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Sublinhado"
-                      >
-                        <Underline className="w-4 h-4" />
-                      </button>
+                              <button
+                                type="button"
+                                className={`relative z-10 flex-1 py-1.5 text-xs font-bold transition-colors duration-300 rounded-full ${
+                                  compareInnerMode === 'original'
+                                    ? 'text-slate-800'
+                                    : 'text-slate-500'
+                                }`}
+                                onClick={() => {
+                                  if (isCompareSplitView) return;
+                                  setCompareInnerMode('original');
+                                }}
+                              >
+                                Texto Original
+                              </button>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorStrike();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Tachado"
-                      >
-                        <Strikethrough className="w-4 h-4" />
-                      </button>
+                              <button
+                                type="button"
+                                className={`relative z-10 flex-1 py-1.5 text-xs font-bold transition-colors duration-300 flex items-center justify-center gap-1.5 rounded-full ${
+                                  compareInnerMode === 'enriched'
+                                    ? 'text-indigo-700'
+                                    : 'text-slate-500'
+                                }`}
+                                onClick={() => {
+                                  if (isCompareSplitView) return;
+                                  setCompareInnerMode('enriched');
+                                }}
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                Enriquecido
+                              </button>
+                            </div>
 
-                      <div className="w-px h-5 bg-slate-200 mx-1" />
+                            <button
+                              type="button"
+                              onClick={() => setIsCompareSplitView((prev) => !prev)}
+                              className={`hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border ${
+                                isCompareSplitView
+                                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                              }`}
+                            >
+                              {isCompareSplitView ? (
+                                <>
+                                  <X className="w-4 h-4" />
+                                  <span>Fechar Comparação</span>
+                                </>
+                              ) : (
+                                <>
+                                  <LayoutTemplate className="w-4 h-4" />
+                                  <span>Lado a Lado</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorHeading();
-                        }}
-                        className="px-2.5 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Título H2"
-                      >
-                        <Heading2 className="w-4 h-4" />
-                      </button>
+                          <div className="bg-white/50 px-8 py-10 md:px-14 md:py-16">
+                            <div
+                              className={`grid items-start transition-all duration-500 ${
+                                isCompareSplitView
+                                  ? 'grid-cols-1 lg:grid-cols-2 gap-12'
+                                  : 'grid-cols-1'
+                              }`}
+                            >
+                              <div
+                                id="panel-original"
+                                className={`panel-item texto-leitura ${
+                                  isCompareSplitView
+                                    ? 'opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
+                                    : compareInnerMode === 'original'
+                                      ? '[grid-area:1/1] opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
+                                      : '[grid-area:1/1] opacity-0 pointer-events-none translate-y-2 scale-[0.98] z-0'
+                                } transition-all duration-500`}
+                              >
+                                <div
+                                  className={`mb-6 pb-4 border-b border-slate-100 ${
+                                    isCompareSplitView ? 'block' : 'hidden'
+                                  }`}
+                                >
+                                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    Versão Original
+                                  </span>
+                                </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorParagraph();
-                        }}
-                        className="px-2.5 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Parágrafo"
-                      >
-                        <Pilcrow className="w-4 h-4" />
-                      </button>
+                                <div className="max-h-[760px] overflow-y-auto pr-2">
+                                  {renderSmartCompareText(transcript, false)}
+                                </div>
+                              </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorQuote();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Citação"
-                      >
-                        <Quote className="w-4 h-4" />
-                      </button>
+                              <div
+                                id="panel-enriquecido"
+                                className={`panel-item texto-leitura ${
+                                  isCompareSplitView
+                                    ? 'opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
+                                    : compareInnerMode === 'enriched'
+                                      ? '[grid-area:1/1] opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
+                                      : '[grid-area:1/1] opacity-0 pointer-events-none translate-y-2 scale-[0.98] z-0'
+                                } transition-all duration-500`}
+                              >
+                                <div
+                                  className={`mb-6 pb-4 border-b border-emerald-100 justify-between items-center ${
+                                    isCompareSplitView ? 'flex' : 'hidden'
+                                  }`}
+                                >
+                                  <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                                    <Check className="w-4 h-4" />
+                                    Versão Enriquecida
+                                  </span>
+                                </div>
 
-                      <div className="w-px h-5 bg-slate-200 mx-1" />
+                                <div className="max-h-[760px] overflow-y-auto pr-2">
+                                  {renderSmartCompareText(enrichedTranscript || transcript, true)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorList();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Lista com marcadores"
-                      >
-                        <ListIcon className="w-4 h-4" />
-                      </button>
+                          <div className="bg-white border-t border-slate-100 p-4 flex justify-end gap-3 z-20 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCompareInnerMode('original');
+                                setIsCompareSplitView(false);
+                              }}
+                              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors"
+                            >
+                              Cancelar
+                            </button>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorOrderedList();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        title="Lista numerada"
-                      >
-                        <ListOrdered className="w-4 h-4" />
-                      </button>
+                            <button
+                              type="button"
+                              onClick={approveEnrichmentChanges}
+                              disabled={enrichmentApprovalStatus === 'saving'}
+                              className={`relative px-6 py-2.5 rounded-xl text-white font-medium text-sm transition-all shadow-md flex items-center gap-2 overflow-hidden disabled:cursor-not-allowed ${
+                                enrichmentApprovalStatus === 'saved'
+                                  ? 'bg-emerald-600 shadow-emerald-200 scale-[1.02]'
+                                  : enrichmentApprovalStatus === 'saving'
+                                    ? 'bg-red-600 opacity-90'
+                                    : 'bg-red-600 hover:bg-red-700'
+                              }`}
+                            >
+                              {enrichmentApprovalStatus === 'saved' ? (
+                                <>
+                                  <span className="absolute inset-0 bg-emerald-400/20 animate-ping" />
+                                  <Check className="relative z-10 w-4 h-4" />
+                                  <span className="relative z-10">Melhorias aprovadas</span>
+                                </>
+                              ) : enrichmentApprovalStatus === 'saving' ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Aplicando melhorias...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  Aprovar Melhorias
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                      <div className="w-px h-5 bg-slate-200 mx-1" />
-
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorHighlight();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                        title="Destacar"
-                      >
-                        <Highlighter className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorLink();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                        title="Inserir link"
-                      >
-                        <Link2 className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyEditorRemoveFormat();
-                        }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-red-400 hover:text-red-500 hover:bg-red-50"
-                        title="Limpar formatação"
-                      >
-                        <Eraser className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    ref={baseTranscriptEditorRef}
-                    id="base-transcript-editor"
-                    contentEditable
-                    suppressContentEditableWarning
-                    onInput={syncRichEditorToState}
-                    onBlur={syncRichEditorToState}
-                    className="w-full min-h-[680px] text-[17px] leading-[1.85] text-slate-700 focus:outline-none max-w-none
-                      [&_h2]:font-serif [&_h2]:text-[1.75rem] [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h2]:mt-12 [&_h2]:mb-5
-                      [&_p]:mb-6
-                      [&_strong]:font-semibold [&_strong]:text-slate-900
-                      [&_b]:font-semibold [&_b]:text-slate-900
-                      [&_em]:italic
-                      [&_i]:italic
-                      [&_u]:underline
-                      [&_s]:line-through
-                      [&_strike]:line-through
-                      [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6
-                      [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-6
-                      [&_li]:mb-2
-                      [&_blockquote]:border-l-4 [&_blockquote]:border-slate-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-500 [&_blockquote]:mb-6
-                      [&_mark]:bg-yellow-200 [&_mark]:text-yellow-900 [&_mark]:px-1 [&_mark]:py-0.5 [&_mark]:rounded
-                      [&_a]:text-indigo-600 [&_a]:underline [&_a]:underline-offset-4"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {comparisonMode === 'enriched' && (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                  Prévia com adições destacadas
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Texto enriquecido renderizado com formatação e blocos vindos da Análise de Evidência destacados.
-                </p>
-              </div>
-
-              <div className="p-6 max-h-[760px] overflow-y-auto">
-                {renderStructuredStudyText(enrichedTranscript || transcript, true)}
-              </div>
-            </div>
-          )}
-
-          {comparisonMode === 'split' && (
-            <div className="w-full max-w-6xl mx-auto">
-              <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] ring-1 ring-slate-900/5 overflow-hidden flex flex-col">
-                <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 bg-white z-20 relative">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600">
-                      <Sparkles className="w-5 h-5" />
-                    </div>
-
-                    <div>
-                      <h2 className="text-sm font-bold text-slate-800 tracking-tight">
-                        Análise de Diferenças
-                      </h2>
-                      <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider mt-0.5">
-                        Passe o mouse sobre os destaques verdes
+                    {enrichedFlashcardsGeneratedAt ? (
+                      <p className="text-xs text-slate-400">
+                        Flashcards enriquecidos gerados em{' '}
+                        {new Date(enrichedFlashcardsGeneratedAt).toLocaleString('pt-BR')}
                       </p>
-                    </div>
+                    ) : null}
                   </div>
-
-                  <div
-                    className={`relative flex p-1.5 bg-slate-100/80 rounded-full w-full md:w-[340px] shadow-inner transition-all ${
-                      isCompareSplitView ? 'opacity-50 pointer-events-none' : ''
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.375rem)] bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/50 transition-transform duration-300 ${
-                        compareInnerMode === 'enriched'
-                          ? 'translate-x-[calc(100%+0.375rem)]'
-                          : 'translate-x-0'
-                      }`}
-                    />
-
-                    <button
-                      type="button"
-                      className={`relative z-10 flex-1 py-1.5 text-xs font-bold transition-colors duration-300 rounded-full ${
-                        compareInnerMode === 'original'
-                          ? 'text-slate-800'
-                          : 'text-slate-500'
-                      }`}
-                      onClick={() => {
-                        if (isCompareSplitView) return;
-                        setCompareInnerMode('original');
-                      }}
-                    >
-                      Texto Original
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`relative z-10 flex-1 py-1.5 text-xs font-bold transition-colors duration-300 flex items-center justify-center gap-1.5 rounded-full ${
-                        compareInnerMode === 'enriched'
-                          ? 'text-indigo-700'
-                          : 'text-slate-500'
-                      }`}
-                      onClick={() => {
-                        if (isCompareSplitView) return;
-                        setCompareInnerMode('enriched');
-                      }}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Enriquecido
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsCompareSplitView((prev) => !prev)}
-                    className={`hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border ${
-                      isCompareSplitView
-                        ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
-                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
-                    }`}
-                  >
-                    {isCompareSplitView ? (
-                      <>
-                        <X className="w-4 h-4" />
-                        <span>Fechar Comparação</span>
-                      </>
-                    ) : (
-                      <>
-                        <LayoutTemplate className="w-4 h-4" />
-                        <span>Lado a Lado</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="bg-white/50 px-8 py-10 md:px-14 md:py-16">
-                  <div
-                    className={`grid items-start transition-all duration-500 ${
-                      isCompareSplitView
-                        ? 'grid-cols-1 lg:grid-cols-2 gap-12'
-                        : 'grid-cols-1'
-                    }`}
-                  >
-                    <div
-                      id="panel-original"
-                      className={`panel-item texto-leitura ${
-                        isCompareSplitView
-                          ? 'opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
-                          : compareInnerMode === 'original'
-                            ? '[grid-area:1/1] opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
-                            : '[grid-area:1/1] opacity-0 pointer-events-none translate-y-2 scale-[0.98] z-0'
-                      } transition-all duration-500`}
-                    >
-                      <div
-                        className={`mb-6 pb-4 border-b border-slate-100 ${
-                          isCompareSplitView ? 'block' : 'hidden'
-                        }`}
-                      >
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                          Versão Original
-                        </span>
-                      </div>
-
-                      <div className="max-h-[760px] overflow-y-auto pr-2">
-                        {renderSmartCompareText(transcript, false)}
-                      </div>
-                    </div>
-
-                    <div
-                      id="panel-enriquecido"
-                      className={`panel-item texto-leitura ${
-                        isCompareSplitView
-                          ? 'opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
-                          : compareInnerMode === 'enriched'
-                            ? '[grid-area:1/1] opacity-100 pointer-events-auto translate-y-0 scale-100 z-10'
-                            : '[grid-area:1/1] opacity-0 pointer-events-none translate-y-2 scale-[0.98] z-0'
-                      } transition-all duration-500`}
-                    >
-                      <div
-                        className={`mb-6 pb-4 border-b border-emerald-100 justify-between items-center ${
-                          isCompareSplitView ? 'flex' : 'hidden'
-                        }`}
-                      >
-                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
-                          <Check className="w-4 h-4" />
-                          Versão Enriquecida
-                        </span>
-                      </div>
-
-                      <div className="max-h-[760px] overflow-y-auto pr-2">
-                        {renderSmartCompareText(enrichedTranscript || transcript, true)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border-t border-slate-100 p-4 flex justify-end gap-3 z-20 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCompareInnerMode('original');
-                      setIsCompareSplitView(false);
-                    }}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={approveEnrichmentChanges}
-                    disabled={enrichmentApprovalStatus === 'saving'}
-                    className={`relative px-6 py-2.5 rounded-xl text-white font-medium text-sm transition-all shadow-md flex items-center gap-2 overflow-hidden disabled:cursor-not-allowed ${
-                      enrichmentApprovalStatus === 'saved'
-                        ? 'bg-emerald-600 shadow-emerald-200 scale-[1.02]'
-                        : enrichmentApprovalStatus === 'saving'
-                          ? 'bg-indigo-600 opacity-90'
-                          : 'bg-[#18181b] hover:bg-[#27272a]'
-                    }`}
-                  >
-                    {enrichmentApprovalStatus === 'saved' ? (
-                      <>
-                        <span className="absolute inset-0 bg-emerald-400/20 animate-ping" />
-                        <Check className="relative z-10 w-4 h-4" />
-                        <span className="relative z-10">Melhorias aprovadas</span>
-                      </>
-                    ) : enrichmentApprovalStatus === 'saving' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Aplicando melhorias...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" />
-                        Aprovar Melhorias
-                      </>
-                    )}
-                  </button>
-                </div>
+                )}
               </div>
-            </div>
+            </section>
           )}
-
-          {enrichedFlashcardsGeneratedAt ? (
-            <p className="text-xs text-slate-400">
-              Flashcards enriquecidos gerados em{' '}
-              {new Date(enrichedFlashcardsGeneratedAt).toLocaleString('pt-BR')}
-            </p>
-          ) : null}
-        </div>
-      )}
-    </div>
-  </section>
-)}
 
 {recommendedHistoryItems.length > 0 && (
   <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -9222,7 +10020,7 @@ export default function AdvancedFlashcardPoC() {
   </section>
 )}
 
-{isHistoryDetailsOpen && currentRunId && (
+{isHistoryDetailsOpen && currentRunId && activeMainSection === 'exclusive-item-session' && (
   <section
     ref={historyDetailsSectionRef}
     className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
@@ -9437,7 +10235,7 @@ export default function AdvancedFlashcardPoC() {
                     'noopener,noreferrer'
                   )
                 }
-                className="px-4 py-3 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors"
+                className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
               >
                 Ver vídeo
               </button>
@@ -9447,7 +10245,7 @@ export default function AdvancedFlashcardPoC() {
               <button
                 type="button"
                 onClick={() => window.open(enrichmentSupportVideoUrl, '_blank', 'noopener,noreferrer')}
-                className="px-4 py-3 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition-colors"
+                className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
               >
                 Ver vídeo complementar
               </button>
@@ -9456,7 +10254,7 @@ export default function AdvancedFlashcardPoC() {
             <button
               onClick={() => generateFlashcardsFromSavedRun(false)}
               disabled={!currentRunId || isGeneratingSavedFlashcards}
-              className="px-4 py-3 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="px-4 py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
             >
               Usar salvos / gerar se faltar
             </button>
@@ -9473,7 +10271,7 @@ export default function AdvancedFlashcardPoC() {
                 isGeneratingEnrichedFlashcards ||
                 !(approvedEnrichedTranscript || enrichedTranscript)
               }
-              className="px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition-colors disabled:opacity-50"
+              className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               {isGeneratingEnrichedFlashcards ? 'Gerando...' : 'Regenerar pelo texto enriquecido'}
             </button>
@@ -9481,7 +10279,7 @@ export default function AdvancedFlashcardPoC() {
             <button
               onClick={() => analyzeEvidenceFromCurrentRun()}
               disabled={!currentRunId || isAnalyzingEvidence}
-              className="px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition-colors disabled:opacity-50"
+              className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               Analisar evidência
             </button>
@@ -9757,7 +10555,7 @@ export default function AdvancedFlashcardPoC() {
 
           <section
             ref={librarySectionRef}
-            className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
+            className={`${sectionVisibilityClass('library')} scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden`}
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
@@ -9774,7 +10572,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={saveCurrentFlashcardsToLibrary}
                   disabled={!flashcards.length || !selectedDeckId || isSavingCardsToLibrary}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
                 >
                   {isSavingCardsToLibrary ? 'Salvando...' : 'Salvar flashcards atuais'}
                 </button>
@@ -9989,7 +10787,7 @@ export default function AdvancedFlashcardPoC() {
 
                   <button
                     onClick={createLibraryDeck}
-                    className="w-full px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                    className="w-full px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                   >
                     Criar deck
                   </button>
@@ -10037,384 +10835,198 @@ export default function AdvancedFlashcardPoC() {
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 rounded-[2rem] shadow-sm overflow-hidden p-5 space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">Acervo por pastas</h3>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Especialidades aparecem como pastas principais. Temas aparecem como subpastas.
-                    </p>
+              <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)] gap-6">
+                <FolderTreePanel
+                  title="Acervo por pastas"
+                  description="Especialidade, tema e deck em uma árvore simples."
+                  nodes={archiveFolderTree}
+                  selectedId={selectedArchiveTreeId}
+                  searchValue={archiveSearch}
+                  onSearchChange={setArchiveSearch}
+                  emptyLabel="Nenhuma pasta encontrada no acervo."
+                />
+
+                <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-1">
+                        Pasta selecionada
+                      </p>
+
+                      <h3
+                        className="text-lg font-black text-slate-900 leading-snug line-clamp-2"
+                        title={
+                          selectedArchiveDeckId
+                            ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                            : selectedArchiveTopic || selectedArchiveSpecialty || 'Todo o acervo'
+                        }
+                      >
+                        {selectedArchiveDeckId
+                          ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                          : selectedArchiveTopic || selectedArchiveSpecialty || 'Todo o acervo'}
+                      </h3>
+
+                      <p className="text-sm text-slate-500 mt-1">
+                        {selectedArchiveCards.length} flashcards nesta seleção.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={clearArchiveSelection}
+                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                      >
+                        Limpar seleção
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          createArchiveFolder({
+                            level: selectedArchiveSpecialty ? 'topic' : 'specialty',
+                            specialty: selectedArchiveSpecialty,
+                          })
+                        }
+                        className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100"
+                      >
+                        Nova pasta
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        createArchiveFolder({
-                          level: 'specialty',
-                        })
-                      }
-                      className="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-bold hover:bg-indigo-100"
-                    >
-                      Nova pasta
-                    </button>
+                  <div className="p-5 space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startStudyFromArchiveCards(selectedArchiveCards)}
+                        disabled={!selectedArchiveCards.length}
+                        className="rounded-2xl bg-red-600 px-4 py-4 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-red-100"
+                      >
+                        Estudar esta pasta
+                      </button>
 
-                    <button
-                      onClick={clearArchiveSelection}
-                      className="px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-bold hover:bg-white"
-                    >
-                      Limpar seleção
-                    </button>
-                  </div>
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => scheduleArchiveFolderReview()}
+                        disabled={!selectedArchiveCards.length || isSchedulingFolderReview}
+                        className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-black text-red-700 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSchedulingFolderReview ? 'Agendando...' : 'Agendar revisão'}
+                      </button>
+                    </div>
 
-                <div className="relative w-full">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-slate-400" />
-                  </div>
+                    {selectedArchiveSpecialty ? (
+                      <details className="rounded-2xl border border-slate-200 bg-slate-50">
+                        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 flex items-center justify-between">
+                          <span>Opções da pasta</span>
+                          <ChevronDown size={16} className="text-slate-400" />
+                        </summary>
 
-                  <input
-                    type="text"
-                    value={archiveSearch}
-                    onChange={(e) => setArchiveSearch(e.target.value)}
-                    placeholder="Buscar no acervo..."
-                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200/80 rounded-2xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
-                  />
-                </div>
+                        <div className="px-4 pb-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              createArchiveFolder({
+                                level: selectedArchiveSpecialty ? 'topic' : 'specialty',
+                                specialty: selectedArchiveSpecialty,
+                              })
+                            }
+                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                          >
+                            Nova subpasta
+                          </button>
 
-                <div className="max-h-[68vh] overflow-y-auto pr-2 space-y-4 scroll-smooth no-visible-scrollbar">
-                  {archiveTree.map((specialty) => {
-                    const specialtyOpen = Boolean(expandedArchiveSpecialties[specialty.id]);
-                    const specialtyCards = specialty.topics.flatMap((topic) =>
-                      topic.decks.flatMap((deck) => deck.cards)
-                    );
-                    const specialtyVisual = getFolderVisualForLabel(specialty.name);
-                    const SpecialtyIcon = specialtyVisual.icon;
-                    const specialtyArea = getMedicalAreaForLabel(specialty.name);
+                          <button
+                            type="button"
+                            onClick={() =>
+                              renameArchiveFolder({
+                                specialty: selectedArchiveSpecialty,
+                                topic: selectedArchiveTopic,
+                                deckId: selectedArchiveDeckId,
+                              })
+                            }
+                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                          >
+                            Renomear
+                          </button>
 
-                    return (
-                      <div key={specialty.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                        <div
-                          onClick={() =>
-                            setExpandedArchiveSpecialties((prev) => ({
-                              ...prev,
-                              [specialty.id]: !prev[specialty.id],
-                            }))
-                          }
-                          className="flex items-center justify-between gap-4 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-4 text-left">
-                            <div
-                              className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border transition-colors duration-300 ${specialtyVisual.iconClass}`}
-                            >
-                              <SpecialtyIcon size={26} />
-                            </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openMoveArchiveFolderDialog({
+                                specialty: selectedArchiveSpecialty,
+                                topic: selectedArchiveTopic,
+                                deckId: selectedArchiveDeckId,
+                              })
+                            }
+                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                          >
+                            Mover
+                          </button>
 
-                            <div>
-                              <p className="text-lg font-black text-slate-900 tracking-tight">{specialty.name}</p>
-                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                  {specialtyArea}
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                  {specialtyCards.length} cards
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                  {specialty.topics.length} temas
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                renameArchiveFolder({
-                                  type: 'specialty',
-                                  currentName: specialty.name,
-                                  cards: specialtyCards,
-                                });
-                              }}
-                              className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
-                            >
-                              Editar nome
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                createArchiveFolder({
-                                  level: 'topic',
-                                  specialtyName: specialty.name,
-                                });
-                              }}
-                              className="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-sm font-bold text-indigo-700"
-                            >
-                              Nova subpasta
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openMoveFolderDialog({
-                                  type: 'specialty',
-                                  name: specialty.name,
-                                  cards: specialtyCards,
-                                });
-                              }}
-                              className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
-                            >
-                              Mover
-                            </button>
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteArchiveFolder({
-                                  type: 'specialty',
-                                  name: specialty.name,
-                                  cards: specialtyCards,
-                                });
-                              }}
-                              className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-bold text-red-600"
-                            >
-                              Excluir
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteArchiveFolder({
+                                specialty: selectedArchiveSpecialty,
+                                topic: selectedArchiveTopic,
+                                deckId: selectedArchiveDeckId,
+                              })
+                            }
+                            className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100"
+                          >
+                            Excluir
+                          </button>
                         </div>
+                      </details>
+                    ) : null}
 
-                        {specialtyOpen ? (
-                          <div className="mt-5 space-y-3">
-                            {specialty.topics.map((topic) => {
-                              const topicKey = `${specialty.id}:${topic.name}`;
-                              const topicOpen = Boolean(expandedArchiveTopics[topicKey]);
-                              const topicCards = topic.decks.flatMap((deck) => deck.cards);
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-black text-slate-900">
+                          Flashcards da pasta
+                        </h4>
 
-                              return (
-                                <div
-                                  key={topicKey}
-                                  className={`relative z-10 bg-white border rounded-2xl flex flex-col min-w-max shadow-sm transition-all duration-300 ${
-                                    topicOpen
-                                      ? 'border-indigo-100 shadow-md'
-                                      : 'border-slate-100 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-200'
-                                  }`}
-                                >
-                                  <div
-                                    onClick={() => {
-                                      setExpandedArchiveTopics((prev) => ({
-                                        ...prev,
-                                        [topicKey]: !prev[topicKey],
-                                      }));
-                                      selectArchiveTopic(specialty.name, topic.name);
-                                    }}
-                                    className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 rounded-t-2xl transition-colors"
-                                  >
-                                    <div className="flex items-center gap-4 text-left">
-                                      <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center shrink-0 border border-slate-100 transition-colors duration-300">
-                                        {topicOpen ? <FolderOpen size={20} /> : <Folder size={20} />}
-                                      </div>
-
-                                      <div>
-                                        <p className="text-base font-black text-slate-900">
-                                          {topic.name}
-                                        </p>
-                                        <p className="text-xs font-black text-slate-400 uppercase">
-                                          {topicCards.length} cards · {topic.decks.length} decks
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2">
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          createArchiveFolder({
-                                            level: 'deck',
-                                            specialtyName: specialty.name,
-                                            topicName: topic.name,
-                                          });
-                                        }}
-                                        className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-                                      >
-                                        Novo deck
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          renameArchiveFolder({
-                                            type: 'topic',
-                                            currentName: topic.name,
-                                            specialtyName: specialty.name,
-                                            cards: topicCards,
-                                          });
-                                        }}
-                                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
-                                      >
-                                        Editar nome
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          viewArchiveFolder({
-                                            cards: topicCards,
-                                            specialty: specialty.name,
-                                          });
-                                        }}
-                                        className="
-                                          px-3 py-1.5
-                                          rounded-xl
-                                          border border-indigo-200
-                                          bg-indigo-50
-                                          text-indigo-700
-                                          text-xs font-bold
-                                          hover:bg-indigo-100
-                                          transition-colors
-                                        "
-                                      >
-                                        Visualizar / estudar
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          scheduleArchiveFolderForReview(topicCards);
-                                        }}
-                                        disabled={!topicCards.length}
-                                        className="px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-bold text-emerald-700 disabled:opacity-50"
-                                      >
-                                        Agendar revisão
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openMoveFolderDialog({
-                                            type: 'topic',
-                                            name: topic.name,
-                                            specialtyName: specialty.name,
-                                            cards: topicCards,
-                                          });
-                                        }}
-                                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
-                                      >
-                                        Mover
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteArchiveFolder({
-                                            type: 'topic',
-                                            name: topic.name,
-                                            specialtyName: specialty.name,
-                                            cards: topicCards,
-                                          });
-                                        }}
-                                        className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-bold text-red-600"
-                                      >
-                                        Excluir
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {topicOpen ? (
-                                  <div className="mt-4 border-t border-slate-100 pt-4 space-y-3">
-                                    {topic.decks.map((deck) => {
-                                      const deckKey = `${topicKey}:${deck.id}`;
-                                      const deckOpen = Boolean(expandedArchiveDecks[deckKey]);
-
-                                      return (
-                                        <div
-                                          key={deckKey}
-                                          className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden"
-                                        >
-                                          <button
-                                            onClick={() => {
-                                              setExpandedArchiveDecks((prev) => ({
-                                                ...prev,
-                                                [deckKey]: !prev[deckKey],
-                                              }));
-                                              selectArchiveDeck(specialty.name, topic.name, deck.id);
-                                            }}
-                                            className="w-full p-4 flex items-center justify-between gap-3 text-left"
-                                          >
-                                            <div className="flex items-center gap-3">
-                                              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
-                                                {deckOpen ? <FolderOpen size={20} /> : <Folder size={20} />}
-                                              </div>
-
-                                              <div>
-                                                <p className="text-sm font-black text-slate-900">
-                                                  {String(deck.name || '').replace(/\s*—\s*Deck Principal$/i, '')}
-                                                </p>
-                                                <p className="text-xs font-black text-slate-400 uppercase">
-                                                  {deck.cards.length} cards
-                                                </p>
-                                              </div>
-                                            </div>
-
-
-                                            <span className="text-xs font-bold text-slate-400">
-                                              {deckOpen ? 'Fechar' : 'Abrir'}
-                                            </span>
-                                          </button>
-
-                                          {deckOpen ? (
-                                            <div className="border-t border-slate-200 p-4 space-y-2">
-                                              {deck.cards.map((card) => (
-                                                <div
-                                                  key={card.id}
-                                                  className="bg-white border border-slate-200/80 rounded-xl p-4 flex flex-col md:flex-row justify-between gap-4 hover:border-indigo-200 transition-colors shadow-sm group"
-                                                >
-                                                  <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                      <p className="text-sm font-bold text-slate-900">
-                                                        {card.question}
-                                                      </p>
-                                                      <FormattedAiText
-                                                        text={card.answer}
-                                                        className="text-xs text-slate-500 mt-1 line-clamp-2 [&_p]:inline [&_p]:m-0 [&_strong]:font-semibold [&_strong]:text-slate-700"
-                                                      />
-                                                    </div>
-
-                                                    <div className="flex flex-row md:flex-col gap-1.5 shrink-0 self-start md:self-stretch justify-center">
-                                                      <button
-                                                        onClick={() => openLibraryCardPreview(card)}
-                                                        className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[10px] font-bold transition-colors"
-                                                      >
-                                                        Prévia
-                                                      </button>
-
-                                                      <button
-                                                        onClick={() => startEditingLibraryCard(card)}
-                                                        className="px-4 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[10px] font-bold transition-colors border border-transparent"
-                                                      >
-                                                        Editar
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
+                        <span className="text-xs font-bold text-slate-400">
+                          {selectedArchiveCards.length} cards
+                        </span>
                       </div>
-                    );
-                  })}
+
+                      {selectedArchiveCards.length > 0 ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          {selectedArchiveCards.slice(0, 20).map((card) => (
+                            <button
+                              key={card.id}
+                              type="button"
+                              onClick={() => setPreviewLibraryCard(card)}
+                              className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-red-200 hover:bg-red-50/40 transition-colors"
+                            >
+                              <p className="text-sm font-bold text-slate-900 line-clamp-2">
+                                {card.question || 'Pergunta sem título'}
+                              </p>
+
+                              <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                                {card.answer || 'Resposta não preenchida.'}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                          <p className="text-sm font-semibold text-slate-500">
+                            Nenhum flashcard nesta pasta.
+                          </p>
+                        </div>
+                      )}
+
+                      {selectedArchiveCards.length > 20 ? (
+                        <p className="text-xs text-slate-400 text-center">
+                          Mostrando os primeiros 20 cards desta pasta.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -10470,7 +11082,7 @@ export default function AdvancedFlashcardPoC() {
                           </div>
                         </div>
 
-                        {selected ? <Check className="w-5 h-5 text-indigo-600" /> : null}
+                        {selected ? <Check className="w-5 h-5 text-red-600" /> : null}
                       </button>
                     );
                   })}
@@ -10492,7 +11104,7 @@ export default function AdvancedFlashcardPoC() {
                   type="button"
                   onClick={confirmMoveFolder}
                   disabled={!moveFolderTargetSpecialty}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
                 >
                   Mover para pasta
                 </button>
@@ -10506,7 +11118,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="w-full max-w-3xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500">
                     Prévia do flashcard
                   </p>
                   <h3 className="text-xl font-black text-slate-900 mt-1">
@@ -10546,13 +11158,13 @@ export default function AdvancedFlashcardPoC() {
 
                 <div className="flex flex-wrap gap-2">
                   {previewLibraryCard.specialty ? (
-                    <span className="px-3 py-1 rounded-full bg-indigo-50 text-xs font-bold text-indigo-700">
+                    <span className="px-3 py-1 rounded-full bg-red-50 text-xs font-bold text-red-700">
                       {previewLibraryCard.specialty}
                     </span>
                   ) : null}
 
                   {previewLibraryCard.sub_specialty ? (
-                    <span className="px-3 py-1 rounded-full bg-violet-50 text-xs font-bold text-violet-700">
+                    <span className="px-3 py-1 rounded-full bg-red-50 text-xs font-bold text-red-700">
                       {previewLibraryCard.sub_specialty}
                     </span>
                   ) : null}
@@ -10578,7 +11190,7 @@ export default function AdvancedFlashcardPoC() {
                     startEditingLibraryCard(previewLibraryCard);
                     setPreviewLibraryCard(null);
                   }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Editar flashcard
                 </button>
@@ -10589,7 +11201,7 @@ export default function AdvancedFlashcardPoC() {
 
           <section
             ref={studySessionSectionRef}
-            className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
+            className={`${sectionVisibilityClass('study-session')} scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden`}
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
@@ -10617,7 +11229,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={() => buildLibraryStudyQueue('deck')}
                   disabled={!selectedDeckId}
-                  className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100 disabled:opacity-50"
                 >
                   Estudar deck selecionado
                 </button>
@@ -10717,7 +11329,7 @@ export default function AdvancedFlashcardPoC() {
 
                 <button
                   onClick={buildStudyQueue}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Iniciar estudo
                 </button>
@@ -10790,7 +11402,7 @@ export default function AdvancedFlashcardPoC() {
                     </div>
 
                     <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4">
-                      <p className="text-xs font-bold uppercase tracking-wider text-violet-500">
+                      <p className="text-xs font-bold uppercase tracking-wider text-red-500">
                         Enriquecidos
                       </p>
                       <p className="text-2xl font-black text-violet-700 mt-1">
@@ -11080,7 +11692,7 @@ export default function AdvancedFlashcardPoC() {
                         }`}
                       >
                         <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-3">
-                          <span className="text-[#6366f1] text-xs font-bold tracking-wider uppercase">
+                          <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
                             Biblioteca
                           </span>
 
@@ -11153,7 +11765,7 @@ export default function AdvancedFlashcardPoC() {
                     <button
                       onClick={() => rateLibraryStudyCard(3)}
                       disabled={isSavingLibraryReview}
-                      className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Bom
                     </button>
@@ -11178,11 +11790,11 @@ export default function AdvancedFlashcardPoC() {
 
           <section
             ref={spacedReviewSectionRef}
-            className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
+            className={`${sectionVisibilityClass('spaced-review')} scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden`}
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500 mb-2">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2">
                   Revisão espaçada
                 </p>
                 <h2 className="text-2xl font-bold text-slate-900">Revisão Inteligente</h2>
@@ -11195,7 +11807,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={() => buildSpacedReviewQueue('today')}
                   disabled={isBuildingSpacedReview}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
                 >
                   Revisar hoje
                 </button>
@@ -11351,7 +11963,7 @@ export default function AdvancedFlashcardPoC() {
                           onClick={() => setSelectedReviewDate(dateKey)}
                           className={`min-h-[88px] rounded-2xl border p-2 text-left transition-all ${
                             isSelected
-                              ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+                              ? 'border-red-500 bg-red-50 ring-2 ring-red-100'
                               : isToday
                                 ? 'border-emerald-300 bg-emerald-50'
                                 : 'border-slate-200 bg-white hover:bg-slate-50'
@@ -11371,7 +11983,7 @@ export default function AdvancedFlashcardPoC() {
 
                           <div className="mt-2 space-y-1">
                             {localCount > 0 ? (
-                              <div className="h-1.5 rounded-full bg-indigo-500" />
+                              <div className="h-1.5 rounded-full bg-red-500" />
                             ) : null}
 
                             {googleCount > 0 ? (
@@ -11415,7 +12027,7 @@ export default function AdvancedFlashcardPoC() {
                       <button
                         type="button"
                         onClick={connectGoogleCalendar}
-                        className="w-full px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800"
+                        className="w-full px-4 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                       >
                         Conectar Google Calendar
                       </button>
@@ -11472,9 +12084,9 @@ export default function AdvancedFlashcardPoC() {
                       {selectedReviewDateCards.map((card) => (
                         <div
                           key={`local-${card.id}`}
-                          className="rounded-xl border border-indigo-100 bg-indigo-50 p-3"
+                          className="rounded-xl border border-red-100 bg-red-50 p-3"
                         >
-                          <p className="text-[11px] font-black uppercase tracking-wider text-indigo-500">
+                          <p className="text-[11px] font-black uppercase tracking-wider text-red-500">
                             Local
                           </p>
                           <p className="text-sm font-semibold text-slate-900 mt-1 line-clamp-2">
@@ -11624,7 +12236,7 @@ export default function AdvancedFlashcardPoC() {
                     <button
                       onClick={() => rateSpacedReviewCard(3)}
                       disabled={isSavingSpacedReview}
-                      className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold hover:bg-blue-100 disabled:opacity-50"
+                      className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50"
                     >
                       Bom
                       <span className="block text-xs font-medium mt-1">normal</span>
@@ -11652,7 +12264,7 @@ export default function AdvancedFlashcardPoC() {
 
           <section
             ref={historySectionRef}
-            className="scroll-mt-24 h-[calc(100vh-7rem)] min-h-[680px] bg-slate-50/50 flex font-sans text-slate-800 overflow-hidden rounded-3xl border border-slate-200 shadow-sm"
+            className={`${sectionVisibilityClass('history')} scroll-mt-24 h-[calc(100vh-7rem)] min-h-[680px] bg-slate-50/50 flex font-sans text-slate-800 overflow-hidden rounded-3xl border border-slate-200 shadow-sm`}
           >
             {isMobileMenuOpen && (
               <div
@@ -11671,100 +12283,155 @@ export default function AdvancedFlashcardPoC() {
               onMouseEnter={() => setIsHistorySidebarExpanded(true)}
               onMouseLeave={() => setIsHistorySidebarExpanded(false)}
             >
-              <div
-                className={`border-b border-slate-100 transition-all duration-300 ${
-                  isHistorySidebarExpanded
-                    ? 'p-6 flex items-center justify-between'
-                    : 'py-6 px-0 flex items-center justify-center lg:justify-center'
-                }`}
-              >
-                <div
-                  className={`flex items-center transition-all duration-300 ${
-                    isHistorySidebarExpanded ? 'gap-3' : 'justify-center'
-                  }`}
-                >
-                  <div className="bg-[#0f172a] text-white w-11 h-11 rounded-2xl flex items-center justify-center font-bold shrink-0">
-                    <LayoutTemplate size={18} />
+              {isHistorySidebarExpanded || isMobileMenuOpen ? (
+                <div className="p-5 border-b border-slate-100">
+                  <div className="flex items-center justify-between gap-3 mb-5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-sm shadow-red-100 shrink-0">
+                        <LayoutTemplate size={22} />
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-black text-slate-900 truncate">
+                          Workspace
+                        </h3>
+
+                        <p className="text-xs text-slate-400 font-semibold truncate">
+                          Histórico de estudos
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      className="lg:hidden text-slate-500 hover:bg-slate-100 p-2 rounded-lg shrink-0"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
 
-                  {(isHistorySidebarExpanded || isMobileMenuOpen) && (
-                    <h2 className="text-xl font-bold text-slate-900 whitespace-nowrap">Workspace</h2>
-                  )}
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-2">
+                    Navegação
+                  </p>
+
+                  <h4 className="text-lg font-black text-slate-900">
+                    Pastas
+                  </h4>
+
+                  <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                    Filtre suas aulas rapidamente.
+                  </p>
+
+                  <div className="relative mt-4">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      size={16}
+                    />
+
+                    <input
+                      type="text"
+                      value={historySearchInput}
+                      onChange={(event) => setHistorySearchInput(event.target.value)}
+                      placeholder="Buscar aula..."
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
+                    />
+                  </div>
                 </div>
+              ) : (
+                <div className="p-4 flex justify-center border-b border-slate-100">
+                  <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-sm shadow-red-100">
+                    <LayoutTemplate size={18} />
+                  </div>
+                </div>
+              )}
 
-                <button
-                  className="lg:hidden text-slate-500 hover:bg-slate-100 p-2 rounded-lg"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 no-visible-scrollbar space-y-2">
+                {allFolders.map((folder) => {
+                  const isActive = currentFolder === folder.id;
+                  const Icon = folder.icon || Folder;
+                  const folderVisual = getFolderVisualForLabel(folder.name);
 
-              <div className="flex-1 min-h-0 overflow-hidden p-4 flex flex-col gap-4">
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1 no-visible-scrollbar">
-                  {allFolders.map((folder) => {
-                    const isActive = currentFolder === folder.id;
-                    const Icon = folder.icon;
-                    const folderVisual = getFolderVisualForLabel(folder.name);
-
-                    return (
-                      <button
-                        key={folder.id}
-                        onClick={() => {
-                          setCurrentFolder(folder.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full transition-all duration-300 ${
-                          isHistorySidebarExpanded || isMobileMenuOpen
-                            ? 'flex items-center justify-between p-3 rounded-xl'
-                            : 'flex items-center justify-center w-14 h-14 rounded-2xl mx-auto'
-                        } ${
-                          isActive ? 'bg-[#0f172a] text-white' : 'text-slate-600 hover:bg-slate-100'
-                        } ${folder.id !== 'all' ? 'mt-1' : ''}`}
-                        title={folder.name}
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => {
+                        setCurrentFolder(folder.id);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
+                        isActive
+                          ? 'bg-red-600 text-white shadow-sm shadow-red-100'
+                          : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-100'
+                      }`}
+                      title={folder.name}
+                    >
+                      <span
+                        className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                          isActive
+                            ? 'bg-white/15 border-white/15 text-white'
+                            : folderVisual.iconClass
+                        }`}
                       >
-                        <div
-                          className={`flex items-center transition-all duration-300 ${
-                            isHistorySidebarExpanded || isMobileMenuOpen ? 'gap-3 font-medium min-w-0' : 'justify-center'
-                          }`}
-                        >
-                          <span
-                            className={`w-8 h-8 rounded-xl flex items-center justify-center border ${
-                              isActive
-                                ? 'bg-white/10 text-white border-white/10'
-                                : folderVisual.iconClass
-                            }`}
-                          >
-                            <Icon size={17} />
-                          </span>
-                          {(isHistorySidebarExpanded || isMobileMenuOpen) && (
-                            <span className="truncate max-w-[150px] text-left">{folder.name}</span>
-                          )}
-                        </div>
+                        <Icon size={17} />
+                      </span>
 
-                        {(isHistorySidebarExpanded || isMobileMenuOpen) && (
+                      {(isHistorySidebarExpanded || isMobileMenuOpen) ? (
+                        <>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-black truncate">
+                              {folder.name}
+                            </span>
+
+                            <span
+                              className={`block text-[11px] truncate ${
+                                isActive ? 'text-white/75' : 'text-slate-400'
+                              }`}
+                            >
+                              {folder.id === 'all'
+                                ? 'Todas as aulas'
+                                : folder.id === 'favorites'
+                                  ? 'Favoritas'
+                                  : folder.id === 'with-flashcards'
+                                    ? 'Com cards gerados'
+                                    : folder.id === 'with-audio'
+                                      ? 'Áudio salvo'
+                                      : folder.id === 'with-video'
+                                        ? 'Vídeo salvo'
+                                        : folder.id === 'transcript-only'
+                                          ? 'Só texto'
+                                          : 'Especialidade'}
+                            </span>
+                          </span>
+
                           <span
-                            className={`text-xs px-2 py-1 rounded-full shrink-0 ${
-                              isActive ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'
+                            className={`text-[11px] font-black rounded-full px-2 py-0.5 shrink-0 ${
+                              isActive ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
                             }`}
                           >
                             {folder.count}
                           </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                        </>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="p-4 border-t border-slate-100">
                 <div
-                  className={`flex items-center justify-center text-xs text-slate-500 bg-slate-50 rounded-lg transition-all duration-300 ${
-                    isHistorySidebarExpanded || isMobileMenuOpen ? 'p-2' : 'w-12 h-12 mx-auto'
+                  className={`flex items-center justify-center text-xs font-semibold text-slate-500 bg-slate-50 rounded-xl ${
+                    isHistorySidebarExpanded || isMobileMenuOpen
+                      ? 'p-3'
+                      : 'w-10 h-10 mx-auto p-0'
                   }`}
-                  title="Dados Salvos Automaticamente"
+                  title="Dados salvos automaticamente"
                 >
-                  {isHistorySidebarExpanded || isMobileMenuOpen ? 'Dados Salvos Automaticamente' : 'DB'}
+                  {isHistorySidebarExpanded || isMobileMenuOpen ? (
+                    'Dados salvos automaticamente'
+                  ) : (
+                    <Database size={16} />
+                  )}
                 </div>
               </div>
             </aside>
@@ -11772,7 +12439,7 @@ export default function AdvancedFlashcardPoC() {
             <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-slate-50">
               <div className="lg:hidden p-4 bg-white border-b border-slate-200 flex items-center justify-between z-10">
                 <div className="flex items-center gap-3">
-                  <div className="bg-[#0f172a] text-white w-8 h-8 rounded-xl flex items-center justify-center font-bold">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-xl flex items-center justify-center font-bold shadow-sm shadow-red-100">
                     <LayoutTemplate size={18} />
                   </div>
                 </div>
@@ -11814,7 +12481,7 @@ export default function AdvancedFlashcardPoC() {
                         <input
                           type="text"
                           placeholder="Procurar por tema, título ou conteúdo"
-                          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all bg-slate-50 hover:bg-white text-sm"
+                          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all bg-slate-50 hover:bg-white text-sm"
                           value={historySearchInput}
                           onChange={(e) => setHistorySearchInput(e.target.value)}
                         />
@@ -11823,7 +12490,7 @@ export default function AdvancedFlashcardPoC() {
                       <div className="flex gap-2">
                         <button
                           type="submit"
-                          className="px-5 py-3 rounded-2xl bg-[#0f172a] text-white text-sm font-semibold hover:bg-[#1e293b] transition-colors"
+                          className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100"
                         >
                           Buscar
                         </button>
@@ -11995,7 +12662,7 @@ export default function AdvancedFlashcardPoC() {
                               <div
                                 key={item.id}
                                 onDoubleClick={() => setQuickPreviewHistoryItem(item)}
-                                className="bg-white border border-slate-200 rounded-[28px] p-5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:border-violet-200 transition-all flex flex-col h-full group min-w-0 cursor-default"
+                                className="bg-white border border-slate-200 rounded-[28px] p-5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:border-red-200 transition-all flex flex-col h-full group min-w-0 cursor-default"
                               >
                                 <div className="flex items-start justify-between gap-4 mb-4 min-w-0">
                                   <div className="min-w-0 flex-1 pr-2">
@@ -12062,19 +12729,19 @@ export default function AdvancedFlashcardPoC() {
                                     )}
 
                                     {item.videoUrl ? (
-                                      <span className="bg-violet-50 text-violet-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                      <span className="bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                                         Vídeo salvo
                                       </span>
                                     ) : null}
 
                                     {item.audioUrl ? (
-                                      <span className="bg-cyan-50 text-cyan-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                      <span className="bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                                         Áudio salvo
                                       </span>
                                     ) : null}
 
                                     {item.hasEnrichmentSupport ? (
-                                      <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                      <span className="bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">
                                         Vídeo complementar
                                       </span>
                                     ) : null}
@@ -12092,7 +12759,7 @@ export default function AdvancedFlashcardPoC() {
                                       {item.videoUrl ? (
                                         <button
                                           onClick={() => window.open(item.videoUrl, '_blank', 'noopener,noreferrer')}
-                                          className="px-4 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold"
+                                          className="px-4 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold"
                                         >
                                           Ver vídeo
                                         </button>
@@ -12101,7 +12768,7 @@ export default function AdvancedFlashcardPoC() {
                                       {item.audioUrl ? (
                                         <button
                                           onClick={() => window.open(item.audioUrl, '_blank', 'noopener,noreferrer')}
-                                          className="px-4 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-xs font-semibold"
+                                          className="px-4 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold"
                                         >
                                           Ouvir áudio
                                         </button>
@@ -12123,7 +12790,7 @@ export default function AdvancedFlashcardPoC() {
 
                                       <button
                                         onClick={() => openHistoryDetails(item.id)}
-                                        className="px-4 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold"
+                                        className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 text-xs font-bold shadow-sm shadow-red-100"
                                       >
                                         Abrir item
                                       </button>
@@ -12151,9 +12818,9 @@ export default function AdvancedFlashcardPoC() {
                                   <div
                                     className={`p-2.5 rounded-xl flex-shrink-0 ${
                                       item.type === 'video'
-                                        ? 'bg-blue-50 text-blue-600'
+                                        ? 'bg-slate-100 text-slate-700'
                                         : item.type === 'audio'
-                                          ? 'bg-cyan-50 text-cyan-600'
+                                          ? 'bg-slate-100 text-slate-700'
                                           : 'bg-slate-100 text-slate-600'
                                     }`}
                                   >
@@ -12224,7 +12891,7 @@ export default function AdvancedFlashcardPoC() {
                                     {item.videoUrl ? (
                                       <button
                                         onClick={() => window.open(item.videoUrl, '_blank', 'noopener,noreferrer')}
-                                        className="text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors"
+                                        className="text-red-600 text-sm font-semibold hover:text-red-700 transition-colors"
                                       >
                                         Ver vídeo
                                       </button>
@@ -12233,7 +12900,7 @@ export default function AdvancedFlashcardPoC() {
                                     {item.audioUrl ? (
                                       <button
                                         onClick={() => window.open(item.audioUrl, '_blank', 'noopener,noreferrer')}
-                                        className="text-cyan-600 text-sm font-semibold hover:text-cyan-700 transition-colors"
+                                        className="text-slate-600 text-sm font-semibold hover:text-slate-800 transition-colors"
                                       >
                                         Ouvir áudio
                                       </button>
@@ -12256,7 +12923,7 @@ export default function AdvancedFlashcardPoC() {
 
                                   <button
                                     onClick={() => openHistoryDetails(item.id)}
-                                    className="bg-white border border-slate-200 hover:border-[#0f172a] hover:bg-slate-50 text-[#0f172a] px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                                    className="bg-white border border-red-200 hover:bg-red-50 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold transition-colors"
                                   >
                                     Abrir
                                   </button>
@@ -12312,7 +12979,7 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() => setHistoryPage(pageNum)}
                             className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
                               historyPage === pageNum
-                                ? 'bg-[#0f172a] text-white shadow-md'
+                                ? 'bg-red-600 text-white shadow-md shadow-red-100'
                                 : 'text-slate-600 hover:bg-slate-100'
                             }`}
                           >
@@ -12408,7 +13075,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   type="button"
                   onClick={() => setPreviewAppliedBlock(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Fechar
                 </button>
@@ -12465,7 +13132,7 @@ export default function AdvancedFlashcardPoC() {
                 )}
 
                 {quickPreviewHistoryItem.hasFlashcards ? (
-                  <span className="px-3 py-1.5 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold">
+                  <span className="px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-xs font-semibold">
                     {quickPreviewHistoryItem.flashcardsCount} flashcards
                   </span>
                 ) : (
@@ -12475,13 +13142,13 @@ export default function AdvancedFlashcardPoC() {
                 )}
 
                 {quickPreviewHistoryItem.videoUrl ? (
-                  <span className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                  <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
                     Vídeo salvo
                   </span>
                 ) : null}
 
                 {quickPreviewHistoryItem.audioUrl ? (
-                  <span className="px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-semibold">
+                  <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
                     Áudio salvo
                   </span>
                 ) : null}
@@ -12497,11 +13164,11 @@ export default function AdvancedFlashcardPoC() {
               </div>
 
               {quickPreviewHistoryItem.enrichedTranscript ? (
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
-                  <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-500 mb-3">
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-3">
                     Texto enriquecido disponível
                   </h4>
-                  <p className="text-sm text-indigo-900 leading-relaxed">
+                  <p className="text-sm text-red-900 leading-relaxed">
                     Este item possui texto enriquecido salvo. Abra o item completo para comparar com a transcrição original.
                   </p>
                 </div>
@@ -12517,7 +13184,7 @@ export default function AdvancedFlashcardPoC() {
                         'noopener,noreferrer'
                       )
                     }
-                    className="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100"
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50"
                   >
                     Ver vídeo
                   </button>
@@ -12532,7 +13199,7 @@ export default function AdvancedFlashcardPoC() {
                         'noopener,noreferrer'
                       )
                     }
-                    className="px-4 py-2.5 rounded-xl bg-cyan-50 text-cyan-700 text-sm font-semibold hover:bg-cyan-100"
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50"
                   >
                     Ouvir áudio
                   </button>
@@ -12544,7 +13211,7 @@ export default function AdvancedFlashcardPoC() {
                     setQuickPreviewHistoryItem(null);
                     openHistoryDetails(id);
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Abrir item completo
                 </button>
@@ -12552,6 +13219,225 @@ export default function AdvancedFlashcardPoC() {
             </div>
           </div>
         </div>
+        )}
+
+        {editingFlashcardIndex !== null && (
+          <div className="fixed inset-0 z-[90] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center px-4 py-8">
+            <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl border border-slate-200">
+              <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100 px-6 py-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-500">
+                    Editor avançado
+                  </p>
+
+                  <h3 className="text-xl font-black text-slate-900">
+                    Flashcard {String(editingFlashcardIndex + 1).padStart(2, '0')}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeFlashcardEditor}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {flashcards[editingFlashcardIndex]?.imageUrl ? (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+                    <img
+                      src={flashcards[editingFlashcardIndex].imageUrl}
+                      alt="Imagem atual do flashcard"
+                      className="max-h-[360px] w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                    <p className="text-sm font-semibold text-slate-500">
+                      Este flashcard ainda não possui imagem.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Pergunta
+                    </span>
+
+                    <textarea
+                      value={editingFlashcardForm.question}
+                      onChange={(event) =>
+                        setEditingFlashcardForm((prev) => ({
+                          ...prev,
+                          question: event.target.value,
+                        }))
+                      }
+                      rows={3}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Resposta
+                    </span>
+
+                    <textarea
+                      value={editingFlashcardForm.answer}
+                      onChange={(event) =>
+                        setEditingFlashcardForm((prev) => ({
+                          ...prev,
+                          answer: event.target.value,
+                        }))
+                      }
+                      rows={7}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Nota do preceptor
+                    </span>
+
+                    <textarea
+                      value={editingFlashcardForm.preceptorNote}
+                      onChange={(event) =>
+                        setEditingFlashcardForm((prev) => ({
+                          ...prev,
+                          preceptorNote: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Dificuldade
+                    </span>
+
+                    <select
+                      value={editingFlashcardForm.difficulty}
+                      onChange={(event) =>
+                        setEditingFlashcardForm((prev) => ({
+                          ...prev,
+                          difficulty: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="easy">Fácil</option>
+                      <option value="medium">Médio</option>
+                      <option value="hard">Difícil</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Tags, separadas por vírgula
+                    </span>
+
+                    <input
+                      value={editingFlashcardForm.tags}
+                      onChange={(event) =>
+                        setEditingFlashcardForm((prev) => ({
+                          ...prev,
+                          tags: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+                </div>
+
+                {flashcards[editingFlashcardIndex]?.cardInsights &&
+                Object.keys(flashcards[editingFlashcardIndex]?.cardInsights || {}).length > 0 ? (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-5 space-y-3">
+                    <h4 className="text-sm font-black text-red-900">
+                      Insights deste flashcard
+                    </h4>
+
+                    <p className="text-sm text-red-900/80 leading-relaxed">
+                      <strong>Lacuna:</strong>{' '}
+                      {flashcards[editingFlashcardIndex].cardInsights.gap || 'Não informado'}
+                    </p>
+
+                    <p className="text-sm text-red-900/80 leading-relaxed">
+                      <strong>Melhoria:</strong>{' '}
+                      {flashcards[editingFlashcardIndex].cardInsights.improvement || 'Não informado'}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-5">
+                  <button
+                    type="button"
+                    onClick={saveFlashcardEdit}
+                    disabled={isSavingFlashcardEdit}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
+                  >
+                    {isSavingFlashcardEdit ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Check size={16} />
+                    )}
+                    Salvar alterações
+                  </button>
+
+                  <label className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    {isUploadingFlashcardImage && flashcardActionIndex === editingFlashcardIndex ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Upload size={16} />
+                    )}
+
+                    Enviar imagem manual
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isUploadingFlashcardImage}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        uploadManualFlashcardImage(editingFlashcardIndex, file);
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    disabled
+                    title="Geração de imagem por IA exige plano pago/billing ativo no Gemini."
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-bold text-slate-400 cursor-not-allowed"
+                  >
+                    <Wand2 size={16} />
+                    Imagem IA indisponível
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => generateFlashcardInsights(editingFlashcardIndex)}
+                    disabled={isGeneratingFlashcardInsights}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    {isGeneratingFlashcardInsights && flashcardActionIndex === editingFlashcardIndex ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                    Gerar insights
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {error && (
