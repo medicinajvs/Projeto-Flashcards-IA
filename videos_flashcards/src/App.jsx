@@ -65,6 +65,8 @@ const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
 const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
 const MULTIPART_UPLOAD_CONCURRENCY = 3;
+const AUTO_INSIGHTS_INITIAL_LIMIT = 3;
+const AUTO_INSIGHTS_DELAY_MS = 9000;
 
 const UI = {
   page: 'bg-slate-50 text-slate-900',
@@ -121,9 +123,50 @@ function normalizeFlashcards(rawFlashcards) {
       imageSource: card.imageSource || card.image_source || '',
       imagePrompt: card.imagePrompt || card.image_prompt || '',
       imageGeneratedAt: card.imageGeneratedAt || card.image_generated_at || null,
+
+      questionImageUrl:
+        card.questionImageUrl ||
+        card.question_image_url ||
+        card.frontImageUrl ||
+        card.front_image_url ||
+        '',
+      questionImageObjectKey:
+        card.questionImageObjectKey ||
+        card.question_image_object_key ||
+        card.frontImageObjectKey ||
+        card.front_image_object_key ||
+        '',
+      answerImageUrl:
+        card.answerImageUrl ||
+        card.answer_image_url ||
+        card.backImageUrl ||
+        card.back_image_url ||
+        '',
+      answerImageObjectKey:
+        card.answerImageObjectKey ||
+        card.answer_image_object_key ||
+        card.backImageObjectKey ||
+        card.back_image_object_key ||
+        '',
+
+      aiProposition:
+        card.aiProposition ||
+        card.ai_proposition ||
+        card.cardInsights?.improvement ||
+        card.card_insights?.improvement ||
+        '',
+      aiPropositionGeneratedAt:
+        card.aiPropositionGeneratedAt ||
+        card.ai_proposition_generated_at ||
+        card.cardInsightsGeneratedAt ||
+        card.card_insights_generated_at ||
+        null,
+
       cardInsights: card.cardInsights || card.card_insights || {},
       cardInsightsGeneratedAt:
         card.cardInsightsGeneratedAt || card.card_insights_generated_at || null,
+
+      position: Number(card.position || card.sort_order || index + 1),
 
       origin:
         card.origin ||
@@ -352,7 +395,7 @@ function SmartDropdown({
             : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
         }`}
       >
-        <div className="p-1.5 max-h-[400px] overflow-y-auto">
+        <div className="p-2 max-h-[320px] overflow-y-auto">
           {options.map((option) => {
             const hasSubOptions = Array.isArray(option.subOptions);
             const isExpanded = expandedGroup === option.id;
@@ -371,8 +414,8 @@ function SmartDropdown({
                       setIsOpen(false);
                     }
                   }}
-                  className={`w-full flex items-center justify-between gap-4 p-3 rounded-lg transition-colors text-left ${
-                    isSelected ? 'bg-red-50' : 'hover:bg-slate-50'
+                  className={`w-full flex items-center justify-between gap-3 p-2.5 rounded-xl transition-colors text-left ${
+                    isSelected ? 'bg-red-50 text-red-700' : 'hover:bg-slate-50 text-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -407,8 +450,10 @@ function SmartDropdown({
                         isExpanded ? 'rotate-180' : '-rotate-90'
                       }`}
                     />
-                  ) : (
+                  ) : isSelected ? (
                     <Check className="w-5 h-5 text-red-600" />
+                  ) : (
+                    <span className="w-5 h-5 shrink-0" />
                   )}
                 </button>
 
@@ -480,7 +525,7 @@ function FolderTreeNode({
 }) {
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
   const isSelected = selectedId === node.id;
-  const [isOpen, setIsOpen] = useState(defaultOpen || level < 1);
+  const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const Icon = node.icon || Folder;
 
   const handleClick = () => {
@@ -649,7 +694,7 @@ function FolderTreePanel({
               node={node}
               selectedId={selectedId}
               onSelect={onSelect}
-              defaultOpen
+              defaultOpen={false}
             />
           ))
         ) : (
@@ -1537,6 +1582,9 @@ export default function AdvancedFlashcardPoC() {
   const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GOOGLE_CALENDAR_API_KEY || '';
   const GOOGLE_CALENDAR_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
   const GOOGLE_CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
+  const autoInsightsQueueRef = useRef(new Set());
+  const autoInsightsRunKeyRef = useRef('');
+  const autoInsightsIsRunningRef = useRef(false);
   const videoInputRef = useRef(null);
   const enrichmentVideoInputRef = useRef(null);
   const uploadSectionRef = useRef(null);
@@ -1565,7 +1613,16 @@ export default function AdvancedFlashcardPoC() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingJobInfo, setProcessingJobInfo] = useState(null);
   const [isGeneratingSavedFlashcards, setIsGeneratingSavedFlashcards] = useState(false);
+  const processingStatus = String(processingJobInfo?.status || '').toLowerCase();
 
+  const isProcessingTerminal = [
+    'completed',
+    'error',
+    'failed',
+    'cancelled',
+  ].includes(processingStatus);
+
+  const isProcessingUiActive = isProcessing && !isProcessingTerminal;
   const [shouldScrollToStudyCard, setShouldScrollToStudyCard] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [flashcards, setFlashcards] = useState([]);
@@ -1636,6 +1693,8 @@ export default function AdvancedFlashcardPoC() {
     preceptorNote: '',
     difficulty: 'medium',
     tags: '',
+    position: 1,
+    aiProposition: '',
   });
   const [isSavingFlashcardEdit, setIsSavingFlashcardEdit] = useState(false);
   const [isUploadingFlashcardImage, setIsUploadingFlashcardImage] = useState(false);
@@ -1643,6 +1702,17 @@ export default function AdvancedFlashcardPoC() {
   const [isGeneratingFlashcardInsights, setIsGeneratingFlashcardInsights] = useState(false);
   const [expandedFlashcardInsights, setExpandedFlashcardInsights] = useState({});
   const [flashcardActionIndex, setFlashcardActionIndex] = useState(null);
+  const [autoInsightsPausedReason, setAutoInsightsPausedReason] = useState('');
+  const [isCreatingFlashcard, setIsCreatingFlashcard] = useState(false);
+  const [newFlashcardForm, setNewFlashcardForm] = useState({
+    question: '',
+    answer: '',
+    preceptorNote: '',
+    difficulty: 'medium',
+    tags: '',
+    position: 1,
+  });
+  const [isSavingFlashcardList, setIsSavingFlashcardList] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckSpecialty, setNewDeckSpecialty] = useState('');
   const [newDeckSubSpecialty, setNewDeckSubSpecialty] = useState('');
@@ -1814,6 +1884,8 @@ export default function AdvancedFlashcardPoC() {
       preceptorNote: '',
       difficulty: 'medium',
       tags: '',
+      position: 1,
+      aiProposition: '',
     });
     setExpandedFlashcardInsights({});
     setFlashcardActionIndex(null);
@@ -1981,6 +2053,12 @@ export default function AdvancedFlashcardPoC() {
     setCurrentStudyIndex(0);
     setIsFlipped(false);
   }, [flashcards]);
+
+  useEffect(() => {
+    if (!isProcessingTerminal) return;
+
+    setIsProcessing(false);
+  }, [isProcessingTerminal]);
 
   useEffect(() => {
     if (isProcessing) return;
@@ -4003,8 +4081,12 @@ export default function AdvancedFlashcardPoC() {
   };
 
   const createLibraryDeck = async () => {
-    if (!newDeckName.trim()) {
-      setError('Digite um nome para o deck.');
+    const createdDeckName = newDeckName.trim();
+    const createdSpecialty = newDeckSpecialty.trim() || 'Sem especialidade';
+    const createdTopic = newDeckSubSpecialty.trim() || createdDeckName;
+
+    if (!createdDeckName) {
+      setError('Digite um nome para a pasta.');
       return;
     }
 
@@ -4015,25 +4097,36 @@ export default function AdvancedFlashcardPoC() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newDeckName.trim(),
-          specialty: newDeckSpecialty.trim(),
-          sub_specialty: newDeckSubSpecialty.trim() || null,
-          deck_type: 'manual',
+          name: createdDeckName,
+          specialty: createdSpecialty,
+          sub_specialty: createdTopic,
+          deck_type: 'leaf-deck',
         }),
       });
 
       const data = await parseResponseSafely(response);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao criar deck.');
+        throw new Error(data.error || 'Erro ao criar pasta.');
       }
+
+      const createdDeckId = data.deck?.id || '';
 
       setNewDeckName('');
       setNewDeckSubSpecialty('');
-      setSelectedDeckId(data.deck?.id || '');
+      setSelectedDeckId(createdDeckId);
+
       await loadLibraryDecks();
+      await loadLibraryCards();
+      await loadDeckTree();
+      await loadLibraryAnalytics();
+
+      setSelectedArchiveSpecialty(createdSpecialty);
+      setSelectedArchiveTopic(createdTopic);
+      setSelectedArchiveDeckId(createdDeckId);
+      openMainSection('library');
     } catch (err) {
-      setError(`Falha ao criar deck: ${err.message}`);
+      setError(`Falha ao criar pasta: ${err.message}`);
     }
   };
 
@@ -4204,6 +4297,49 @@ export default function AdvancedFlashcardPoC() {
     };
   };
 
+  const updateFlashcardListViaServer = async ({
+    nextFlashcards,
+    origin = getCurrentFlashcardStorageOrigin(),
+  }) => {
+    if (!currentRunId) {
+      throw new Error('Abra ou processe um estudo salvo antes de alterar a lista de flashcards.');
+    }
+
+    const normalizedList = normalizeFlashcards(nextFlashcards).map((card, index) => ({
+      ...card,
+      position: index + 1,
+    }));
+
+    const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin,
+        flashcards: normalizedList,
+      }),
+    });
+
+    const data = await parseResponseSafely(response);
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro ao salvar lista de flashcards.');
+    }
+
+    const updatedFlashcards = normalizeFlashcards(data.flashcards || normalizedList);
+    setFlashcards(updatedFlashcards);
+    setFlashcardsOrigin(data.origin || origin || 'original');
+
+    loadHistoryDebounced(historySearch);
+    loadLibraryCards();
+    loadDeckTree();
+    loadLibraryAnalytics();
+
+    return {
+      ...data,
+      flashcards: updatedFlashcards,
+    };
+  };
+
   const openFlashcardEditor = (index) => {
     const card = flashcards[index];
     if (!card) return;
@@ -4215,6 +4351,8 @@ export default function AdvancedFlashcardPoC() {
       preceptorNote: card.preceptorNote || '',
       difficulty: card.difficulty || 'medium',
       tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
+      position: index + 1,
+      aiProposition: card.aiProposition || card.cardInsights?.improvement || '',
     });
   };
 
@@ -4226,6 +4364,8 @@ export default function AdvancedFlashcardPoC() {
       preceptorNote: '',
       difficulty: 'medium',
       tags: '',
+      position: 1,
+      aiProposition: '',
     });
   };
 
@@ -4241,23 +4381,309 @@ export default function AdvancedFlashcardPoC() {
         .map((tag) => tag.trim())
         .filter(Boolean);
 
-      await updateFlashcardViaServer({
-        index: editingFlashcardIndex,
-        updates: {
-          question: editingFlashcardForm.question,
-          answer: editingFlashcardForm.answer,
-          preceptorNote: editingFlashcardForm.preceptorNote,
-          preceptor_note: editingFlashcardForm.preceptorNote,
-          difficulty: editingFlashcardForm.difficulty,
-          tags,
-        },
-      });
+      const safePosition = Math.max(
+        1,
+        Math.min(
+          flashcards.length,
+          Number(editingFlashcardForm.position || editingFlashcardIndex + 1)
+        )
+      );
+
+      const currentCard = flashcards[editingFlashcardIndex];
+
+      if (!currentCard) {
+        throw new Error('Flashcard não encontrado.');
+      }
+
+      const updatedCard = {
+        ...currentCard,
+        question: editingFlashcardForm.question,
+        answer: editingFlashcardForm.answer,
+        preceptorNote: editingFlashcardForm.preceptorNote,
+        preceptor_note: editingFlashcardForm.preceptorNote,
+        difficulty: editingFlashcardForm.difficulty,
+        tags,
+        position: safePosition,
+        aiProposition: editingFlashcardForm.aiProposition,
+        ai_proposition: editingFlashcardForm.aiProposition,
+      };
+
+      if (safePosition !== editingFlashcardIndex + 1) {
+        const nextFlashcards = [...flashcards];
+
+        nextFlashcards.splice(editingFlashcardIndex, 1);
+        nextFlashcards.splice(safePosition - 1, 0, updatedCard);
+
+        await updateFlashcardListViaServer({
+          nextFlashcards,
+        });
+      } else {
+        await updateFlashcardViaServer({
+          index: editingFlashcardIndex,
+          updates: {
+            question: editingFlashcardForm.question,
+            answer: editingFlashcardForm.answer,
+            preceptorNote: editingFlashcardForm.preceptorNote,
+            preceptor_note: editingFlashcardForm.preceptorNote,
+            difficulty: editingFlashcardForm.difficulty,
+            tags,
+            position: safePosition,
+            aiProposition: editingFlashcardForm.aiProposition,
+            ai_proposition: editingFlashcardForm.aiProposition,
+          },
+        });
+      }
 
       closeFlashcardEditor();
     } catch (err) {
       setError(`Falha ao salvar flashcard: ${err.message}`);
     } finally {
       setIsSavingFlashcardEdit(false);
+    }
+  };
+
+  const moveFlashcardToPosition = async (index, rawPosition) => {
+    const safePosition = Math.max(
+      1,
+      Math.min(flashcards.length, Number(rawPosition || index + 1))
+    );
+
+    if (safePosition === index + 1) return;
+
+    try {
+      setIsSavingFlashcardList(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const nextFlashcards = [...flashcards];
+      const [card] = nextFlashcards.splice(index, 1);
+
+      nextFlashcards.splice(safePosition - 1, 0, card);
+
+      await updateFlashcardListViaServer({
+        nextFlashcards,
+      });
+    } catch (err) {
+      setError(`Falha ao renumerar flashcard: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardList(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const openCreateFlashcardModal = () => {
+    setIsCreatingFlashcard(true);
+    setNewFlashcardForm({
+      question: '',
+      answer: '',
+      preceptorNote: '',
+      difficulty: 'medium',
+      tags: '',
+      position: flashcards.length + 1,
+    });
+  };
+
+  const closeCreateFlashcardModal = () => {
+    setIsCreatingFlashcard(false);
+    setNewFlashcardForm({
+      question: '',
+      answer: '',
+      preceptorNote: '',
+      difficulty: 'medium',
+      tags: '',
+      position: 1,
+    });
+  };
+
+  const createFlashcardFromScratch = async () => {
+    if (!newFlashcardForm.question.trim() || !newFlashcardForm.answer.trim()) {
+      setError('Preencha pelo menos a pergunta e a resposta do novo flashcard.');
+      return;
+    }
+
+    try {
+      setIsSavingFlashcardList(true);
+      setError(null);
+
+      const tags = String(newFlashcardForm.tags || '')
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const newCard = {
+        id: `manual-${Date.now()}`,
+        question: newFlashcardForm.question.trim(),
+        answer: newFlashcardForm.answer.trim(),
+        preceptorNote: newFlashcardForm.preceptorNote.trim(),
+        preceptor_note: newFlashcardForm.preceptorNote.trim(),
+        difficulty: newFlashcardForm.difficulty || 'medium',
+        tags,
+        origin: 'manual',
+        reviewed: true,
+        position: Number(newFlashcardForm.position || flashcards.length + 1),
+        aiProposition: '',
+        ai_proposition: '',
+      };
+
+      const nextFlashcards = [...flashcards];
+
+      const safePosition = Math.max(
+        1,
+        Math.min(
+          nextFlashcards.length + 1,
+          Number(newFlashcardForm.position || nextFlashcards.length + 1)
+        )
+      );
+
+      nextFlashcards.splice(safePosition - 1, 0, newCard);
+
+      await updateFlashcardListViaServer({
+        nextFlashcards,
+      });
+
+      closeCreateFlashcardModal();
+      setActiveMainSection('flashcards');
+    } catch (err) {
+      setError(`Falha ao criar flashcard: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardList(false);
+    }
+  };
+
+  const uploadFlashcardFieldImage = async (index, file, field = 'question') => {
+    if (!file) return;
+
+    const isQuestion = field === 'question';
+
+    try {
+      setIsUploadingFlashcardImage(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const contentType = file.type || 'image/png';
+
+      const uploadResponse = await fetch(
+        `${API_BASE}/api/history/${currentRunId}/flashcards/${index}/image-upload-url`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: `${isQuestion ? 'pergunta' : 'resposta'}-${file.name || 'imagem.png'}`,
+            contentType,
+          }),
+        }
+      );
+
+      const uploadData = await parseResponseSafely(uploadResponse);
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadData.error || 'Erro ao preparar upload da imagem.');
+      }
+
+      const putResponse = await fetch(uploadData.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+
+      if (!putResponse.ok) {
+        throw new Error('Falha ao enviar imagem para o R2. Confira o CORS do bucket.');
+      }
+
+      const uploadedAt = new Date().toISOString();
+
+      await updateFlashcardViaServer({
+        index,
+        updates: isQuestion
+          ? {
+              questionImageUrl: uploadData.publicUrl || '',
+              question_image_url: uploadData.publicUrl || '',
+              questionImageObjectKey: uploadData.key || '',
+              question_image_object_key: uploadData.key || '',
+              imageGeneratedAt: uploadedAt,
+              image_generated_at: uploadedAt,
+            }
+          : {
+              answerImageUrl: uploadData.publicUrl || '',
+              answer_image_url: uploadData.publicUrl || '',
+              answerImageObjectKey: uploadData.key || '',
+              answer_image_object_key: uploadData.key || '',
+              imageGeneratedAt: uploadedAt,
+              image_generated_at: uploadedAt,
+            },
+      });
+    } catch (err) {
+      setError(`Falha ao enviar imagem da ${isQuestion ? 'pergunta' : 'resposta'}: ${err.message}`);
+    } finally {
+      setIsUploadingFlashcardImage(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const applyAiPropositionToAnswer = async (index) => {
+    const card = flashcards[index];
+    const proposition = card?.aiProposition || card?.cardInsights?.improvement || '';
+
+    if (!card || !proposition.trim()) {
+      setError('Este flashcard ainda não possui proposição da IA.');
+      return;
+    }
+
+    try {
+      setIsSavingFlashcardEdit(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const nextAnswer = `${card.answer || ''}
+
+  ${proposition}`.trim();
+
+      await updateFlashcardViaServer({
+        index,
+        updates: {
+          answer: nextAnswer,
+          aiProposition: '',
+          ai_proposition: '',
+        },
+      });
+    } catch (err) {
+      setError(`Falha ao aplicar proposição: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardEdit(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const deleteAiProposition = async (index) => {
+    const card = flashcards[index];
+
+    if (!card) return;
+
+    try {
+      setIsSavingFlashcardEdit(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      await updateFlashcardViaServer({
+        index,
+        updates: {
+          aiProposition: '',
+          ai_proposition: '',
+          cardInsights: {
+            ...(card.cardInsights || {}),
+            improvement: '',
+          },
+          card_insights: {
+            ...(card.cardInsights || {}),
+            improvement: '',
+          },
+        },
+      });
+    } catch (err) {
+      setError(`Falha ao excluir proposição: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardEdit(false);
+      setFlashcardActionIndex(null);
     }
   };
 
@@ -4322,10 +4748,32 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
+  const hasUsefulFlashcardInsights = useCallback((card) => {
+    const insights = card?.cardInsights || card?.card_insights || {};
+
+    return Boolean(
+      String(insights.gap || '').trim() ||
+        String(insights.improvement || '').trim() ||
+        String(insights.corrected_answer || '').trim() ||
+        String(insights.preceptor_note_suggestion || '').trim() ||
+        String(card?.aiProposition || card?.ai_proposition || '').trim()
+    );
+  }, []);
+
+  const flashcardsAutoInsightsSignature = useMemo(() => {
+    return flashcards
+      .map((card, index) => {
+        const id = card?.id || `card-${index}`;
+        const question = String(card?.question || '').slice(0, 80);
+        return `${index}:${id}:${question}`;
+      })
+      .join('|');
+  }, [flashcards]);
+
   const generateFlashcardInsights = async (index) => {
     if (!currentRunId) {
       setError('Abra ou processe um estudo salvo antes de gerar insights.');
-      return;
+      return false;
     }
 
     try {
@@ -4355,13 +4803,156 @@ export default function AdvancedFlashcardPoC() {
       loadLibraryCards();
       loadDeckTree();
       loadLibraryAnalytics();
+      setAutoInsightsPausedReason('');
+      return true;
     } catch (err) {
-      setError(`Falha ao gerar insights: ${err.message}`);
+      const message = String(err?.message || '');
+
+      const isQuotaError =
+        message.includes('429') ||
+        message.toLowerCase().includes('quota') ||
+        message.toLowerCase().includes('rate limit') ||
+        message.toLowerCase().includes('free_tier');
+
+      if (isQuotaError) {
+        setAutoInsightsPausedReason(
+          'A análise automática foi pausada porque a cota gratuita do Gemini foi atingida. Aguarde a cota liberar ou ative billing no projeto.'
+        );
+      }
+
+      setError(`Falha ao gerar insights: ${message}`);
+      return false;
     } finally {
       setIsGeneratingFlashcardInsights(false);
       setFlashcardActionIndex(null);
     }
   };
+
+  useEffect(() => {
+    if (!currentRunId) return;
+    if (!flashcards.length) return;
+    if (flashcardsOrigin === 'library') return;
+    if (autoInsightsPausedReason) return;
+
+    const runKey = `${currentRunId}:${flashcardsAutoInsightsSignature}`;
+
+    if (autoInsightsRunKeyRef.current !== runKey) {
+      autoInsightsRunKeyRef.current = runKey;
+      autoInsightsQueueRef.current = new Set();
+    }
+
+    if (autoInsightsIsRunningRef.current) return;
+
+    const missingIndexes = flashcards
+      .map((card, index) => ({ card, index }))
+      .filter(({ card }) => !hasUsefulFlashcardInsights(card))
+      .map(({ index }) => index)
+      .slice(0, AUTO_INSIGHTS_INITIAL_LIMIT);
+
+    if (!missingIndexes.length) return;
+
+    let cancelled = false;
+    autoInsightsIsRunningRef.current = true;
+
+    const runAutoInsights = async () => {
+      try {
+        for (const index of missingIndexes) {
+          if (cancelled) break;
+
+          const card = flashcards[index];
+
+          if (!card || hasUsefulFlashcardInsights(card)) continue;
+
+          const cardKey = `${currentRunId}:${card.id || index}:${index}`;
+
+          if (autoInsightsQueueRef.current.has(cardKey)) continue;
+
+          autoInsightsQueueRef.current.add(cardKey);
+
+          const ok = await generateFlashcardInsights(index);
+
+          if (!ok) break;
+
+          await new Promise((resolve) => setTimeout(resolve, AUTO_INSIGHTS_DELAY_MS));
+        }
+      } finally {
+        autoInsightsIsRunningRef.current = false;
+      }
+    };
+
+    runAutoInsights();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentRunId,
+    flashcards.length,
+    flashcardsOrigin,
+    flashcardsAutoInsightsSignature,
+    hasUsefulFlashcardInsights,
+    autoInsightsPausedReason,
+  ]);
+
+  useEffect(() => {
+    if (!currentRunId) return;
+    if (!flashcards.length) return;
+    if (flashcardsOrigin === 'library') return;
+    if (flashcardsViewMode !== 'study') return;
+    if (autoInsightsPausedReason) return;
+    if (autoInsightsIsRunningRef.current) return;
+
+    const card = flashcards[currentStudyIndex];
+
+    if (!card || hasUsefulFlashcardInsights(card)) return;
+
+    const cardKey = `${currentRunId}:${card.id || currentStudyIndex}:${currentStudyIndex}`;
+
+    if (autoInsightsQueueRef.current.has(cardKey)) return;
+
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+
+      autoInsightsIsRunningRef.current = true;
+      autoInsightsQueueRef.current.add(cardKey);
+
+      try {
+        await generateFlashcardInsights(currentStudyIndex);
+      } finally {
+        autoInsightsIsRunningRef.current = false;
+      }
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    currentRunId,
+    flashcards.length,
+    flashcardsOrigin,
+    flashcardsViewMode,
+    currentStudyIndex,
+    flashcardsAutoInsightsSignature,
+    hasUsefulFlashcardInsights,
+    autoInsightsPausedReason,
+  ]);
+
+  useEffect(() => {
+    if (!flashcards.length) return;
+
+    setExpandedFlashcardInsights((prev) => {
+      const next = { ...prev };
+
+      flashcards.forEach((_, index) => {
+        next[index] = true;
+      });
+
+      return next;
+    });
+  }, [flashcards.length, flashcardsAutoInsightsSignature]);
 
   const generateFlashcardImage = async (index) => {
     if (!currentRunId) {
@@ -4438,6 +5029,57 @@ export default function AdvancedFlashcardPoC() {
       });
     } catch (err) {
       setError(`Falha ao aplicar melhoria: ${err.message}`);
+    } finally {
+      setIsSavingFlashcardEdit(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const deleteFlashcardAtIndex = async (index) => {
+    const card = flashcards[index];
+
+    if (!card) return;
+
+    const confirmed = window.confirm(
+      `Excluir o flashcard ${String(index + 1).padStart(2, '0')}? Essa ação não poderá ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsSavingFlashcardEdit(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const nextFlashcards = flashcards.filter((_, cardIndex) => cardIndex !== index);
+
+      if (!currentRunId) {
+        setFlashcards(nextFlashcards);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: getCurrentFlashcardStorageOrigin(),
+          flashcards: nextFlashcards,
+        }),
+      });
+
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir flashcard.');
+      }
+
+      setFlashcards(normalizeFlashcards(data.flashcards || nextFlashcards));
+      loadHistoryDebounced(historySearch);
+      loadLibraryCards();
+      loadDeckTree();
+      loadLibraryAnalytics();
+    } catch (err) {
+      setError(`Falha ao excluir flashcard: ${err.message}`);
     } finally {
       setIsSavingFlashcardEdit(false);
       setFlashcardActionIndex(null);
@@ -5349,6 +5991,26 @@ export default function AdvancedFlashcardPoC() {
   const sectionVisibilityClass = (sectionId) =>
     activeMainSection === sectionId ? 'block' : 'hidden';
 
+  useEffect(() => {
+    const removedSections = [
+      'evidence',
+      'enriched',
+      'study-session',
+      'spaced-review',
+      'history',
+      'exclusive-item-session',
+    ];
+
+    if (!removedSections.includes(activeMainSection)) return;
+
+    if (flashcards.length > 0) {
+      setActiveMainSection('flashcards');
+      return;
+    }
+
+    setActiveMainSection('library');
+  }, [activeMainSection, flashcards.length]);
+
   const smartDeckCounters = useMemo(() => {
     const now = new Date();
 
@@ -5455,9 +6117,7 @@ export default function AdvancedFlashcardPoC() {
 
       if (deck.deck_type === 'specialty-root') return;
 
-      const topicName = deck.sub_specialty || '';
-
-      if (!topicName) return;
+      const topicName = deck.sub_specialty || deck.name || 'Geral';
 
       const topic = ensureTopic(specialty, specialtyName, topicName);
 
@@ -5474,7 +6134,7 @@ export default function AdvancedFlashcardPoC() {
     libraryCards.forEach((card) => {
       const deck = deckMap.get(card.deck_id);
       const specialtyName = card.specialty || deck?.specialty || 'Sem especialidade';
-      const topicName = card.sub_specialty || deck?.sub_specialty || '';
+      const topicName = card.sub_specialty || deck?.sub_specialty || deck?.name || 'Sem tema';
 
       const specialty = ensureSpecialty(specialtyName);
       specialty.cardCount += 1;
@@ -6856,27 +7516,20 @@ export default function AdvancedFlashcardPoC() {
   }, [archiveTree, selectedArchiveSpecialty, selectedArchiveTopic, selectedArchiveDeckId]);
 
   const startStudyFromArchiveCards = (cards) => {
-    if (!Array.isArray(cards) || cards.length === 0) {
-      setError('Nenhum flashcard disponível nesta pasta do acervo.');
+    const folderCards = normalizeFlashcards(cards);
+
+    if (!folderCards.length) {
+      setError('Essa pasta não possui flashcards para estudar.');
       return;
     }
 
-    setStudyQueue(cards);
-    setCurrentLibraryStudyIndex(0);
-    setIsLibraryStudyFlipped(false);
-    setStudySessionStats({
-      totalSeen: 0,
-      correctCount: 0,
-      hardCount: 0,
-      easyCount: 0,
-    });
-
-    setTimeout(() => {
-      studySessionSectionRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    }, 150);
+    setError(null);
+    setFlashcards(folderCards);
+    setFlashcardsOrigin('library');
+    setCurrentStudyIndex(0);
+    setIsFlipped(false);
+    setFlashcardsViewMode('study');
+    openMainSection('flashcards');
   };
 
   useEffect(() => {
@@ -7541,7 +8194,18 @@ export default function AdvancedFlashcardPoC() {
               : 'py-3 px-0 gap-3 items-center justify-start'
           }`}
         >
-          {sectionNavItems.map((item) => {
+          {sectionNavItems
+            .filter((item) =>
+              ![
+                'evidence',
+                'enriched',
+                'study-session',
+                'spaced-review',
+                'history',
+                'exclusive-item-session',
+              ].includes(item.id)
+            )
+            .map((item) => {
             const Icon = item.icon;
 
             return (
@@ -7650,6 +8314,108 @@ export default function AdvancedFlashcardPoC() {
                           Envie a aula e o sistema tenta fazer tudo por você: transcrição, flashcards,
                           análise, enriquecimento e organização no acervo.
                         </p>
+
+                        {processingJobInfo ? (
+                          <div className="mt-4 rounded-2xl border border-red-100 bg-white/80 p-4 shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                                {processingJobInfo.status === 'completed' ? (
+                                  <Check size={17} />
+                                ) : processingJobInfo.status === 'error' ? (
+                                  <AlertCircle size={17} />
+                                ) : (
+                                  <Loader2 size={17} className="animate-spin" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                  <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-500">
+                                      Processamento
+                                    </p>
+
+                                    <p className="mt-1 text-sm font-bold text-slate-900">
+                                      {processingJobInfo.current_step || 'Preparando processamento...'}
+                                    </p>
+                                  </div>
+
+                                  <span
+                                    className={`inline-flex w-fit items-center gap-1 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] border ${
+                                      processingJobInfo.status === 'completed'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        : processingJobInfo.status === 'error'
+                                          ? 'bg-red-50 text-red-700 border-red-100'
+                                          : 'bg-red-50 text-red-700 border-red-100'
+                                    }`}
+                                  >
+                                    {processingJobInfo.status === 'completed'
+                                      ? 'Concluído'
+                                      : processingJobInfo.status === 'error'
+                                        ? 'Erro'
+                                        : 'Em andamento'}
+                                  </span>
+                                </div>
+
+                                <div className="mt-3">
+                                  <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                                    <span>
+                                      {processingJobInfo.status === 'uploading'
+                                        ? 'Enviando arquivo'
+                                        : 'Progresso'}
+                                    </span>
+
+                                    <span>
+                                      {Math.max(
+                                        0,
+                                        Math.min(
+                                          100,
+                                          Number(
+                                            processingJobInfo.status === 'uploading'
+                                              ? processingJobInfo.uploadProgress
+                                              : processingJobInfo.progress
+                                          ) || 0
+                                        )
+                                      )}
+                                      %
+                                    </span>
+                                  </div>
+
+                                  <div className="h-2 overflow-hidden rounded-full border border-red-100 bg-red-50">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        processingJobInfo.status === 'error'
+                                          ? 'bg-red-500'
+                                          : processingJobInfo.status === 'completed'
+                                            ? 'bg-emerald-500'
+                                            : 'bg-red-600'
+                                      }`}
+                                      style={{
+                                        width: `${Math.max(
+                                          0,
+                                          Math.min(
+                                            100,
+                                            Number(
+                                              processingJobInfo.status === 'uploading'
+                                                ? processingJobInfo.uploadProgress
+                                                : processingJobInfo.progress
+                                            ) || 0
+                                          )
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {processingJobInfo.error_message ? (
+                                  <p className="mt-2 text-xs font-medium text-red-600">
+                                    {processingJobInfo.error_message}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -7708,14 +8474,29 @@ export default function AdvancedFlashcardPoC() {
                             return;
                           }
 
+                          if (processingStatus === 'completed') {
+                            if (flashcards.length > 0) {
+                              openMainSection('flashcards');
+                            }
+                            return;
+                          }
+
                           processVideo();
                         }}
-                        disabled={isProcessing}
+                        disabled={isProcessingUiActive}
                         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-md shadow-red-100 transition-all hover:bg-red-700 disabled:opacity-50"
-                        title={videoFile ? 'Gerar estudo automaticamente' : 'Selecionar aula'}
+                        title={
+                          processingStatus === 'completed'
+                            ? 'Abrir flashcards'
+                            : videoFile
+                              ? 'Gerar estudo automaticamente'
+                              : 'Selecionar aula'
+                        }
                       >
-                        {isProcessing ? (
+                        {isProcessingUiActive ? (
                           <Loader2 className="animate-spin" size={20} />
+                        ) : processingStatus === 'completed' ? (
+                          <Check size={20} />
                         ) : videoFile ? (
                           <Sparkles size={20} />
                         ) : (
@@ -7820,25 +8601,9 @@ export default function AdvancedFlashcardPoC() {
                           disabled: !flashcards.length && !transcript && !currentRunId,
                         },
                         {
-                          label: 'Histórico',
-                          icon: FolderOpen,
-                          onClick: () => openMainSection('history'),
-                        },
-                        {
-                          label: 'Biblioteca',
+                          label: 'Acervo',
                           icon: Folder,
                           onClick: () => openMainSection('library'),
-                        },
-                        {
-                          label: 'Revisar hoje',
-                          icon: RefreshCw,
-                          onClick: () => openMainSection('spaced-review'),
-                        },
-                        {
-                          label: 'Evidências',
-                          icon: Sparkles,
-                          onClick: () => openMainSection('evidence'),
-                          disabled: !transcript,
                         },
                       ].map((action) => {
                         const Icon = action.icon;
@@ -7959,63 +8724,6 @@ export default function AdvancedFlashcardPoC() {
                       })}
                     </div>
                   </section>
-
-                  {processingJobInfo ? (
-                    <div className="mt-6 rounded-2xl border border-red-100 bg-red-50/70 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-red-500">
-                          {processingJobInfo.status === 'completed' ? (
-                            <Check size={17} />
-                          ) : processingJobInfo.status === 'error' ? (
-                            <AlertCircle size={17} />
-                          ) : (
-                            <Loader2 size={17} className="animate-spin" />
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-red-500">
-                            Processamento assíncrono
-                          </p>
-
-                          <p className="mt-1 text-sm font-bold text-slate-800">
-                            {processingJobInfo.current_step || 'Preparando processamento...'}
-                          </p>
-
-                          <div className="mt-3 h-2 overflow-hidden rounded-full border border-red-100 bg-white">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                processingJobInfo.status === 'error'
-                                  ? 'bg-red-500'
-                                  : processingJobInfo.status === 'completed'
-                                    ? 'bg-emerald-500'
-                                    : 'bg-red-500'
-                              }`}
-                              style={{
-                                width: `${Math.max(
-                                  0,
-                                  Math.min(
-                                    100,
-                                    Number(
-                                      processingJobInfo.status === 'uploading'
-                                        ? processingJobInfo.uploadProgress
-                                        : processingJobInfo.progress
-                                    ) || 0
-                                  )
-                                )}%`,
-                              }}
-                            />
-                          </div>
-
-                          {processingJobInfo.error_message ? (
-                            <p className="mt-2 text-xs font-medium text-red-600">
-                              {processingJobInfo.error_message}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </section>
@@ -8300,7 +9008,7 @@ export default function AdvancedFlashcardPoC() {
             </section>
           )}
 
-          {transcript && activeMainSection === 'flashcards' && (
+          {(flashcards.length > 0 || transcript) && activeMainSection === 'flashcards' && (
             <section
               ref={flashcardsSectionRef}
               className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
@@ -8310,7 +9018,9 @@ export default function AdvancedFlashcardPoC() {
                   <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
                     3
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">Flashcards</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    {flashcardsOrigin === 'library' ? 'Flashcards da pasta' : 'Flashcards'}
+                  </h2>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
@@ -8375,6 +9085,14 @@ export default function AdvancedFlashcardPoC() {
                 </div>
               </div>
 
+              {autoInsightsPausedReason ? (
+                <div className="px-6 md:px-8 pt-6 bg-slate-50/30">
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                    {autoInsightsPausedReason}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="p-6 md:p-8 bg-slate-50/30 min-h-[500px]">
                 {flashcards.length === 0 ? (
                   <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center flex flex-col items-center justify-center min-h-[320px]">
@@ -8390,11 +9108,11 @@ export default function AdvancedFlashcardPoC() {
                 ) : (
                   <>
                     {flashcardsViewMode === 'grid' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {flashcards.map((card, index) => (
                           <div
                             key={card.id || index}
-                            className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col h-full"
+                            className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col"
                           >
                             <div className="flex justify-between items-center mb-4">
                               <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
@@ -8466,7 +9184,7 @@ export default function AdvancedFlashcardPoC() {
                               >
                                 {isGeneratingFlashcardInsights && flashcardActionIndex === index
                                   ? 'Analisando...'
-                                  : 'Insights'}
+                                  : 'Reanalisar card'}
                               </button>
                             </div>
 
@@ -8512,14 +9230,14 @@ export default function AdvancedFlashcardPoC() {
                                 </div>
                               )}
 
-                              {card.cardInsights && Object.keys(card.cardInsights || {}).length > 0 ? (
+                              {currentRunId && flashcardsOrigin !== 'library' ? (
                                 <div className="mt-4 rounded-2xl border border-red-100 bg-red-50/60 p-4">
                                   <button
                                     type="button"
                                     onClick={() =>
                                       setExpandedFlashcardInsights((prev) => ({
                                         ...prev,
-                                        [index]: !prev[index],
+                                        [index]: prev[index] === false ? true : false,
                                       }))
                                     }
                                     className="w-full flex items-center justify-between gap-3 text-left"
@@ -8531,13 +9249,29 @@ export default function AdvancedFlashcardPoC() {
                                     <ChevronDown
                                       size={16}
                                       className={`text-red-500 transition-transform ${
-                                        expandedFlashcardInsights[index] ? 'rotate-180' : ''
+                                        expandedFlashcardInsights[index] !== false ? 'rotate-180' : ''
                                       }`}
                                     />
                                   </button>
 
-                                  {expandedFlashcardInsights[index] ? (
+                                  {expandedFlashcardInsights[index] !== false ? (
                                     <div className="mt-4 space-y-3 text-sm text-red-950/80 leading-relaxed">
+                                      {!hasUsefulFlashcardInsights(card) ? (
+                                        <div className="rounded-xl border border-red-100 bg-white p-3 text-xs font-bold text-red-700 flex items-center gap-2">
+                                          {isGeneratingFlashcardInsights && flashcardActionIndex === index ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                          ) : (
+                                            <Sparkles size={14} />
+                                          )}
+
+                                          <span>
+                                            {isGeneratingFlashcardInsights && flashcardActionIndex === index
+                                              ? 'Analisando automaticamente este flashcard...'
+                                              : 'Este flashcard está na fila de análise automática.'}
+                                          </span>
+                                        </div>
+                                      ) : null}
+
                                       {card.cardInsights.gap ? (
                                         <div>
                                           <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
@@ -8590,19 +9324,33 @@ export default function AdvancedFlashcardPoC() {
 
                     {flashcardsViewMode === 'study' && currentStudyCard && (
                       <div className="flex flex-col items-center justify-center py-10">
-                        <div className="flex items-center justify-between w-full max-w-2xl mb-6">
-                          <span className="text-sm font-semibold text-slate-500">
-                            Cartão {currentStudyIndex + 1} de {flashcards.length}
-                          </span>
-                          <div className="flex gap-1">
-                            {flashcards.map((_, idx) => (
-                              <div
-                                key={idx}
-                                className={`h-1.5 rounded-full transition-all duration-300 ${
-                                  idx === currentStudyIndex ? 'w-6 bg-blue-600' : 'w-2 bg-slate-200'
-                                }`}
-                              />
-                            ))}
+                        <div className="w-full max-w-2xl mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-4 mb-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
+                                Estudo da pasta
+                              </p>
+
+                              <p className="mt-1 text-sm font-black text-slate-900">
+                                Cartão {currentStudyIndex + 1} de {flashcards.length}
+                              </p>
+                            </div>
+
+                            <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+                              {Math.round(((currentStudyIndex + 1) / Math.max(1, flashcards.length)) * 100)}%
+                            </span>
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-red-600 transition-all duration-500"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.max(0, ((currentStudyIndex + 1) / Math.max(1, flashcards.length)) * 100)
+                                )}%`,
+                              }}
+                            />
                           </div>
                         </div>
 
@@ -10559,12 +11307,12 @@ export default function AdvancedFlashcardPoC() {
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500 mb-2">
-                  Acervo inteligente
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2">
+                  Acervo
                 </p>
-                <h2 className="text-2xl font-bold text-slate-900">Biblioteca de Flashcards</h2>
+                <h2 className="text-2xl font-black text-slate-900">Suas pastas de flashcards</h2>
                 <p className="text-sm text-slate-500 mt-2">
-                  Organize seus cards por especialidade, tema, deck, revisão e dificuldade.
+                  Guarde, organize e estude seus flashcards por pastas simples.
                 </p>
               </div>
 
@@ -10592,169 +11340,36 @@ export default function AdvancedFlashcardPoC() {
             </div>
 
             <div className="p-6 md:p-8 bg-slate-50/30 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
-                {[
-                  { label: 'Decks', value: libraryDecks.length },
-                  { label: 'Cards', value: libraryCards.length },
-                  { label: 'Favoritos', value: libraryCards.filter((card) => card.is_favorite).length },
-                  { label: 'Suspensos', value: libraryCards.filter((card) => card.is_suspended).length },
-                  { label: 'Especialidades', value: librarySpecialties.length },
-                  {
-                    label: 'Vencidos',
-                    value: libraryCards.filter(
-                      (card) => card?.review_state?.dueAt && new Date(card.review_state.dueAt) <= new Date()
-                    ).length,
-                  },
-                ].map((metric) => (
-                  <div key={metric.label} className="bg-white border border-slate-200 rounded-2xl p-4">
-                    <p className="text-xs text-slate-400 uppercase font-bold">{metric.label}</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-2">{metric.value}</p>
-                  </div>
-                ))}
-              </div>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-2">
+                    Organização
+                  </p>
 
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <h3 className="text-xl font-black text-slate-900">
+                    Guardar em pasta
+                  </h3>
+
+                  <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                    Crie uma pasta simples para guardar seus flashcards ao longo do tempo.
+                    Depois você pode abrir essa pasta no acervo e estudar todos os cards dela.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)_minmax(0,1fr)_180px] gap-3 items-end">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Filtros rápidos</h3>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Use filtros clínicos em vez de nomes longos tipo “pai-filho”.
-                    </p>
-                  </div>
+                    <label className="block text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-2">
+                      Nome da pasta
+                    </label>
 
-                  {activeSmartDeck && (
-                    <button
-                      onClick={() => setActiveSmartDeck(null)}
-                      className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                    >
-                      Limpar smart deck
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {[
-                    { id: 'new', label: 'Novos', count: smartDeckCounters.new },
-                    { id: 'hard', label: 'Difíceis', count: smartDeckCounters.hard },
-                    { id: 'favorites', label: 'Favoritos', count: smartDeckCounters.favorites },
-                  ].map((deck) => (
-                    <button
-                      key={deck.id}
-                      onClick={() => setActiveSmartDeck((prev) => (prev === deck.id ? null : deck.id))}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
-                        activeSmartDeck === deck.id
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-white'
-                      }`}
-                    >
-                      <p className="text-sm font-black">{deck.label}</p>
-                      <p className="text-2xl font-black mt-2">{deck.count}</p>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <SmartDropdown
-                    value={libraryMode}
-                    onChange={setLibraryMode}
-                    placeholder="Todos os cards"
-                    options={[
-                      {
-                        id: 'status_group',
-                        label: 'Por Status',
-                        icon: <Layers className="w-4 h-4" />,
-                        description: 'Estado dos flashcards',
-                        subOptions: [
-                          { id: 'deck', label: 'Todos os cards' },
-                          { id: 'favorites', label: 'Favoritos' },
-                          { id: 'due', label: 'Vencidos' },
-                        ],
-                      },
-                    ]}
-                  />
-
-                  <SmartDropdown
-                    value={librarySpecialtyFilter}
-                    onChange={setLibrarySpecialtyFilter}
-                    placeholder="Todas as especialidades"
-                    options={[
-                      {
-                        id: 'specialties_group',
-                        label: 'Especialidades',
-                        icon: <Folder className="w-4 h-4" />,
-                        description: 'Filtrar por área médica',
-                        subOptions: [
-                          { id: '', label: 'Todas as especialidades' },
-                          ...librarySpecialties.map((specialty) => ({
-                            id: specialty,
-                            label: specialty,
-                          })),
-                        ],
-                      },
-                    ]}
-                  />
-
-                  <SmartDropdown
-                    value={selectedDeckId}
-                    onChange={setSelectedDeckId}
-                    placeholder="Todos os decks"
-                    options={[
-                      {
-                        id: 'all_decks_group',
-                        label: 'Biblioteca',
-                        icon: <Folder className="w-4 h-4" />,
-                        description: 'Escolha um deck',
-                        subOptions: [
-                          { id: '', label: 'Todos os decks' },
-                          ...libraryDecks.map((deck) => ({
-                            id: deck.id,
-                            label: deck.specialty
-                              ? `${deck.name} · ${deck.specialty}`
-                              : deck.name,
-                          })),
-                        ],
-                      },
-                    ]}
-                  />
-
-                  <div className="flex gap-2">
                     <input
                       type="text"
-                      value={librarySearch}
-                      onChange={(e) => setLibrarySearch(e.target.value)}
-                      placeholder="Buscar card..."
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm"
+                      value={newDeckName}
+                      onChange={(event) => setNewDeckName(event.target.value)}
+                      placeholder="Ex: Vasculites, Arritmias, Pneumologia..."
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
-
-                    <button
-                      onClick={() =>
-                        loadLibraryCards({
-                          deckId: selectedDeckId,
-                          specialty: librarySpecialtyFilter,
-                          favorites: libraryMode === 'favorites',
-                          dueOnly: libraryMode === 'due',
-                          search: librarySearch,
-                        })
-                      }
-                      className="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold"
-                    >
-                      Buscar
-                    </button>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-[0.85fr_1.15fr] gap-6">
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-lg font-bold text-slate-900">Criar / selecionar deck</h3>
-
-                  <input
-                    type="text"
-                    value={newDeckName}
-                    onChange={(e) => setNewDeckName(e.target.value)}
-                    placeholder="Nome do novo deck"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm"
-                  />
 
                   <SmartDropdown
                     value={newDeckSpecialty}
@@ -10762,83 +11377,48 @@ export default function AdvancedFlashcardPoC() {
                     placeholder="Sem especialidade"
                     options={[
                       {
-                        id: 'new_deck_specialty_group',
-                        label: 'Especialidade do deck',
+                        id: '',
+                        label: 'Sem especialidade',
                         icon: <Folder className="w-4 h-4" />,
-                        description: 'Área médica do novo deck',
-                        subOptions: [
-                          { id: '', label: 'Sem especialidade' },
-                          ...librarySpecialties.map((specialty) => ({
-                            id: specialty,
-                            label: specialty,
-                          })),
-                        ],
+                        description: 'Guardar sem área definida',
                       },
+                      ...librarySpecialties.map((specialty) => ({
+                        id: specialty,
+                        label: specialty,
+                        icon: <Folder className="w-4 h-4" />,
+                        description: 'Pasta já existente',
+                      })),
                     ]}
                   />
 
-                  <input
-                    type="text"
-                    value={newDeckSubSpecialty}
-                    onChange={(e) => setNewDeckSubSpecialty(e.target.value)}
-                    placeholder="Tema / subespecialidade"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm"
-                  />
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-2">
+                      Tema opcional
+                    </label>
+
+                    <input
+                      type="text"
+                      value={newDeckSubSpecialty}
+                      onChange={(event) => setNewDeckSubSpecialty(event.target.value)}
+                      placeholder="Ex: SAF, Parkinson, DOACs..."
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
+                    />
+                  </div>
 
                   <button
+                    type="button"
                     onClick={createLibraryDeck}
-                    className="w-full px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
+                    className="w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-700 shadow-sm shadow-red-100"
                   >
-                    Criar deck
+                    Criar pasta
                   </button>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-lg font-bold text-slate-900">Resumo da biblioteca</h3>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase">Decks</p>
-                      <p className="text-2xl font-black text-slate-900 mt-1">{libraryDecks.length}</p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase">Cards</p>
-                      <p className="text-2xl font-black text-slate-900 mt-1">{libraryCards.length}</p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase">Favoritos</p>
-                      <p className="text-2xl font-black text-slate-900 mt-1">
-                        {libraryCards.filter((card) => Boolean(card.is_favorite)).length}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase">Vencidos</p>
-                      <p className="text-2xl font-black text-slate-900 mt-1">
-                        {libraryCards.filter((card) => {
-                          const dueAt = card?.review_state?.dueAt;
-                          return dueAt ? new Date(dueAt) <= new Date() : false;
-                        }).length}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-                    <p className="text-sm font-bold text-indigo-900">Dica de organização</p>
-                    <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
-                      Use o acervo principal abaixo para abrir pastas, visualizar temas, estudar uma pasta inteira
-                      ou agendar revisão por assunto.
-                    </p>
-                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)] gap-6">
                 <FolderTreePanel
-                  title="Acervo por pastas"
-                  description="Especialidade, tema e deck em uma árvore simples."
+                  title="Suas pastas"
+                  description="Clique em uma pasta para ver e estudar os flashcards."
                   nodes={archiveFolderTree}
                   selectedId={selectedArchiveTreeId}
                   searchValue={archiveSearch}
@@ -10885,7 +11465,7 @@ export default function AdvancedFlashcardPoC() {
                         onClick={() =>
                           createArchiveFolder({
                             level: selectedArchiveSpecialty ? 'topic' : 'specialty',
-                            specialty: selectedArchiveSpecialty,
+                            specialtyName: selectedArchiveSpecialty,
                           })
                         }
                         className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100"
@@ -10896,7 +11476,7 @@ export default function AdvancedFlashcardPoC() {
                   </div>
 
                   <div className="p-5 space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3">
                       <button
                         type="button"
                         onClick={() => startStudyFromArchiveCards(selectedArchiveCards)}
@@ -10904,15 +11484,6 @@ export default function AdvancedFlashcardPoC() {
                         className="rounded-2xl bg-red-600 px-4 py-4 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-red-100"
                       >
                         Estudar esta pasta
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => scheduleArchiveFolderReview()}
-                        disabled={!selectedArchiveCards.length || isSchedulingFolderReview}
-                        className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-black text-red-700 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isSchedulingFolderReview ? 'Agendando...' : 'Agendar revisão'}
                       </button>
                     </div>
 
@@ -10929,7 +11500,7 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() =>
                               createArchiveFolder({
                                 level: selectedArchiveSpecialty ? 'topic' : 'specialty',
-                                specialty: selectedArchiveSpecialty,
+                                specialtyName: selectedArchiveSpecialty,
                               })
                             }
                             className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
@@ -10941,9 +11512,13 @@ export default function AdvancedFlashcardPoC() {
                             type="button"
                             onClick={() =>
                               renameArchiveFolder({
-                                specialty: selectedArchiveSpecialty,
-                                topic: selectedArchiveTopic,
-                                deckId: selectedArchiveDeckId,
+                                type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
+                                id: selectedArchiveDeckId || '',
+                                currentName: selectedArchiveDeckId
+                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  : selectedArchiveTopic || selectedArchiveSpecialty,
+                                specialtyName: selectedArchiveSpecialty,
+                                cards: selectedArchiveCards,
                               })
                             }
                             className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
@@ -10954,10 +11529,14 @@ export default function AdvancedFlashcardPoC() {
                           <button
                             type="button"
                             onClick={() =>
-                              openMoveArchiveFolderDialog({
-                                specialty: selectedArchiveSpecialty,
-                                topic: selectedArchiveTopic,
-                                deckId: selectedArchiveDeckId,
+                              setMoveFolderDialog({
+                                type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
+                                id: selectedArchiveDeckId || '',
+                                name: selectedArchiveDeckId
+                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  : selectedArchiveTopic || selectedArchiveSpecialty,
+                                specialtyName: selectedArchiveSpecialty,
+                                cards: selectedArchiveCards,
                               })
                             }
                             className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
@@ -10969,9 +11548,13 @@ export default function AdvancedFlashcardPoC() {
                             type="button"
                             onClick={() =>
                               deleteArchiveFolder({
-                                specialty: selectedArchiveSpecialty,
-                                topic: selectedArchiveTopic,
-                                deckId: selectedArchiveDeckId,
+                                type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
+                                id: selectedArchiveDeckId || '',
+                                name: selectedArchiveDeckId
+                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  : selectedArchiveTopic || selectedArchiveSpecialty,
+                                specialtyName: selectedArchiveSpecialty,
+                                cards: selectedArchiveCards,
                               })
                             }
                             className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100"
@@ -13359,7 +13942,7 @@ export default function AdvancedFlashcardPoC() {
                 Object.keys(flashcards[editingFlashcardIndex]?.cardInsights || {}).length > 0 ? (
                   <div className="rounded-2xl border border-red-100 bg-red-50 p-5 space-y-3">
                     <h4 className="text-sm font-black text-red-900">
-                      Insights deste flashcard
+                      Lacunas e melhorias deste card
                     </h4>
 
                     <p className="text-sm text-red-900/80 leading-relaxed">
