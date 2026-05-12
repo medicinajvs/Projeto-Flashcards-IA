@@ -65,8 +65,8 @@ const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
 const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
 const MULTIPART_UPLOAD_CONCURRENCY = 3;
-const AUTO_INSIGHTS_INITIAL_LIMIT = 3;
 const AUTO_INSIGHTS_DELAY_MS = 9000;
+const ARCHIVE_CARDS_PER_PAGE = 10;
 
 const UI = {
   page: 'bg-slate-50 text-slate-900',
@@ -117,7 +117,11 @@ function normalizeFlashcards(rawFlashcards) {
         null,
       difficulty: card.difficulty || 'medium',
       tags,
-
+      specialty: card.specialty || '',
+      subSpecialty: card.subSpecialty || card.sub_specialty || '',
+      sub_specialty: card.sub_specialty || card.subSpecialty || '',
+      theme: card.theme || card.tema || '',
+      deck_id: card.deck_id || card.deckId || '',
       imageUrl: card.imageUrl || card.image_url || '',
       imageObjectKey: card.imageObjectKey || card.image_object_key || '',
       imageSource: card.imageSource || card.image_source || '',
@@ -647,7 +651,7 @@ function FolderTreePanel({
   );
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm ${className}`}>
+    <div className={`h-full min-h-0 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm flex flex-col ${className}`}>
       <div className="p-5 border-b border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -686,7 +690,7 @@ function FolderTreePanel({
         ) : null}
       </div>
 
-      <div className="p-3 max-h-[520px] overflow-y-auto space-y-1">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1 pr-2">
         {filteredNodes.length > 0 ? (
           filteredNodes.map((node) => (
             <FolderTreeNode
@@ -1585,6 +1589,8 @@ export default function AdvancedFlashcardPoC() {
   const autoInsightsQueueRef = useRef(new Set());
   const autoInsightsRunKeyRef = useRef('');
   const autoInsightsIsRunningRef = useRef(false);
+  const autoInsightsSkippedKeysRef = useRef(new Set());
+  const [autoInsightsCycle, setAutoInsightsCycle] = useState(0);
   const videoInputRef = useRef(null);
   const enrichmentVideoInputRef = useRef(null);
   const uploadSectionRef = useRef(null);
@@ -1668,6 +1674,7 @@ export default function AdvancedFlashcardPoC() {
   const [selectedArchiveSpecialty, setSelectedArchiveSpecialty] = useState('');
   const [selectedArchiveTopic, setSelectedArchiveTopic] = useState('');
   const [selectedArchiveDeckId, setSelectedArchiveDeckId] = useState('');
+  const [selectedArchivePage, setSelectedArchivePage] = useState(1);
   const [deckTree, setDeckTree] = useState([]);
   const [selectedTreeNodeId, setSelectedTreeNodeId] = useState('');
   const [selectedTreeNode, setSelectedTreeNode] = useState(null);
@@ -1684,6 +1691,7 @@ export default function AdvancedFlashcardPoC() {
   const [libraryMode, setLibraryMode] = useState('deck');
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
   const [isSavingCardsToLibrary, setIsSavingCardsToLibrary] = useState(false);
+  const [isExportingFlashcardsFile, setIsExportingFlashcardsFile] = useState(false);
   const [flashcardsOrigin, setFlashcardsOrigin] = useState('original');
   const [flashcardsLibrarySaveStatus, setFlashcardsLibrarySaveStatus] = useState('idle');
   const [editingFlashcardIndex, setEditingFlashcardIndex] = useState(null);
@@ -4063,7 +4071,7 @@ export default function AdvancedFlashcardPoC() {
       if (dueOnly) params.set('dueOnly', 'true');
       if (String(search || '').trim()) params.set('search', String(search).trim());
 
-      params.set('limit', '500');
+      params.set('limit', '5000');
 
       const response = await fetch(`${API_BASE}/api/flashcards-library?${params.toString()}`);
       const data = await parseResponseSafely(response);
@@ -4081,12 +4089,17 @@ export default function AdvancedFlashcardPoC() {
   };
 
   const createLibraryDeck = async () => {
-    const createdDeckName = newDeckName.trim();
-    const createdSpecialty = newDeckSpecialty.trim() || 'Sem especialidade';
-    const createdTopic = newDeckSubSpecialty.trim() || createdDeckName;
+    const createdSpecialty = String(newDeckSpecialty || '').trim() || 'Sem especialidade';
+    const createdTopic = String(newDeckSubSpecialty || '').trim() || String(newDeckName || '').trim();
+    const createdDeckName = createdTopic;
 
-    if (!createdDeckName) {
-      setError('Digite um nome para a pasta.');
+    if (!createdSpecialty || createdSpecialty === 'Sem especialidade') {
+      setError('Digite ou selecione uma especialidade. Ex: Reumatologia, Cardiologia, Neurologia.');
+      return;
+    }
+
+    if (!createdTopic) {
+      setError('Digite o tema/pasta dentro da especialidade. Ex: Vasculites, SAF, DOACs.');
       return;
     }
 
@@ -4124,6 +4137,7 @@ export default function AdvancedFlashcardPoC() {
       setSelectedArchiveSpecialty(createdSpecialty);
       setSelectedArchiveTopic(createdTopic);
       setSelectedArchiveDeckId(createdDeckId);
+
       openMainSection('library');
     } catch (err) {
       setError(`Falha ao criar pasta: ${err.message}`);
@@ -4241,6 +4255,83 @@ export default function AdvancedFlashcardPoC() {
       setError(`Falha ao salvar na biblioteca: ${err.message}`);
     } finally {
       setIsSavingCardsToLibrary(false);
+    }
+  };
+
+  const downloadBlobFile = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  };
+
+  const buildFlashcardExportTitle = ({ source = 'current' } = {}) => {
+    if (source === 'archive') {
+      return selectedArchiveDeckId
+        ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Flashcards da pasta'
+        : selectedArchiveTopic || selectedArchiveSpecialty || 'Flashcards da pasta';
+    }
+
+    return currentFilename || currentSpecialty || 'Flashcards';
+  };
+
+  const exportFlashcardsFile = async ({
+    format = 'pdf',
+    cards = flashcards,
+    title = buildFlashcardExportTitle(),
+  } = {}) => {
+    const cardsToExport = normalizeFlashcards(cards);
+
+    if (!cardsToExport.length) {
+      setError('Não há flashcards para exportar.');
+      return;
+    }
+
+    try {
+      setIsExportingFlashcardsFile(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/exports/flashcards/${format}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          cards: cardsToExport.map((card) => ({
+            question: card.question,
+            answer: card.answer,
+            preceptorNote: card.preceptorNote,
+            specialty: card.specialty || currentSpecialty || selectedArchiveSpecialty || '',
+            sub_specialty: card.sub_specialty || card.subSpecialty || selectedArchiveTopic || '',
+            theme: card.theme || selectedArchiveTopic || '',
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await parseResponseSafely(response);
+        throw new Error(data.error || `Erro ao exportar ${format.toUpperCase()}.`);
+      }
+
+      const blob = await response.blob();
+      const safeTitle = String(title || 'flashcards')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9-_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/(^-|-$)/g, '')
+        .toLowerCase();
+
+      downloadBlobFile(blob, `${safeTitle || 'flashcards'}.${format}`);
+    } catch (err) {
+      setError(`Falha ao exportar flashcards: ${err.message}`);
+    } finally {
+      setIsExportingFlashcardsFile(false);
     }
   };
 
@@ -4765,15 +4856,17 @@ export default function AdvancedFlashcardPoC() {
       .map((card, index) => {
         const id = card?.id || `card-${index}`;
         const question = String(card?.question || '').slice(0, 80);
-        return `${index}:${id}:${question}`;
+        const insightsReady = hasUsefulFlashcardInsights(card) ? '1' : '0';
+
+        return `${index}:${id}:${question}:${insightsReady}`;
       })
       .join('|');
-  }, [flashcards]);
+  }, [flashcards, hasUsefulFlashcardInsights]);
 
   const generateFlashcardInsights = async (index) => {
     if (!currentRunId) {
       setError('Abra ou processe um estudo salvo antes de gerar insights.');
-      return false;
+      return { ok: false, pauseAutoQueue: false };
     }
 
     try {
@@ -4796,6 +4889,8 @@ export default function AdvancedFlashcardPoC() {
       }
 
       const updatedFlashcards = normalizeFlashcards(data.flashcards || []);
+      const updatedCard = updatedFlashcards[index];
+
       setFlashcards(updatedFlashcards);
       setFlashcardsOrigin(data.origin || getCurrentFlashcardStorageOrigin());
       setExpandedFlashcardInsights((prev) => ({ ...prev, [index]: true }));
@@ -4804,24 +4899,32 @@ export default function AdvancedFlashcardPoC() {
       loadDeckTree();
       loadLibraryAnalytics();
       setAutoInsightsPausedReason('');
-      return true;
+
+      return {
+        ok: true,
+        pauseAutoQueue: false,
+        hasUsefulInsights: hasUsefulFlashcardInsights(updatedCard),
+      };
     } catch (err) {
       const message = String(err?.message || '');
+      const lower = message.toLowerCase();
 
       const isQuotaError =
         message.includes('429') ||
-        message.toLowerCase().includes('quota') ||
-        message.toLowerCase().includes('rate limit') ||
-        message.toLowerCase().includes('free_tier');
+        lower.includes('quota') ||
+        lower.includes('rate limit') ||
+        lower.includes('free_tier');
 
       if (isQuotaError) {
         setAutoInsightsPausedReason(
-          'A análise automática foi pausada porque a cota gratuita do Gemini foi atingida. Aguarde a cota liberar ou ative billing no projeto.'
+          'A análise automática foi pausada porque a cota do Gemini foi atingida. Aguarde a cota liberar ou ative billing no projeto.'
         );
+        setError(`Falha ao gerar insights: ${message}`);
+        return { ok: false, pauseAutoQueue: true };
       }
 
       setError(`Falha ao gerar insights: ${message}`);
-      return false;
+      return { ok: false, pauseAutoQueue: false };
     } finally {
       setIsGeneratingFlashcardInsights(false);
       setFlashcardActionIndex(null);
@@ -4833,57 +4936,64 @@ export default function AdvancedFlashcardPoC() {
     if (!flashcards.length) return;
     if (flashcardsOrigin === 'library') return;
     if (autoInsightsPausedReason) return;
+    if (autoInsightsIsRunningRef.current) return;
 
     const runKey = `${currentRunId}:${flashcardsAutoInsightsSignature}`;
 
     if (autoInsightsRunKeyRef.current !== runKey) {
       autoInsightsRunKeyRef.current = runKey;
       autoInsightsQueueRef.current = new Set();
+      autoInsightsSkippedKeysRef.current = new Set();
     }
 
-    if (autoInsightsIsRunningRef.current) return;
+    const nextIndex = flashcards.findIndex((card, index) => {
+      if (!card) return false;
+      if (hasUsefulFlashcardInsights(card)) return false;
 
-    const missingIndexes = flashcards
-      .map((card, index) => ({ card, index }))
-      .filter(({ card }) => !hasUsefulFlashcardInsights(card))
-      .map(({ index }) => index)
-      .slice(0, AUTO_INSIGHTS_INITIAL_LIMIT);
+      const cardKey = `${currentRunId}:${card.id || index}:${index}`;
 
-    if (!missingIndexes.length) return;
+      if (autoInsightsQueueRef.current.has(cardKey)) return false;
+      if (autoInsightsSkippedKeysRef.current.has(cardKey)) return false;
+
+      return true;
+    });
+
+    if (nextIndex < 0) return;
+
+    const card = flashcards[nextIndex];
+    const cardKey = `${currentRunId}:${card.id || nextIndex}:${nextIndex}`;
 
     let cancelled = false;
-    autoInsightsIsRunningRef.current = true;
 
-    const runAutoInsights = async () => {
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+
+      autoInsightsIsRunningRef.current = true;
+      autoInsightsQueueRef.current.add(cardKey);
+
       try {
-        for (const index of missingIndexes) {
-          if (cancelled) break;
+        const result = await generateFlashcardInsights(nextIndex);
 
-          const card = flashcards[index];
+        if (result?.pauseAutoQueue) {
+          return;
+        }
 
-          if (!card || hasUsefulFlashcardInsights(card)) continue;
-
-          const cardKey = `${currentRunId}:${card.id || index}:${index}`;
-
-          if (autoInsightsQueueRef.current.has(cardKey)) continue;
-
-          autoInsightsQueueRef.current.add(cardKey);
-
-          const ok = await generateFlashcardInsights(index);
-
-          if (!ok) break;
-
-          await new Promise((resolve) => setTimeout(resolve, AUTO_INSIGHTS_DELAY_MS));
+        if (!result?.ok || !result?.hasUsefulInsights) {
+          autoInsightsSkippedKeysRef.current.add(cardKey);
         }
       } finally {
+        autoInsightsQueueRef.current.delete(cardKey);
         autoInsightsIsRunningRef.current = false;
-      }
-    };
 
-    runAutoInsights();
+        if (!cancelled) {
+          setAutoInsightsCycle((value) => value + 1);
+        }
+      }
+    }, AUTO_INSIGHTS_DELAY_MS);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     currentRunId,
@@ -4892,6 +5002,7 @@ export default function AdvancedFlashcardPoC() {
     flashcardsAutoInsightsSignature,
     hasUsefulFlashcardInsights,
     autoInsightsPausedReason,
+    autoInsightsCycle,
   ]);
 
   useEffect(() => {
@@ -4919,9 +5030,15 @@ export default function AdvancedFlashcardPoC() {
       autoInsightsQueueRef.current.add(cardKey);
 
       try {
-        await generateFlashcardInsights(currentStudyIndex);
+        const result = await generateFlashcardInsights(currentStudyIndex);
+
+        if (!result?.ok || !result?.hasUsefulInsights) {
+          autoInsightsSkippedKeysRef.current.add(cardKey);
+        }
       } finally {
+        autoInsightsQueueRef.current.delete(cardKey);
         autoInsightsIsRunningRef.current = false;
+        setAutoInsightsCycle((value) => value + 1);
       }
     }, 1500);
 
@@ -5319,7 +5436,7 @@ export default function AdvancedFlashcardPoC() {
     favorites = false,
     dueOnly = false,
     search = '',
-    limit = 500,
+    limit = 5000,
   } = {}) => {
     const params = new URLSearchParams();
 
@@ -5354,7 +5471,7 @@ export default function AdvancedFlashcardPoC() {
         favorites: normalizedMode === 'favorites',
         dueOnly: false,
         search: '',
-        limit: 500,
+        limit: 5000,
       });
 
       let queue = [...baseCards];
@@ -5613,7 +5730,7 @@ export default function AdvancedFlashcardPoC() {
           favorites: normalizedMode === 'favorites',
           dueOnly: false,
           search: '',
-          limit: 500,
+          limit: 5000,
         });
 
         let queue = [...baseCards];
@@ -6646,7 +6763,7 @@ export default function AdvancedFlashcardPoC() {
     {
       id: 'library',
       label: 'Biblioteca',
-      description: `${libraryCards.length} cards`,
+      description: `${libraryAnalytics?.totalCards ?? libraryCards.length} cards`,
       icon: Folder,
       ref: librarySectionRef,
       alwaysVisible: true,
@@ -7013,7 +7130,7 @@ export default function AdvancedFlashcardPoC() {
         favorites: false,
         dueOnly: false,
         search: '',
-        limit: 500,
+        limit: 5000,
       });
 
       let queue = [];
@@ -7313,6 +7430,36 @@ export default function AdvancedFlashcardPoC() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [historyData, libraryDecks, libraryCards]);
 
+  const librarySpecialtySuggestions = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          ...librarySpecialties,
+          ...libraryDecks.map((deck) => deck.specialty),
+          ...libraryCards.map((card) => card.specialty),
+          selectedArchiveSpecialty,
+          currentSpecialty,
+        ]
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+          .filter((item) => item !== 'Sem especialidade')
+      )
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [
+    librarySpecialties,
+    libraryDecks,
+    libraryCards,
+    selectedArchiveSpecialty,
+    currentSpecialty,
+  ]);
+
+  useEffect(() => {
+    if (!selectedArchiveSpecialty) return;
+    if (newDeckSpecialty) return;
+
+    setNewDeckSpecialty(selectedArchiveSpecialty);
+  }, [selectedArchiveSpecialty, newDeckSpecialty]);
+
   const libraryStudyTopicOptions = useMemo(() => {
     const topics = new Set();
 
@@ -7439,6 +7586,44 @@ export default function AdvancedFlashcardPoC() {
     selectedArchiveDeckId,
     libraryDecks,
   ]);
+
+  const selectedArchiveTotalPages = Math.max(
+    1,
+    Math.ceil(selectedArchiveCards.length / ARCHIVE_CARDS_PER_PAGE)
+  );
+
+  const selectedArchiveSafePage = Math.min(
+    Math.max(selectedArchivePage, 1),
+    selectedArchiveTotalPages
+  );
+
+  const selectedArchiveStartIndex =
+    (selectedArchiveSafePage - 1) * ARCHIVE_CARDS_PER_PAGE;
+
+  const selectedArchiveEndIndex = Math.min(
+    selectedArchiveStartIndex + ARCHIVE_CARDS_PER_PAGE,
+    selectedArchiveCards.length
+  );
+
+  const selectedArchiveVisibleCards = selectedArchiveCards.slice(
+    selectedArchiveStartIndex,
+    selectedArchiveEndIndex
+  );
+
+  useEffect(() => {
+    setSelectedArchivePage(1);
+  }, [
+    selectedArchiveSpecialty,
+    selectedArchiveTopic,
+    selectedArchiveDeckId,
+    archiveSearch,
+  ]);
+
+  useEffect(() => {
+    setSelectedArchivePage((previousPage) =>
+      Math.min(Math.max(previousPage, 1), selectedArchiveTotalPages)
+    );
+  }, [selectedArchiveTotalPages]);
 
   const clearArchiveSelection = () => {
     setSelectedArchiveSpecialty('');
@@ -9047,6 +9232,38 @@ export default function AdvancedFlashcardPoC() {
                   </button>
 
                   <button
+                    type="button"
+                    onClick={() =>
+                      exportFlashcardsFile({
+                        format: 'pdf',
+                        cards: flashcards,
+                        title: buildFlashcardExportTitle(),
+                      })
+                    }
+                    disabled={!flashcards.length || isExportingFlashcardsFile}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      exportFlashcardsFile({
+                        format: 'docx',
+                        cards: flashcards,
+                        title: buildFlashcardExportTitle(),
+                      })
+                    }
+                    disabled={!flashcards.length || isExportingFlashcardsFile}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <FileText size={16} />
+                    Word
+                  </button>
+
+                  <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
                     className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
@@ -9108,11 +9325,11 @@ export default function AdvancedFlashcardPoC() {
                 ) : (
                   <>
                     {flashcardsViewMode === 'grid' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                      <div className="columns-1 md:columns-2 [column-gap:1.5rem]">
                         {flashcards.map((card, index) => (
                           <div
                             key={card.id || index}
-                            className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col"
+                            className="mb-6 break-inside-avoid bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col"
                           >
                             <div className="flex justify-between items-center mb-4">
                               <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
@@ -9169,11 +9386,13 @@ export default function AdvancedFlashcardPoC() {
 
                               <button
                                 type="button"
-                                disabled
-                                title="Geração de imagem por IA exige plano pago/billing ativo no Gemini."
-                                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed"
+                                onClick={() => generateFlashcardImage(index)}
+                                disabled={isGeneratingFlashcardImage}
+                                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
                               >
-                                Imagem IA indisponível
+                                {isGeneratingFlashcardImage && flashcardActionIndex === index
+                                  ? 'Gerando imagem...'
+                                  : 'Gerar imagem IA'}
                               </button>
 
                               <button
@@ -9187,20 +9406,6 @@ export default function AdvancedFlashcardPoC() {
                                   : 'Reanalisar card'}
                               </button>
                             </div>
-
-                            {card.imageUrl ? (
-                              <button
-                                type="button"
-                                onClick={() => window.open(card.imageUrl, '_blank', 'noopener,noreferrer')}
-                                className="mb-5 overflow-hidden rounded-2xl border border-slate-100 bg-slate-950 group"
-                              >
-                                <img
-                                  src={card.imageUrl}
-                                  alt={`Imagem do flashcard ${index + 1}`}
-                                  className="h-56 w-full object-cover group-hover:scale-[1.02] transition-transform"
-                                />
-                              </button>
-                            ) : null}
 
                             <h3 className="text-lg font-bold text-slate-900 mb-6 leading-snug">
                               {card.question}
@@ -9217,8 +9422,24 @@ export default function AdvancedFlashcardPoC() {
                                 className="text-slate-600 text-sm leading-relaxed mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
                               />
 
+                              {card.imageUrl ? (
+                                <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => window.open(card.imageUrl, '_blank', 'noopener,noreferrer')}
+                                    className="block w-full"
+                                  >
+                                    <img
+                                      src={card.imageUrl}
+                                      alt={`Imagem explicativa do flashcard ${index + 1}`}
+                                      className="w-full max-h-[360px] rounded-xl object-contain bg-black"
+                                    />
+                                  </button>
+                                </div>
+                              ) : null}
+
                               {card.preceptorNote && (
-                                <div className="mt-auto bg-amber-50/80 border border-amber-100 rounded-xl p-4 relative overflow-hidden">
+                                <div className="mt-4 bg-amber-50/80 border border-amber-100 rounded-xl p-4 relative overflow-hidden">
                                   <div className="absolute top-0 left-0 w-1 h-full bg-amber-400" />
                                   <span className="block text-amber-600 text-[10px] font-bold tracking-widest mb-1.5 uppercase">
                                     Nota do Preceptor
@@ -9267,7 +9488,7 @@ export default function AdvancedFlashcardPoC() {
                                           <span>
                                             {isGeneratingFlashcardInsights && flashcardActionIndex === index
                                               ? 'Analisando automaticamente este flashcard...'
-                                              : 'Este flashcard está na fila de análise automática.'}
+                                              : 'Aguardando análise automática deste flashcard.'}
                                           </span>
                                         </div>
                                       ) : null}
@@ -9370,13 +9591,7 @@ export default function AdvancedFlashcardPoC() {
                               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 text-blue-500">
                                 <Lightbulb size={32} />
                               </div>
-                              {currentStudyCard.imageUrl ? (
-                                <img
-                                  src={currentStudyCard.imageUrl}
-                                  alt="Imagem do flashcard atual"
-                                  className="mb-5 max-h-32 w-full max-w-xs rounded-2xl object-cover border border-slate-100"
-                                />
-                              ) : null}
+              
                               <h3 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight">
                                 {currentStudyCard.question}
                               </h3>
@@ -9402,8 +9617,18 @@ export default function AdvancedFlashcardPoC() {
                                 className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
                               />
 
+                              {currentStudyCard.imageUrl ? (
+                                <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <img
+                                    src={currentStudyCard.imageUrl}
+                                    alt="Imagem explicativa do flashcard atual"
+                                    className="w-full max-h-[320px] rounded-xl object-contain bg-black"
+                                  />
+                                </div>
+                              ) : null}
+
                               {currentStudyCard.preceptorNote && (
-                                <div className="mt-auto bg-amber-50 border border-amber-100 rounded-2xl p-5 relative">
+                                <div className="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-5 relative">
                                   <div className="flex items-center gap-2 mb-2">
                                     <Sparkles size={16} className="text-amber-500" />
                                     <span className="text-amber-700 text-xs font-bold tracking-widest uppercase">
@@ -11356,66 +11581,63 @@ export default function AdvancedFlashcardPoC() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)_minmax(0,1fr)_180px] gap-3 items-end">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)_180px] gap-3 items-start">
                   <div>
                     <label className="block text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-2">
-                      Nome da pasta
+                      Especialidade
                     </label>
 
                     <input
                       type="text"
-                      value={newDeckName}
-                      onChange={(event) => setNewDeckName(event.target.value)}
-                      placeholder="Ex: Vasculites, Arritmias, Pneumologia..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
+                      list="library-specialty-suggestions"
+                      value={newDeckSpecialty}
+                      onChange={(event) => setNewDeckSpecialty(event.target.value)}
+                      placeholder="Ex: Reumatologia, Cardiologia, Neurologia..."
+                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
-                  </div>
 
-                  <SmartDropdown
-                    value={newDeckSpecialty}
-                    onChange={setNewDeckSpecialty}
-                    placeholder="Sem especialidade"
-                    options={[
-                      {
-                        id: '',
-                        label: 'Sem especialidade',
-                        icon: <Folder className="w-4 h-4" />,
-                        description: 'Guardar sem área definida',
-                      },
-                      ...librarySpecialties.map((specialty) => ({
-                        id: specialty,
-                        label: specialty,
-                        icon: <Folder className="w-4 h-4" />,
-                        description: 'Pasta já existente',
-                      })),
-                    ]}
-                  />
+                    <datalist id="library-specialty-suggestions">
+                      {librarySpecialtySuggestions.map((specialty) => (
+                        <option key={specialty} value={specialty} />
+                      ))}
+                    </datalist>
+
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Digite uma nova especialidade ou escolha uma já existente.
+                    </p>
+                  </div>
 
                   <div>
                     <label className="block text-xs font-black uppercase tracking-[0.14em] text-slate-400 mb-2">
-                      Tema opcional
+                      Tema / pasta
                     </label>
 
                     <input
                       type="text"
                       value={newDeckSubSpecialty}
                       onChange={(event) => setNewDeckSubSpecialty(event.target.value)}
-                      placeholder="Ex: SAF, Parkinson, DOACs..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
+                      placeholder="Ex: Vasculites, SAF, Parkinson, DOACs..."
+                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
+
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Essa pasta ficará dentro da especialidade escolhida.
+                    </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={createLibraryDeck}
-                    className="w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-700 shadow-sm shadow-red-100"
-                  >
-                    Criar pasta
-                  </button>
+                  <div className="lg:pt-6">
+                    <button
+                      type="button"
+                      onClick={createLibraryDeck}
+                      className="w-full h-[46px] rounded-2xl bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700 shadow-sm shadow-red-100"
+                    >
+                      Criar pasta
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)] gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:h-[720px] items-stretch min-h-0">
                 <FolderTreePanel
                   title="Suas pastas"
                   description="Clique em uma pasta para ver e estudar os flashcards."
@@ -11426,7 +11648,7 @@ export default function AdvancedFlashcardPoC() {
                   emptyLabel="Nenhuma pasta encontrada no acervo."
                 />
 
-                <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+                <div className="h-full min-h-0 bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
                   <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-1">
@@ -11475,8 +11697,8 @@ export default function AdvancedFlashcardPoC() {
                     </div>
                   </div>
 
-                  <div className="p-5 space-y-5">
-                    <div className="grid grid-cols-1 gap-3">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <button
                         type="button"
                         onClick={() => startStudyFromArchiveCards(selectedArchiveCards)}
@@ -11484,6 +11706,36 @@ export default function AdvancedFlashcardPoC() {
                         className="rounded-2xl bg-red-600 px-4 py-4 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-red-100"
                       >
                         Estudar esta pasta
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          exportFlashcardsFile({
+                            format: 'pdf',
+                            cards: selectedArchiveCards,
+                            title: buildFlashcardExportTitle({ source: 'archive' }),
+                          })
+                        }
+                        disabled={!selectedArchiveCards.length || isExportingFlashcardsFile}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Baixar PDF
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          exportFlashcardsFile({
+                            format: 'docx',
+                            cards: selectedArchiveCards,
+                            title: buildFlashcardExportTitle({ source: 'archive' }),
+                          })
+                        }
+                        disabled={!selectedArchiveCards.length || isExportingFlashcardsFile}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Baixar Word
                       </button>
                     </div>
 
@@ -11577,24 +11829,61 @@ export default function AdvancedFlashcardPoC() {
                       </div>
 
                       {selectedArchiveCards.length > 0 ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                          {selectedArchiveCards.slice(0, 20).map((card) => (
-                            <button
-                              key={card.id}
-                              type="button"
-                              onClick={() => setPreviewLibraryCard(card)}
-                              className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-red-200 hover:bg-red-50/40 transition-colors"
-                            >
-                              <p className="text-sm font-bold text-slate-900 line-clamp-2">
-                                {card.question || 'Pergunta sem título'}
-                              </p>
+                        <>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {selectedArchiveVisibleCards.map((card) => (
+                              <button
+                                key={card.id}
+                                type="button"
+                                onClick={() => setPreviewLibraryCard(card)}
+                                className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-red-200 hover:bg-red-50/40 transition-colors"
+                              >
+                                <p className="text-sm font-bold text-slate-900 line-clamp-2">
+                                  {card.question || 'Pergunta sem título'}
+                                </p>
 
-                              <p className="text-xs text-slate-500 mt-2 line-clamp-2">
-                                {card.answer || 'Resposta não preenchida.'}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
+                                <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                                  {card.answer || 'Resposta não preenchida.'}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-xs font-bold text-slate-500">
+                              Mostrando {selectedArchiveStartIndex + 1}–{selectedArchiveEndIndex} de{' '}
+                              {selectedArchiveCards.length} flashcards
+                            </p>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedArchivePage((page) => Math.max(1, page - 1))}
+                                disabled={selectedArchiveSafePage <= 1}
+                                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Anterior
+                              </button>
+
+                              <span className="min-w-[96px] text-center text-xs font-black text-slate-500">
+                                Página {selectedArchiveSafePage} de {selectedArchiveTotalPages}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedArchivePage((page) =>
+                                    Math.min(selectedArchiveTotalPages, page + 1)
+                                  )
+                                }
+                                disabled={selectedArchiveSafePage >= selectedArchiveTotalPages}
+                                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Próxima
+                              </button>
+                            </div>
+                          </div>
+                        </>
                       ) : (
                         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
                           <p className="text-sm font-semibold text-slate-500">
@@ -11602,12 +11891,6 @@ export default function AdvancedFlashcardPoC() {
                           </p>
                         </div>
                       )}
-
-                      {selectedArchiveCards.length > 20 ? (
-                        <p className="text-xs text-slate-400 text-center">
-                          Mostrando os primeiros 20 cards desta pasta.
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -12786,8 +13069,18 @@ export default function AdvancedFlashcardPoC() {
                           className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
                         />
 
+                        {currentSpacedReviewCard.imageUrl || currentSpacedReviewCard.image_url ? (
+                          <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <img
+                              src={currentSpacedReviewCard.imageUrl || currentSpacedReviewCard.image_url}
+                              alt="Imagem explicativa do flashcard em revisão"
+                              className="w-full max-h-[320px] rounded-xl object-contain bg-black"
+                            />
+                          </div>
+                        ) : null}
+
                         {currentSpacedReviewCard.preceptor_note && (
-                          <div className="mt-auto bg-amber-50 border border-amber-100 rounded-2xl p-5">
+                          <div className="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-5">
                             <p className="text-amber-900 text-sm leading-relaxed">
                               {currentSpacedReviewCard.preceptor_note}
                             </p>
@@ -13996,12 +14289,18 @@ export default function AdvancedFlashcardPoC() {
 
                   <button
                     type="button"
-                    disabled
-                    title="Geração de imagem por IA exige plano pago/billing ativo no Gemini."
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-bold text-slate-400 cursor-not-allowed"
+                    onClick={() => generateFlashcardImage(editingFlashcardIndex)}
+                    disabled={isGeneratingFlashcardImage}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
-                    <Wand2 size={16} />
-                    Imagem IA indisponível
+                    {isGeneratingFlashcardImage && flashcardActionIndex === editingFlashcardIndex ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Wand2 size={16} />
+                    )}
+                    {isGeneratingFlashcardImage && flashcardActionIndex === editingFlashcardIndex
+                      ? 'Gerando imagem...'
+                      : 'Gerar imagem IA'}
                   </button>
 
                   <button

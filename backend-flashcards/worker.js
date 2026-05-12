@@ -43,8 +43,53 @@ const R2_BUCKET_NAME = cleanEnv(process.env.R2_BUCKET_NAME);
 const R2_PUBLIC_BASE_URL = cleanEnv(process.env.R2_PUBLIC_BASE_URL);
 
 const DEEPGRAM_API_KEY = cleanEnv(process.env.DEEPGRAM_API_KEY);
-const GEMINI_API_KEY = cleanEnv(process.env.GEMINI_API_KEY);
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
+function parseCommaList(value = '') {
+  return String(value || '')
+    .split(',')
+    .map((item) => cleanEnv(item))
+    .filter(Boolean);
+}
+
+function uniqueList(items = []) {
+  return Array.from(new Set(items.filter(Boolean)));
+}
+
+const GEMINI_API_KEYS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_API_KEYS),
+  cleanEnv(process.env.GEMINI_API_KEY),
+]);
+
+const GEMINI_API_KEY = GEMINI_API_KEYS[0] || '';
+
+const GEMINI_TEXT_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_TEXT_MODELS),
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+]);
+
+const GEMINI_METADATA_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_METADATA_MODELS),
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+]);
+
+const GEMINI_FLASHCARD_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_FLASHCARD_MODELS),
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-pro',
+]);
+
+const GEMINI_KEY_COOLDOWN_MS = Number(process.env.GEMINI_KEY_COOLDOWN_MS || 70_000);
+const geminiKeyCooldowns = new Map();
 
 const REQUEST_TIMEOUT_MS = Number(process.env.WORKER_REQUEST_TIMEOUT_MS || 10 * 60 * 1000);
 const TRANSCRIPTION_CONCURRENCY = Number(process.env.TRANSCRIPTION_CONCURRENCY || 2);
@@ -182,6 +227,62 @@ function isRetryableGeminiError(statusCode, message) {
     msg.includes('overloaded') ||
     msg.includes('timeout')
   );
+}
+
+function isGeminiQuotaError(error) {
+  const message = String(error?.message || '').toLowerCase();
+
+  return (
+    error?.statusCode === 429 ||
+    message.includes('quota') ||
+    message.includes('rate limit') ||
+    message.includes('resource exhausted') ||
+    message.includes('free_tier')
+  );
+}
+
+function maskGeminiKey(key = '') {
+  if (!key) return 'sem-chave';
+  return `${key.slice(0, 8)}...${key.slice(-4)}`;
+}
+
+function getRetryDelayMsFromGeminiError(error) {
+  const message = String(error?.message || '');
+  const retryMatch = message.match(/retry in\s+([\d.]+)s/i);
+
+  if (!retryMatch) return GEMINI_KEY_COOLDOWN_MS;
+
+  const retryMs = Math.ceil(Number(retryMatch[1]) * 1000);
+
+  return Number.isFinite(retryMs)
+    ? Math.max(retryMs, GEMINI_KEY_COOLDOWN_MS)
+    : GEMINI_KEY_COOLDOWN_MS;
+}
+
+function putGeminiKeyOnCooldown(apiKey, error) {
+  if (!apiKey) return;
+
+  const cooldownMs = getRetryDelayMsFromGeminiError(error);
+  geminiKeyCooldowns.set(apiKey, Date.now() + cooldownMs);
+
+  console.warn(
+    `⚠️ Chave Gemini em cooldown: ${maskGeminiKey(apiKey)} por ${Math.round(cooldownMs / 1000)}s.`
+  );
+}
+
+function getGeminiKeysToTry() {
+  if (!GEMINI_API_KEYS.length) {
+    throw new Error('Nenhuma chave Gemini configurada. Defina GEMINI_API_KEY ou GEMINI_API_KEYS.');
+  }
+
+  const now = Date.now();
+
+  const availableKeys = GEMINI_API_KEYS.filter((key) => {
+    const cooldownUntil = geminiKeyCooldowns.get(key) || 0;
+    return cooldownUntil <= now;
+  });
+
+  return availableKeys.length ? availableKeys : GEMINI_API_KEYS;
 }
 
 async function updateJob(id, updates) {
@@ -848,14 +949,14 @@ async function transcribeAudioWithDeepgram(audioPath) {
   return transcript.trim();
 }
 
-async function callGeminiWithModel(modelName, payload) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY não definida.');
+async function callGeminiWithModel(modelName, payload, apiKey = GEMINI_API_KEY) {
+  if (!apiKey) {
+    throw new Error('Nenhuma chave Gemini disponível.');
   }
 
   const apiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent` +
-    `?key=${GEMINI_API_KEY}`;
+    `?key=${apiKey}`;
 
   const response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
@@ -882,27 +983,34 @@ async function callGeminiWithModel(modelName, payload) {
   };
 }
 
-async function callGeminiWithFallback(payload) {
-  let lastError = null;
+async function callGeminiWithFallback(payload, modelsToTry = GEMINI_TEXT_MODELS) {
+  const errors = [];
 
-  for (const modelName of GEMINI_MODELS) {
-    try {
-      return await callGeminiWithModel(modelName, payload);
-    } catch (error) {
-      lastError = error;
+  for (const modelName of modelsToTry) {
+    for (const apiKey of getGeminiKeysToTry()) {
+      try {
+        return await callGeminiWithModel(modelName, payload, apiKey);
+      } catch (error) {
+        const message = error.message || 'Erro desconhecido';
+        errors.push(`${modelName} | ${maskGeminiKey(apiKey)} [${error.statusCode || 'sem-status'}]: ${message}`);
 
-      if (!isRetryableGeminiError(error.statusCode, error.message)) {
-        throw error;
+        if (!isRetryableGeminiError(error.statusCode, message)) {
+          throw error;
+        }
+
+        if (isGeminiQuotaError(error)) {
+          putGeminiKeyOnCooldown(apiKey, error);
+        }
+
+        console.warn(
+          `⚠️ Gemini indisponível no modelo ${modelName} com chave ${maskGeminiKey(apiKey)}. Tentando próximo fallback:`,
+          message
+        );
       }
-
-      console.warn(
-        `⚠️ Gemini indisponível no modelo ${modelName}. Tentando próximo modelo:`,
-        error.message
-      );
     }
   }
 
-  throw lastError || new Error('Falha ao chamar Gemini.');
+  throw new Error(`Falha ao chamar Gemini com todos os fallbacks. Detalhes: ${errors.join(' | ')}`);
 }
 
 async function classifyTranscriptMetadata(transcript) {
@@ -930,18 +1038,21 @@ Transcrição:
 ${transcript}
 `.trim();
 
-  const result = await callGeminiWithFallback({
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: prompt }],
+  const result = await callGeminiWithFallback(
+    {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: 'application/json',
       },
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: 'application/json',
     },
-  });
+    GEMINI_METADATA_MODELS
+  );
 
   const parsed = parseGeminiJson(result.text);
 
@@ -958,13 +1069,104 @@ ${transcript}
   };
 }
 
+function extractFlashcardArrayFromGeminiPayload(parsed) {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return [];
+  }
+
+  const directCandidates = [
+    parsed.flashcards,
+    parsed.cards,
+    parsed.flashcard_list,
+    parsed.study_cards,
+    parsed.items,
+    parsed.data?.flashcards,
+    parsed.data?.cards,
+    parsed.result?.flashcards,
+    parsed.result?.cards,
+    parsed.output?.flashcards,
+    parsed.output?.cards,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  const seen = new Set();
+
+  function findNestedFlashcards(value, depth = 0) {
+    if (!value || depth > 4) return [];
+
+    if (Array.isArray(value)) {
+      const looksLikeFlashcards = value.some((item) => {
+        if (!item || typeof item !== 'object') return false;
+
+        return Boolean(
+          item.question ||
+            item.pergunta ||
+            item.front ||
+            item.prompt ||
+            item.answer ||
+            item.resposta ||
+            item.back ||
+            item.response
+        );
+      });
+
+      return looksLikeFlashcards ? value : [];
+    }
+
+    if (typeof value !== 'object') return [];
+
+    if (seen.has(value)) return [];
+    seen.add(value);
+
+    for (const child of Object.values(value)) {
+      const found = findNestedFlashcards(child, depth + 1);
+
+      if (found.length) {
+        return found;
+      }
+    }
+
+    return [];
+  }
+
+  return findNestedFlashcards(parsed);
+}
+
 function normalizeGeneratedFlashcards(rawFlashcards = []) {
   if (!Array.isArray(rawFlashcards)) return [];
 
   return rawFlashcards
     .map((card, index) => {
-      const question = String(card.question || card.pergunta || '').trim();
-      const answer = String(card.answer || card.resposta || '').trim();
+      const question = String(
+        card.question ||
+          card.pergunta ||
+          card.front ||
+          card.frente ||
+          card.prompt ||
+          card.enunciado ||
+          card.ask ||
+          ''
+      ).trim();
+
+      const answer = String(
+        card.answer ||
+          card.resposta ||
+          card.back ||
+          card.verso ||
+          card.response ||
+          card.explanation ||
+          card.explicacao ||
+          ''
+      ).trim();
 
       if (!question || !answer) return null;
 
@@ -1024,29 +1226,44 @@ Regras:
 - Usar português do Brasil.
 - Respostas devem ser completas, mas não excessivamente longas.
 - Se houver listas, organize de forma clara.
+- Nunca retorne "flashcards": [] quando houver qualquer conteúdo compreensível na transcrição.
+- Se a transcrição for curta, pouco médica ou pouco estruturada, gere de 3 a 8 flashcards úteis sobre o conteúdo disponível.
+- Use obrigatoriamente os campos "question" e "answer" em todos os flashcards.
+- Não use campos alternativos como "front", "back", "pergunta" ou "resposta".
 
 Transcrição:
 ${transcript}
 `.trim();
 
-  const result = await callGeminiWithFallback({
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: prompt }],
+  const result = await callGeminiWithFallback(
+    {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.35,
+        responseMimeType: 'application/json',
       },
-    ],
-    generationConfig: {
-      temperature: 0.35,
-      responseMimeType: 'application/json',
     },
-  });
+    GEMINI_FLASHCARD_MODELS
+  );
 
   const parsed = parseGeminiJson(result.text);
-  const flashcards = normalizeGeneratedFlashcards(parsed.flashcards || parsed.cards || []);
+  const rawFlashcards = extractFlashcardArrayFromGeminiPayload(parsed);
+  const flashcards = normalizeGeneratedFlashcards(rawFlashcards);
 
   if (!flashcards.length) {
-    throw new Error('Gemini não retornou flashcards válidos.');
+    console.warn('⚠️ Resposta do Gemini sem flashcards válidos:', {
+      modelUsed: result.modelUsed,
+      preview: String(result.text || '').slice(0, 800),
+    });
+
+    throw new Error(
+      `Gemini não retornou flashcards válidos. Modelo: ${result.modelUsed || 'desconhecido'}.`
+    );
   }
 
   return {
@@ -1479,37 +1696,60 @@ async function processJob(job) {
     let flashcardsModelUsed = null;
 
     if (shouldGenerateFlashcardsForJob(job)) {
-      const flashcardResult = await generateFlashcardsWithGemini(transcript);
-      generatedFlashcards = flashcardResult.flashcards;
-      flashcardsModelUsed = flashcardResult.modelUsed;
+      try {
+        const flashcardResult = await generateFlashcardsWithGemini(transcript);
+        generatedFlashcards = flashcardResult.flashcards;
+        flashcardsModelUsed = flashcardResult.modelUsed;
 
-      await updateStudyRun(studyRun.id, {
-        flashcards: generatedFlashcards,
-        flashcards_provider: 'gemini',
-        flashcards_model: flashcardsModelUsed || 'gemini',
-      });
+        await updateStudyRun(studyRun.id, {
+          flashcards: generatedFlashcards,
+          flashcards_provider: 'gemini',
+          flashcards_model: flashcardsModelUsed || 'gemini',
+        });
 
-      await updateJob(job.id, {
-        flashcards: generatedFlashcards,
-        flashcards_model: flashcardsModelUsed,
-        status: 'processing',
-        current_step: 'Flashcards gerados. Salvando na biblioteca.',
-        progress: 88,
-      });
+        await updateJob(job.id, {
+          flashcards: generatedFlashcards,
+          flashcards_model: flashcardsModelUsed,
+          status: 'processing',
+          current_step: 'Flashcards gerados. Salvando na biblioteca.',
+          progress: 88,
+        });
 
-      await saveFlashcardsToLibrary({
-        runId: studyRun.id,
-        flashcards: generatedFlashcards,
-        specialty: metadata.specialty || 'Clínica Médica',
-        subSpecialty:
-          Array.isArray(metadata.secondary_topics) && metadata.secondary_topics.length > 0
-            ? metadata.secondary_topics[0]
-            : '',
-        theme:
-          Array.isArray(metadata.secondary_topics) && metadata.secondary_topics.length > 1
-            ? metadata.secondary_topics[1]
-            : metadata.study_tag || '',
-      });
+        await saveFlashcardsToLibrary({
+          runId: studyRun.id,
+          flashcards: generatedFlashcards,
+          specialty: metadata.specialty || 'Clínica Médica',
+          subSpecialty:
+            Array.isArray(metadata.secondary_topics) && metadata.secondary_topics.length > 0
+              ? metadata.secondary_topics[0]
+              : '',
+          theme:
+            Array.isArray(metadata.secondary_topics) && metadata.secondary_topics.length > 1
+              ? metadata.secondary_topics[1]
+              : metadata.study_tag || '',
+        });
+      } catch (flashcardError) {
+        console.warn(
+          `⚠️ Estudo ${studyRun.id} criado, mas falha ao gerar flashcards no job ${job.id}:`,
+          flashcardError.message
+        );
+
+        await updateStudyRun(studyRun.id, {
+          flashcards: [],
+          flashcards_provider: 'gemini_failed',
+          flashcards_model: 'failed',
+        });
+
+        await updateJob(job.id, {
+          flashcards: [],
+          flashcards_model: 'failed',
+          status: 'processing',
+          current_step:
+            'Estudo salvo com transcrição. Os flashcards não foram gerados automaticamente.',
+          error_message: `Flashcards não gerados: ${flashcardError.message}`,
+          progress: 88,
+        });
+      }
     }
 
     await updateJob(job.id, {

@@ -4,6 +4,16 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const PDFDocument = require('pdfkit');
+const {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  HeadingLevel,
+  PageBreak,
+} = require('docx');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
 const {
@@ -31,9 +41,60 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || '';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
-const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'imagen-4.0-fast-generate-001';
+
+function parseCommaList(value = '') {
+  return String(value || '')
+    .split(',')
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+}
+
+function uniqueList(items = []) {
+  return Array.from(new Set(items.filter(Boolean)));
+}
+
+const GEMINI_API_KEYS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_API_KEYS),
+  process.env.GEMINI_API_KEY || '',
+]);
+
+const GEMINI_API_KEY = GEMINI_API_KEYS[0] || '';
+
+const GEMINI_TEXT_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_TEXT_MODELS),
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+]);
+
+const GEMINI_METADATA_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_METADATA_MODELS),
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+]);
+
+const GEMINI_FLASHCARD_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_FLASHCARD_MODELS),
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-pro',
+]);
+
+const GEMINI_KEY_COOLDOWN_MS = Number(process.env.GEMINI_KEY_COOLDOWN_MS || 70_000);
+const geminiKeyCooldowns = new Map();
+const GEMINI_IMAGE_MODELS = uniqueList([
+  ...parseCommaList(process.env.GEMINI_IMAGE_MODELS),
+  process.env.GEMINI_IMAGE_MODEL || '',
+  'imagen-4.0-fast-generate-001',
+  'imagen-4.0-generate-001',
+  'imagen-4.0-ultra-generate-001',
+]);
 const FLASHCARD_IMAGE_WIDTH = Number(process.env.FLASHCARD_IMAGE_WIDTH || 1080);
 const FLASHCARD_IMAGE_HEIGHT = Number(process.env.FLASHCARD_IMAGE_HEIGHT || 1920);
 
@@ -289,6 +350,62 @@ function isRetryableGeminiError(statusCode, message) {
     msg.includes('overloaded') ||
     msg.includes('timeout')
   );
+}
+
+function isGeminiQuotaError(error) {
+  const message = String(error?.message || '').toLowerCase();
+
+  return (
+    error?.statusCode === 429 ||
+    message.includes('quota') ||
+    message.includes('rate limit') ||
+    message.includes('resource exhausted') ||
+    message.includes('free_tier')
+  );
+}
+
+function maskGeminiKey(key = '') {
+  if (!key) return 'sem-chave';
+  return `${key.slice(0, 8)}...${key.slice(-4)}`;
+}
+
+function getRetryDelayMsFromGeminiError(error) {
+  const message = String(error?.message || '');
+  const retryMatch = message.match(/retry in\s+([\d.]+)s/i);
+
+  if (!retryMatch) return GEMINI_KEY_COOLDOWN_MS;
+
+  const retryMs = Math.ceil(Number(retryMatch[1]) * 1000);
+
+  return Number.isFinite(retryMs)
+    ? Math.max(retryMs, GEMINI_KEY_COOLDOWN_MS)
+    : GEMINI_KEY_COOLDOWN_MS;
+}
+
+function putGeminiKeyOnCooldown(apiKey, error) {
+  if (!apiKey) return;
+
+  const cooldownMs = getRetryDelayMsFromGeminiError(error);
+  geminiKeyCooldowns.set(apiKey, Date.now() + cooldownMs);
+
+  console.warn(
+    `⚠️ Chave Gemini em cooldown: ${maskGeminiKey(apiKey)} por ${Math.round(cooldownMs / 1000)}s.`
+  );
+}
+
+function getGeminiKeysToTry() {
+  if (!GEMINI_API_KEYS.length) {
+    throw new Error('Nenhuma chave Gemini configurada. Defina GEMINI_API_KEY ou GEMINI_API_KEYS.');
+  }
+
+  const now = Date.now();
+
+  const availableKeys = GEMINI_API_KEYS.filter((key) => {
+    const cooldownUntil = geminiKeyCooldowns.get(key) || 0;
+    return cooldownUntil <= now;
+  });
+
+  return availableKeys.length ? availableKeys : GEMINI_API_KEYS;
 }
 
 function normalizeUtf8Filename(filename) {
@@ -867,8 +984,12 @@ async function transcribeAudioWithDeepgram(audioPath) {
   return transcript;
 }
 
-async function callGeminiWithModel(modelName, payload) {
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+async function callGeminiWithModel(modelName, payload, apiKey = GEMINI_API_KEY) {
+  if (!apiKey) {
+    throw new Error('Nenhuma chave Gemini disponível.');
+  }
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
   const response = await fetchWithTimeout(
     apiUrl,
@@ -893,6 +1014,36 @@ async function callGeminiWithModel(modelName, payload) {
   }
 
   return data;
+}
+
+async function callGeminiWithFallback(payload, modelsToTry = GEMINI_TEXT_MODELS) {
+  const errors = [];
+
+  for (const modelName of modelsToTry) {
+    for (const apiKey of getGeminiKeysToTry()) {
+      try {
+        return await callGeminiWithModel(modelName, payload, apiKey);
+      } catch (error) {
+        const message = error.message || 'Erro desconhecido';
+        errors.push(`${modelName} | ${maskGeminiKey(apiKey)} [${error.statusCode || 'sem-status'}]: ${message}`);
+
+        if (!isRetryableGeminiError(error.statusCode, message)) {
+          throw error;
+        }
+
+        if (isGeminiQuotaError(error)) {
+          putGeminiKeyOnCooldown(apiKey, error);
+        }
+
+        console.warn(
+          `⚠️ Gemini indisponível no modelo ${modelName} com chave ${maskGeminiKey(apiKey)}. Tentando próximo fallback:`,
+          message
+        );
+      }
+    }
+  }
+
+  throw new Error(`Falha ao chamar Gemini com todos os fallbacks. Detalhes: ${errors.join(' | ')}`);
 }
 
 async function generateFlashcardsWithGemini(text) {
@@ -967,14 +1118,14 @@ Retorne apenas JSON válido no schema solicitado.`,
 
   const errors = [];
 
-  for (const modelName of GEMINI_MODELS) {
+  for (const modelName of GEMINI_FLASHCARD_MODELS) {
     const maxAttempts = 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         console.log(`🧠 Gemini: tentando modelo ${modelName} (${attempt}/${maxAttempts})...`);
 
-        const data = await callGeminiWithModel(modelName, payload);
+        const data = await callGeminiWithFallback(payload, [modelName]);
         const jsonText = stripMarkdownJsonFence(getGeminiText(data));
         const parsed = parseJsonSafe(jsonText);
 
@@ -1386,19 +1537,38 @@ function pickFlashcardImageKeyword(card = {}) {
 
 function buildFlashcardImagePrompt(card = {}) {
   const insights = card.cardInsights || card.card_insights || {};
-  const existingPrompt = card.imagePrompt || card.image_prompt || insights.image_prompt || insights.imagePrompt;
-
-  if (existingPrompt && String(existingPrompt).trim()) {
-    return String(existingPrompt).trim();
-  }
-
   const keyword = pickFlashcardImageKeyword(card);
-  const question = String(card.question || card.pergunta || '').replace(/\s+/g, ' ').trim();
+
+  const answerBase = String(
+    insights.corrected_answer ||
+      card.answer ||
+      card.resposta ||
+      ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const shortTitle = String(
+    insights.image_keyword ||
+      keyword ||
+      'FLASHCARD MÉDICO'
+  )
+    .toUpperCase()
+    .slice(0, 56);
 
   return [
-    `Create a clean, high-quality educational medical illustration about: ${keyword}.`,
-    question ? `Clinical learning context: ${question.slice(0, 220)}.` : '',
-    'Style: modern medical infographic illustration, dark background, high contrast, no text, no logos, no watermark, no real patient identity, suitable for a medical flashcard poster.',
+    'Create a single educational mnemonic illustration in Brazilian Portuguese.',
+    `Main title: "${shortTitle}".`,
+    answerBase
+      ? `Base the illustration on this medical concept: ${answerBase.slice(0, 600)}.`
+      : '',
+    'The result must look like a didactic study figure, similar to a visual memory aid.',
+    'Visual style: black or very dark background, bold short title, central cartoon-style or infographic-style illustration, clean composition, high contrast, educational.',
+    'Use very little text. Only the short title and, if needed, one very short supporting label.',
+    'Do not write the full flashcard question.',
+    'Do not create a footer.',
+    'Do not add logos, watermark, UI elements, or long paragraphs.',
+    'The illustration must be the main focus.',
   ]
     .filter(Boolean)
     .join(' ')
@@ -1406,30 +1576,71 @@ function buildFlashcardImagePrompt(card = {}) {
 }
 
 async function generateImagenIllustrationBuffer(prompt) {
-  if (!GEMINI_API_KEY) {
+  if (!GEMINI_API_KEYS.length) {
     throw new Error('GEMINI_API_KEY não definida no .env.');
   }
 
   const { GoogleGenAI } = await import('@google/genai');
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const errors = [];
 
-  const response = await ai.models.generateImages({
-    model: GEMINI_IMAGE_MODEL,
-    prompt,
-    config: {
-      numberOfImages: 1,
-      aspectRatio: '3:4',
-      personGeneration: 'dont_allow',
-    },
-  });
+  for (const modelName of GEMINI_IMAGE_MODELS) {
+    for (const apiKey of getGeminiKeysToTry()) {
+      try {
+        const ai = new GoogleGenAI({ apiKey });
 
-  const imageBytes = response?.generatedImages?.[0]?.image?.imageBytes;
+        const response = await ai.models.generateImages({
+          model: modelName,
+          prompt,
+          config: {
+            numberOfImages: 1,
+            aspectRatio: '3:4',
+            personGeneration: 'dont_allow',
+          },
+        });
 
-  if (!imageBytes) {
-    throw new Error('O modelo de imagem não retornou bytes de imagem.');
+        const imageBytes = response?.generatedImages?.[0]?.image?.imageBytes;
+
+        if (!imageBytes) {
+          throw new Error('O modelo de imagem não retornou bytes de imagem.');
+        }
+
+        return Buffer.from(imageBytes, 'base64');
+      } catch (error) {
+        const message = error.message || 'Erro desconhecido';
+
+        errors.push(
+          `${modelName} | ${maskGeminiKey(apiKey)} [${error.statusCode || 'sem-status'}]: ${message}`
+        );
+
+        if (isGeminiQuotaError(error)) {
+          putGeminiKeyOnCooldown(apiKey, error);
+        }
+
+        const lowerMessage = message.toLowerCase();
+
+        const shouldTryNextImageModel =
+          isRetryableGeminiError(error.statusCode, message) ||
+          lowerMessage.includes('paid plan') ||
+          lowerMessage.includes('billing') ||
+          lowerMessage.includes('not available') ||
+          lowerMessage.includes('unsupported') ||
+          lowerMessage.includes('not supported') ||
+          lowerMessage.includes('permission') ||
+          lowerMessage.includes('invalid_argument');
+
+        if (!shouldTryNextImageModel) {
+          throw error;
+        }
+
+        console.warn(
+          `⚠️ Geração de imagem indisponível no modelo ${modelName} com chave ${maskGeminiKey(apiKey)}. Tentando próximo fallback:`,
+          message
+        );
+      }
+    }
   }
 
-  return Buffer.from(imageBytes, 'base64');
+  throw new Error(`Falha ao gerar imagem com IA. Detalhes: ${errors.join(' | ')}`);
 }
 
 async function composeFlashcardPosterImage({ illustrationBuffer, card = {}, keyword = '' }) {
@@ -2094,6 +2305,7 @@ async function generateStructuredObjectWithGemini({
   systemInstructionText,
   userText,
   responseSchema,
+  models = GEMINI_TEXT_MODELS,
 }) {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY não definida no .env.');
@@ -2117,12 +2329,12 @@ async function generateStructuredObjectWithGemini({
 
   const errors = [];
 
-  for (const modelName of GEMINI_MODELS) {
+  for (const modelName of models) {
     const maxAttempts = 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const data = await callGeminiWithModel(modelName, payload);
+        const data = await callGeminiWithFallback(payload, [modelName]);
         const jsonText = stripMarkdownJsonFence(getGeminiText(data));
         return parseJsonSafe(jsonText);
       } catch (error) {
@@ -2206,6 +2418,7 @@ ${transcript}
     systemInstructionText,
     userText,
     responseSchema,
+    models: GEMINI_METADATA_MODELS,
   });
 
   const allowed = new Set([
@@ -3459,11 +3672,280 @@ function buildGoogleCalendarReviewEventFromCard(card) {
   };
 }
 
+function normalizeExportFlashcards(cards = []) {
+  return (Array.isArray(cards) ? cards : [])
+    .map((card, index) => ({
+      index: index + 1,
+      question: String(card.question || card.pergunta || '').trim(),
+      answer: String(card.answer || card.resposta || '').trim(),
+      preceptorNote: String(card.preceptorNote || card.preceptor_note || card.nota_preceptor || '').trim(),
+      specialty: String(card.specialty || '').trim(),
+      topic: String(card.sub_specialty || card.theme || '').trim(),
+    }))
+    .filter((card) => card.question && card.answer);
+}
+
+function safeExportFilename(value = 'flashcards') {
+  return String(value || 'flashcards')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .toLowerCase();
+}
+
+function drawFlashcardPdfPage(doc, {
+  type = 'Pergunta',
+  text = '',
+  specialty = '',
+  topic = '',
+  cardNumber = 1,
+  totalCards = 1,
+}) {
+  const width = doc.page.width;
+  const height = doc.page.height;
+
+  doc.rect(0, 0, width, height).fill('#ffffff');
+
+  // Fundo quadriculado leve
+  doc.strokeColor('#eef2f7').lineWidth(0.5);
+  for (let x = 0; x <= width; x += 24) {
+    doc.moveTo(x, 0).lineTo(x, height).stroke();
+  }
+  for (let y = 0; y <= height; y += 24) {
+    doc.moveTo(0, y).lineTo(width, y).stroke();
+  }
+
+  const accent = type === 'Pergunta' ? '#0f9aa6' : '#3b82f6';
+
+  // Borda
+  doc.roundedRect(24, 24, width - 48, height - 48, 18)
+    .lineWidth(3)
+    .strokeColor(accent)
+    .stroke();
+
+  // Pílula superior
+  doc.font('Helvetica-Bold').fontSize(18);
+
+  const pillX = 48;
+  const pillY = 46;
+  const pillHeight = 42;
+  const pillTextWidth = doc.widthOfString(type);
+  const pillTextHeight = doc.currentLineHeight();
+  const pillWidth = Math.max(180, pillTextWidth + 64);
+  const pillTextY = pillY + ((pillHeight - pillTextHeight) / 2) - 1;
+
+  doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 12)
+    .fillAndStroke('#ffffff', '#94a3b8');
+
+  doc.fillColor('#1f2937')
+    .font('Helvetica-Bold')
+    .fontSize(18)
+    .text(type, pillX, pillTextY, {
+      width: pillWidth,
+      align: 'center',
+      lineBreak: false,
+    });
+
+  // Contador
+  doc.fillColor('#94a3b8')
+    .fontSize(10)
+    .font('Helvetica-Bold')
+    .text(`CARD ${cardNumber} / ${totalCards}`, width - 170, 60, {
+      width: 120,
+      align: 'right',
+    });
+
+  // Texto principal
+  const fontSize = text.length > 220 ? 26 : text.length > 130 ? 32 : 38;
+
+  doc.fillColor('#243447')
+    .font('Helvetica-Bold')
+    .fontSize(fontSize)
+    .text(text, 72, 180, {
+      width: width - 144,
+      height: 300,
+      align: 'center',
+      lineGap: 10,
+    });
+
+  // Linha decorativa
+  doc.strokeColor(accent)
+    .lineWidth(4)
+    .moveTo(76, height - 150)
+    .lineTo(160, height - 150)
+    .stroke();
+
+  // Especialidade/tema
+  const footer = [specialty, topic].filter(Boolean).join(' · ');
+
+  doc.fillColor(accent)
+    .font('Helvetica-Bold')
+    .fontSize(22)
+    .text(footer || 'Flashcards', 72, height - 110, {
+      width: width - 144,
+      align: 'right',
+    });
+}
+
+async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
+  return await new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: [720, 720],
+      margin: 0,
+      autoFirstPage: false,
+    });
+
+    const chunks = [];
+
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    cards.forEach((card, index) => {
+      doc.addPage();
+
+      drawFlashcardPdfPage(doc, {
+        type: 'Pergunta',
+        text: card.question,
+        specialty: card.specialty,
+        topic: card.topic,
+        cardNumber: index + 1,
+        totalCards: cards.length,
+      });
+
+      doc.addPage();
+
+      drawFlashcardPdfPage(doc, {
+        type: 'Resposta',
+        text: card.answer,
+        specialty: card.specialty,
+        topic: card.topic,
+        cardNumber: index + 1,
+        totalCards: cards.length,
+      });
+    });
+
+    doc.end();
+  });
+}
+
+async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
+  const children = [
+    new Paragraph({
+      text: title,
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `${cards.length} flashcards`,
+          bold: true,
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+    }),
+  ];
+
+  cards.forEach((card, index) => {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Flashcard ${index + 1}`,
+            bold: true,
+            color: 'DC2626',
+          }),
+        ],
+        spacing: { before: 300, after: 160 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'Pergunta',
+            bold: true,
+          }),
+        ],
+      }),
+      new Paragraph({
+        text: card.question,
+        spacing: { after: 240 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'Resposta',
+            bold: true,
+          }),
+        ],
+      }),
+      new Paragraph({
+        text: card.answer,
+        spacing: { after: 160 },
+      })
+    );
+
+    if (card.preceptorNote) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'Nota do preceptor',
+              bold: true,
+            }),
+          ],
+        }),
+        new Paragraph({
+          text: card.preceptorNote,
+          spacing: { after: 160 },
+        })
+      );
+    }
+
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: [card.specialty, card.topic].filter(Boolean).join(' · '),
+            italics: true,
+            color: '64748B',
+          }),
+        ],
+      })
+    );
+
+    if (index < cards.length - 1) {
+      children.push(
+        new Paragraph({
+          children: [new PageBreak()],
+        })
+      );
+    }
+  });
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {},
+        children,
+      },
+    ],
+  });
+
+  return await Packer.toBuffer(doc);
+}
+
 app.get('/health', (_, res) => {
   res.json({
     ok: true,
     transcription: 'deepgram',
-    flashcardsModels: GEMINI_MODELS,
+    textModels: GEMINI_TEXT_MODELS,
+    metadataModels: GEMINI_METADATA_MODELS,
+    flashcardsModels: GEMINI_FLASHCARD_MODELS,
+    imageModels: GEMINI_IMAGE_MODELS,
     persistence: Boolean(supabase),
     videoStorage: r2 ? 'cloudflare-r2' : 'disabled',
   });
@@ -3616,24 +4098,18 @@ app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, re
 
     const card = cards[normalizedIndex];
     const finalPrompt = String(prompt || '').trim() || buildFlashcardImagePrompt(card);
-    const keyword = pickFlashcardImageKeyword({ ...card, imagePrompt: finalPrompt });
 
     const illustrationBuffer = await generateImagenIllustrationBuffer(finalPrompt);
-    const posterBuffer = await composeFlashcardPosterImage({
-      illustrationBuffer,
-      card,
-      keyword,
-    });
 
     const key = buildFlashcardImageKey({
       runId: id,
       cardIndex: normalizedIndex,
-      filename: 'ai-flashcard-poster.png',
+      filename: 'ai-flashcard-illustration.png',
       contentType: 'image/png',
     });
 
     const uploaded = await uploadBufferToR2({
-      buffer: posterBuffer,
+      buffer: illustrationBuffer,
       key,
       contentType: 'image/png',
     });
@@ -3667,6 +4143,73 @@ app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, re
     });
   } catch (error) {
     console.error('❌ Erro ao gerar imagem do flashcard:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/exports/flashcards/pdf', async (req, res) => {
+  try {
+    const {
+      cards = [],
+      title = 'Flashcards',
+    } = req.body || {};
+
+    const normalizedCards = normalizeExportFlashcards(cards);
+
+    if (!normalizedCards.length) {
+      return res.status(400).json({
+        error: 'Nenhum flashcard válido para exportar.',
+      });
+    }
+
+    const buffer = await buildFlashcardsPdfBuffer({
+      cards: normalizedCards,
+      title,
+    });
+
+    const filename = `${safeExportFilename(title)}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    return res.send(buffer);
+  } catch (error) {
+    console.error('❌ Erro ao exportar PDF:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/exports/flashcards/docx', async (req, res) => {
+  try {
+    const {
+      cards = [],
+      title = 'Flashcards',
+    } = req.body || {};
+
+    const normalizedCards = normalizeExportFlashcards(cards);
+
+    if (!normalizedCards.length) {
+      return res.status(400).json({
+        error: 'Nenhum flashcard válido para exportar.',
+      });
+    }
+
+    const buffer = await buildFlashcardsDocxBuffer({
+      cards: normalizedCards,
+      title,
+    });
+
+    const filename = `${safeExportFilename(title)}.docx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    return res.send(buffer);
+  } catch (error) {
+    console.error('❌ Erro ao exportar DOCX:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -3941,7 +4484,7 @@ app.get('/api/flashcards-library', async (req, res) => {
       .from('flashcards_library')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(Math.min(Math.max(Number(limit || 300), 1), 500));
+      .limit(Math.min(Math.max(Number(limit || 300), 1), 5000));
 
     if (String(deckId).trim()) {
       query = query.eq('deck_id', String(deckId).trim());
