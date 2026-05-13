@@ -1067,7 +1067,13 @@ Regras obrigatórias:
 - Antes de responder, identifique mentalmente todos os temas e subtemas clínicos relevantes da transcrição.
 - Garanta cobertura ampla do conteúdo. Não foque só no início ou só no tema mais óbvio.
 - Gere flashcards suficientes para cobrir os principais tópicos, subtemas, critérios, condutas, contraindicações, complicações, interpretações clínicas e armadilhas de prova/prática.
-- Use quantidade proporcional à riqueza do texto. Em geral, produza entre 12 e 30 cards.
+Use quantidade proporcional à riqueza do texto:
+- até 1200 palavras: 10 a 22 cards;
+- 1200 a 3000 palavras: 20 a 35 cards;
+- 3000 a 6000 palavras: 32 a 55 cards;
+- 6000 a 9000 palavras: 50 a 85 cards;
+- acima de 9000 palavras: 70 a 110 cards.
+Para textos longos, não compacte demais. Cubra todos os blocos temáticos relevantes.
 - Evite cards triviais, vagos ou repetitivos.
 - Cada card deve cobrar uma ideia central, objetiva e útil.
 - A pergunta deve ser clara, específica e com cara de revisão de residência.

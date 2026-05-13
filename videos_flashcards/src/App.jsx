@@ -8514,19 +8514,22 @@ export default function AdvancedFlashcardPoC() {
                               </div>
 
                               <div className="min-w-0 flex-1">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                  <div>
+                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_150px] gap-3 sm:items-start">
+                                  <div className="min-w-0">
                                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-500">
                                       Processamento
                                     </p>
 
-                                    <p className="mt-1 text-sm font-bold text-slate-900">
+                                    <p
+                                      className="mt-1 min-h-[40px] text-sm font-bold leading-5 text-slate-900 line-clamp-2"
+                                      title={processingJobInfo.current_step || 'Preparando processamento...'}
+                                    >
                                       {processingJobInfo.current_step || 'Preparando processamento...'}
                                     </p>
                                   </div>
 
                                   <span
-                                    className={`inline-flex w-fit items-center gap-1 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] border ${
+                                    className={`inline-flex h-8 w-[150px] items-center justify-center gap-1 rounded-full px-3 text-[11px] font-black uppercase tracking-[0.1em] border sm:justify-self-end ${
                                       processingJobInfo.status === 'completed'
                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                         : processingJobInfo.status === 'error'
@@ -9198,37 +9201,74 @@ export default function AdvancedFlashcardPoC() {
               ref={flashcardsSectionRef}
               className="scroll-mt-24 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden"
             >
-              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div className="flex items-center gap-3">
-                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
-                    3
+              <div className="p-6 md:p-8 border-b border-slate-100">
+                <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+                  <div className="min-w-0 flex items-center gap-3">
+                    <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100 shrink-0">
+                      3
+                    </div>
+
+                    <div className="min-w-0">
+                      <h2 className="text-2xl font-bold text-slate-900 truncate">
+                        {flashcardsOrigin === 'library' ? 'Flashcards da pasta' : 'Flashcards'}
+                      </h2>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        {flashcards.length
+                          ? `${flashcards.length} cards disponíveis`
+                          : 'Use os botões abaixo para gerar ou carregar cards.'}
+                      </p>
+                    </div>
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">
-                    {flashcardsOrigin === 'library' ? 'Flashcards da pasta' : 'Flashcards'}
-                  </h2>
+
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start shrink-0">
+                    <button
+                      onClick={() => setFlashcardsViewMode('grid')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                        flashcardsViewMode === 'grid'
+                          ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      Grade
+                    </button>
+
+                    <button
+                      onClick={() => setFlashcardsViewMode('study')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                        flashcardsViewMode === 'study'
+                          ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      Estudo
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(220px,1.3fr)_minmax(150px,0.9fr)_90px_100px_minmax(160px,0.9fr)] gap-2">
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(false)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
+                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white shadow-sm shadow-red-100 transition-colors hover:bg-red-700 disabled:opacity-50"
+                    title="Usar salvos / gerar se faltar"
                   >
                     {isGeneratingSavedFlashcards ? (
-                      <Loader2 size={16} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin shrink-0" />
                     ) : (
-                      <Wand2 size={16} />
+                      <Wand2 size={16} className="shrink-0" />
                     )}
-                    Usar salvos / gerar se faltar
+                    <span className="truncate">Usar salvos / gerar se faltar</span>
                   </button>
 
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(true)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    title="Regenerar do original"
                   >
-                    <RefreshCw size={16} />
-                    Regenerar do original
+                    <RefreshCw size={16} className="shrink-0" />
+                    <span className="truncate">Regenerar</span>
                   </button>
 
                   <button
@@ -9241,10 +9281,11 @@ export default function AdvancedFlashcardPoC() {
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-11 min-w-0 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    title="Baixar PDF"
                   >
-                    <Download size={16} />
-                    PDF
+                    <Download size={16} className="shrink-0" />
+                    <span className="truncate">PDF</span>
                   </button>
 
                   <button
@@ -9257,47 +9298,25 @@ export default function AdvancedFlashcardPoC() {
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-11 min-w-0 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    title="Baixar Word"
                   >
-                    <FileText size={16} />
-                    Word
+                    <FileText size={16} className="shrink-0" />
+                    <span className="truncate">Word</span>
                   </button>
 
                   <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
-                    className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
+                    title="Analisar evidência"
                   >
                     {isAnalyzingEvidence ? (
-                      <Loader2 size={16} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin shrink-0" />
                     ) : (
-                      <Sparkles size={16} />
+                      <Sparkles size={16} className="shrink-0" />
                     )}
-                    Analisar evidência
-                  </button>
-                </div>
-
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                  <button
-                    onClick={() => setFlashcardsViewMode('grid')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                      flashcardsViewMode === 'grid'
-                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    Grade
-                  </button>
-
-                  <button
-                    onClick={() => setFlashcardsViewMode('study')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                      flashcardsViewMode === 'study'
-                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    Estudo
+                    <span className="truncate">Analisar evidência</span>
                   </button>
                 </div>
               </div>
