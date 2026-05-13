@@ -1339,28 +1339,218 @@ Gere obrigatoriamente entre ${minCards} e ${maxCards} flashcards, se houver cont
   };
 }
 
+function countTranscriptWords(text = '') {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function calculateFlashcardTargetByWordCount(wordCount = 0) {
+  if (wordCount >= 10000) return { min: 75, max: 120 };
+  if (wordCount >= 8000) return { min: 60, max: 100 };
+  if (wordCount >= 6000) return { min: 45, max: 80 };
+  if (wordCount >= 3000) return { min: 28, max: 55 };
+  if (wordCount >= 1200) return { min: 18, max: 35 };
+  return { min: 8, max: 18 };
+}
+
+function splitTranscriptIntoChunks(text = '', maxWordsPerChunk = 1200) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+
+  if (!words.length) return [];
+
+  const chunks = [];
+
+  for (let index = 0; index < words.length; index += maxWordsPerChunk) {
+    chunks.push(words.slice(index, index + maxWordsPerChunk).join(' '));
+  }
+
+  return chunks;
+}
+
+function extractFlashcardArrayFromGeminiPayload(parsed) {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return [];
+  }
+
+  const candidates = [
+    parsed.flashcards,
+    parsed.cards,
+    parsed.items,
+    parsed.data?.flashcards,
+    parsed.data?.cards,
+    parsed.result?.flashcards,
+    parsed.result?.cards,
+    parsed.output?.flashcards,
+    parsed.output?.cards,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+}
+
+function dedupeGeneratedFlashcards(cards = []) {
+  const seen = new Set();
+
+  return cards.filter((card) => {
+    const key = String(card.question || card.pergunta || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!key) return false;
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
+async function generateFlashcardsForChunk({
+  chunk,
+  chunkIndex,
+  totalChunks,
+  minCards,
+  maxCards,
+}) {
+  const prompt = `
+Você é um professor médico especialista em residência médica.
+
+Você receberá UM BLOCO de uma transcrição maior.
+
+Sua tarefa é criar flashcards de alta qualidade APENAS sobre este bloco.
+
+Retorne APENAS JSON válido, sem markdown, sem comentários e sem texto fora do JSON.
+
+Formato obrigatório:
+{
+  "flashcards": [
+    {
+      "question": "Pergunta objetiva e testável",
+      "answer": "Resposta completa, didática e clinicamente útil",
+      "difficulty": "easy | medium | hard",
+      "tags": ["tema", "subtema"],
+      "nota_preceptor": "Comentário curto explicando relevância clínica, pegadinha de prova ou raciocínio."
+    }
+  ]
+}
+
+Regras obrigatórias:
+- Este é o bloco ${chunkIndex + 1} de ${totalChunks}.
+- Gere de ${minCards} a ${maxCards} flashcards NESTE BLOCO.
+- Não gere menos de ${minCards}, exceto se o bloco for praticamente vazio ou sem conteúdo médico.
+- Cubra todos os conceitos testáveis do bloco.
+- Priorize: definição, fisiopatologia, clínica, diagnóstico, critérios, diferenciais, conduta, contraindicação, complicações, prognóstico, pegadinhas e raciocínio clínico.
+- Cada flashcard deve cobrar uma ideia central.
+- Não resuma o bloco em poucos cards.
+- Não crie flashcards genéricos.
+- Não invente informação fora do bloco.
+- Use português do Brasil.
+- Use obrigatoriamente os campos "question" e "answer".
+- Não use "pergunta" e "resposta"; use "question" e "answer".
+
+Bloco da transcrição:
+${chunk}
+`.trim();
+
+  const errors = [];
+  const attempts = 3;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const result = await callGeminiWithFallback(
+        {
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text:
+                    attempt === 1
+                      ? prompt
+                      : `${prompt}
+
+ATENÇÃO: A tentativa anterior falhou ou gerou poucos flashcards.
+Retorne JSON puro válido.
+Gere obrigatoriamente de ${minCards} a ${maxCards} flashcards para este bloco, se houver conteúdo suficiente.
+Não compacte demais.`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: attempt === 1 ? 0.3 : 0.15,
+            responseMimeType: 'application/json',
+          },
+        },
+        GEMINI_FLASHCARD_MODELS
+      );
+
+      const parsed = parseGeminiJson(result.text);
+      const rawFlashcards = extractFlashcardArrayFromGeminiPayload(parsed);
+      const flashcards = normalizeGeneratedFlashcards(rawFlashcards);
+
+      if (flashcards.length < Math.max(3, Math.floor(minCards * 0.6))) {
+        errors.push(
+          `Tentativa ${attempt}: gerou poucos flashcards (${flashcards.length}/${minCards}).`
+        );
+        continue;
+      }
+
+      return {
+        flashcards,
+        modelUsed: result.modelUsed,
+      };
+    } catch (error) {
+      errors.push(`Tentativa ${attempt}: ${error.message}`);
+    }
+  }
+
+  console.warn(
+    `⚠️ Falha ou baixa geração no bloco ${chunkIndex + 1}/${totalChunks}: ${errors.join(' | ')}`
+  );
+
+  return {
+    flashcards: [],
+    modelUsed: '',
+  };
+}
+
 async function generateFlashcardsWithGemini(transcript) {
-  const wordCount = countWords(transcript);
-  const target = calculateFlashcardTarget(wordCount);
-  const chunks = splitTranscriptIntoWordChunks(transcript, 1800);
+  const wordCount = countTranscriptWords(transcript);
+  const target = calculateFlashcardTargetByWordCount(wordCount);
+  const chunks = splitTranscriptIntoChunks(transcript, 1200);
 
   if (!chunks.length) {
     throw new Error('Transcrição vazia para geração de flashcards.');
   }
 
   const totalChunks = chunks.length;
-  const minPerChunk = Math.max(8, Math.floor(target.min / totalChunks));
+
+  const minPerChunk = Math.max(7, Math.floor(target.min / totalChunks));
   const maxPerChunk = Math.max(minPerChunk + 3, Math.ceil(target.max / totalChunks));
 
   console.log(
-    `🧠 Gerando flashcards em ${totalChunks} blocos. Palavras: ${wordCount}. Meta: ${target.min}-${target.max}. Por bloco: ${minPerChunk}-${maxPerChunk}.`
+    `🧠 Gerando flashcards por blocos. Palavras: ${wordCount}. Blocos: ${totalChunks}. Meta final: ${target.min}-${target.max}. Meta por bloco: ${minPerChunk}-${maxPerChunk}.`
   );
 
   const allFlashcards = [];
   let modelUsed = '';
 
   for (let index = 0; index < chunks.length; index += 1) {
-    const result = await generateFlashcardsForTranscriptChunk({
+    console.log(`🧠 Gerando flashcards do bloco ${index + 1}/${totalChunks}...`);
+
+    const result = await generateFlashcardsForChunk({
       chunk: chunks[index],
       chunkIndex: index,
       totalChunks,
@@ -1379,15 +1569,17 @@ async function generateFlashcardsWithGemini(transcript) {
 
   const uniqueFlashcards = dedupeGeneratedFlashcards(allFlashcards);
 
-  if (!uniqueFlashcards.length) {
-    throw new Error('Gemini não retornou flashcards válidos.');
-  }
+  const absoluteMinimum = Math.max(10, Math.floor(target.min * 0.65));
 
-  if (uniqueFlashcards.length < Math.max(12, Math.floor(target.min * 0.6))) {
-    console.warn(
-      `⚠️ Quantidade de flashcards abaixo do esperado. Esperado mínimo aproximado: ${target.min}. Gerado: ${uniqueFlashcards.length}.`
+  if (uniqueFlashcards.length < absoluteMinimum) {
+    throw new Error(
+      `Geração insuficiente de flashcards. Esperado pelo menos ${absoluteMinimum} para ${wordCount} palavras; gerado ${uniqueFlashcards.length}.`
     );
   }
+
+  console.log(
+    `✅ Flashcards gerados: ${uniqueFlashcards.length}. Meta: ${target.min}-${target.max}. Palavras: ${wordCount}.`
+  );
 
   return {
     flashcards: uniqueFlashcards,
