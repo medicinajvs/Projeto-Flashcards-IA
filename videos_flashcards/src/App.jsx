@@ -57,6 +57,7 @@ import {
   Ear,
   Droplets,
   Syringe,
+  Plus,
 } from 'lucide-react';
 
 const HISTORY_ITEMS_PER_PAGE = 6;
@@ -111,6 +112,16 @@ function normalizeFlashcards(rawFlashcards) {
       id: card.id ?? `card-${index}`,
       question: card.question ?? card.pergunta ?? '',
       answer: card.answer ?? card.resposta ?? '',
+      questionHtml: card.questionHtml || card.question_html || '',
+      question_html: card.question_html || card.questionHtml || '',
+      answerHtml: card.answerHtml || card.answer_html || '',
+      answer_html: card.answer_html || card.answerHtml || '',
+      preceptorNoteHtml: card.preceptorNoteHtml || card.preceptor_note_html || '',
+      preceptor_note_html: card.preceptor_note_html || card.preceptorNoteHtml || '',
+      createdAt: card.createdAt || card.created_at || null,
+      created_at: card.created_at || card.createdAt || null,
+      updatedAt: card.updatedAt || card.updated_at || null,
+      updated_at: card.updated_at || card.updatedAt || null,
       preceptorNote:
         card.preceptorNote ??
         card.nota_preceptor ??
@@ -1039,6 +1050,47 @@ function FormattedAiText({ text, className = '' }) {
   );
 }
 
+function sanitizeFlashcardHtml(html = '') {
+  return String(html || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, '')
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/\shref\s*=\s*"javascript:[^"]*"/gi, '')
+    .replace(/\shref\s*=\s*'javascript:[^']*'/gi, '')
+    .replace(/\ssrc\s*=\s*"javascript:[^"]*"/gi, '')
+    .replace(/\ssrc\s*=\s*'javascript:[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+function RichFlashcardText({
+  html = '',
+  fallback = '',
+  className = '',
+}) {
+  const safeHtml = sanitizeFlashcardHtml(html);
+
+  if (safeHtml.trim()) {
+    return (
+      <div
+        className={className}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+
+  return (
+    <FormattedAiText
+      text={fallback}
+      className={className}
+    />
+  );
+}
+
 function ReadableTranscriptText({ text }) {
   const paragraphs = useMemo(() => {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
@@ -1581,6 +1633,130 @@ function PremiumRichTextEditor({
   );
 }
 
+function FlashcardRichTextEditor({
+  value = '',
+  onChange,
+  minHeight = 160,
+}) {
+  const editorRef = useRef(null);
+  const lastValueRef = useRef('');
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    const safeValue = String(value || '');
+
+    if (lastValueRef.current === safeValue) return;
+
+    editorRef.current.innerHTML = safeValue;
+    lastValueRef.current = safeValue;
+  }, [value]);
+
+  const syncEditor = () => {
+    if (!editorRef.current) return;
+
+    const html = editorRef.current.innerHTML;
+    lastValueRef.current = html;
+    onChange?.(html);
+  };
+
+  const runCommand = (command, commandValue = null) => {
+    if (!editorRef.current) return;
+
+    editorRef.current.focus();
+    document.execCommand(command, false, commandValue);
+
+    setTimeout(syncEditor, 0);
+  };
+
+  const askColor = () => {
+    const color = window.prompt('Cor do texto em HEX. Exemplo: #dc2626', '#dc2626');
+
+    if (!color) return;
+
+    runCommand('foreColor', color);
+  };
+
+  const askHighlight = () => {
+    const color = window.prompt('Cor do destaque em HEX. Exemplo: #fef08a', '#fef08a');
+
+    if (!color) return;
+
+    runCommand('hiliteColor', color);
+  };
+
+  const buttonClass =
+    'h-9 w-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900';
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('bold'); }}>
+          <Bold size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('italic'); }}>
+          <Italic size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('underline'); }}>
+          <Underline size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('strikeThrough'); }}>
+          <Strikethrough size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); askColor(); }}>
+          <span className="text-xs font-black">A</span>
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); askHighlight(); }}>
+          <Highlighter size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('insertUnorderedList'); }}>
+          <ListIcon size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('insertOrderedList'); }}>
+          <ListOrdered size={15} />
+        </button>
+
+        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('removeFormat'); }}>
+          <Eraser size={15} />
+        </button>
+      </div>
+
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={syncEditor}
+        onBlur={syncEditor}
+        className="px-4 py-3 text-sm leading-relaxed text-slate-700 outline-none focus:ring-2 focus:ring-red-100"
+        style={{ minHeight }}
+      />
+    </div>
+  );
+}
+
+function formatShortDateTime(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function AdvancedFlashcardPoC() {
   const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
   const GOOGLE_CALENDAR_CLIENT_ID = import.meta.env.VITE_GOOGLE_CALENDAR_CLIENT_ID || '';
@@ -1704,6 +1880,9 @@ export default function AdvancedFlashcardPoC() {
     tags: '',
     position: 1,
     aiProposition: '',
+    questionHtml: '',
+    answerHtml: '',
+    preceptorNoteHtml: '',
   });
   const [isSavingFlashcardEdit, setIsSavingFlashcardEdit] = useState(false);
   const [isUploadingFlashcardImage, setIsUploadingFlashcardImage] = useState(false);
@@ -1720,6 +1899,9 @@ export default function AdvancedFlashcardPoC() {
     difficulty: 'medium',
     tags: '',
     position: 1,
+    questionHtml: '',
+    answerHtml: '',
+    preceptorNoteHtml: '',
   });
   const [isSavingFlashcardList, setIsSavingFlashcardList] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
@@ -1732,6 +1914,9 @@ export default function AdvancedFlashcardPoC() {
     question: '',
     answer: '',
     preceptor_note: '',
+    question_html: '',
+    answer_html: '',
+    preceptor_note_html: '',
     difficulty: 'medium',
     deck_id: '',
   });
@@ -4350,10 +4535,31 @@ export default function AdvancedFlashcardPoC() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          cards: cardsToExport.map((card) => ({
+          cards: cardsToExport.map((card, index) => ({
+            position: Number(card.position || card.sort_order || index + 1),
+
             question: card.question,
             answer: card.answer,
-            preceptorNote: card.preceptorNote,
+            preceptorNote: card.preceptorNote || card.preceptor_note || '',
+
+            questionHtml: card.questionHtml || card.question_html || '',
+            question_html: card.question_html || card.questionHtml || '',
+
+            answerHtml: card.answerHtml || card.answer_html || '',
+            answer_html: card.answer_html || card.answerHtml || '',
+
+            preceptorNoteHtml: card.preceptorNoteHtml || card.preceptor_note_html || '',
+            preceptor_note_html: card.preceptor_note_html || card.preceptorNoteHtml || '',
+
+            imageUrl: card.imageUrl || card.image_url || '',
+            image_url: card.image_url || card.imageUrl || '',
+
+            questionImageUrl: card.questionImageUrl || card.question_image_url || '',
+            question_image_url: card.question_image_url || card.questionImageUrl || '',
+
+            answerImageUrl: card.answerImageUrl || card.answer_image_url || '',
+            answer_image_url: card.answer_image_url || card.answerImageUrl || '',
+
             specialty: card.specialty || currentSpecialty || selectedArchiveSpecialty || '',
             sub_specialty: card.sub_specialty || card.subSpecialty || selectedArchiveTopic || '',
             theme: card.theme || selectedArchiveTopic || '',
@@ -4492,6 +4698,12 @@ export default function AdvancedFlashcardPoC() {
       tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
       position: index + 1,
       aiProposition: card.aiProposition || card.cardInsights?.improvement || '',
+      questionHtml: card.questionHtml || card.question_html || plainTextToPremiumEditorHtml(card.question || ''),
+      answerHtml: card.answerHtml || card.answer_html || plainTextToPremiumEditorHtml(card.answer || ''),
+      preceptorNoteHtml:
+        card.preceptorNoteHtml ||
+        card.preceptor_note_html ||
+        plainTextToPremiumEditorHtml(card.preceptorNote || card.preceptor_note || ''),
     });
   };
 
@@ -4505,6 +4717,9 @@ export default function AdvancedFlashcardPoC() {
       tags: '',
       position: 1,
       aiProposition: '',
+      questionHtml: '',
+      answerHtml: '',
+      preceptorNoteHtml: '',
     });
   };
 
@@ -4545,6 +4760,12 @@ export default function AdvancedFlashcardPoC() {
         position: safePosition,
         aiProposition: editingFlashcardForm.aiProposition,
         ai_proposition: editingFlashcardForm.aiProposition,
+        questionHtml: editingFlashcardForm.questionHtml,
+        question_html: editingFlashcardForm.questionHtml,
+        answerHtml: editingFlashcardForm.answerHtml,
+        answer_html: editingFlashcardForm.answerHtml,
+        preceptorNoteHtml: editingFlashcardForm.preceptorNoteHtml,
+        preceptor_note_html: editingFlashcardForm.preceptorNoteHtml,
       };
 
       if (safePosition !== editingFlashcardIndex + 1) {
@@ -4569,6 +4790,12 @@ export default function AdvancedFlashcardPoC() {
             position: safePosition,
             aiProposition: editingFlashcardForm.aiProposition,
             ai_proposition: editingFlashcardForm.aiProposition,
+            questionHtml: editingFlashcardForm.questionHtml,
+            question_html: editingFlashcardForm.questionHtml,
+            answerHtml: editingFlashcardForm.answerHtml,
+            answer_html: editingFlashcardForm.answerHtml,
+            preceptorNoteHtml: editingFlashcardForm.preceptorNoteHtml,
+            preceptor_note_html: editingFlashcardForm.preceptorNoteHtml,
           },
         });
       }
@@ -4619,6 +4846,9 @@ export default function AdvancedFlashcardPoC() {
       difficulty: 'medium',
       tags: '',
       position: flashcards.length + 1,
+      questionHtml: '',
+      answerHtml: '',
+      preceptorNoteHtml: '',
     });
   };
 
@@ -4631,6 +4861,9 @@ export default function AdvancedFlashcardPoC() {
       difficulty: 'medium',
       tags: '',
       position: 1,
+      questionHtml: '',
+      answerHtml: '',
+      preceptorNoteHtml: '',
     });
   };
 
@@ -4662,6 +4895,12 @@ export default function AdvancedFlashcardPoC() {
         position: Number(newFlashcardForm.position || flashcards.length + 1),
         aiProposition: '',
         ai_proposition: '',
+        questionHtml: newFlashcardForm.questionHtml,
+        question_html: newFlashcardForm.questionHtml,
+        answerHtml: newFlashcardForm.answerHtml,
+        answer_html: newFlashcardForm.answerHtml,
+        preceptorNoteHtml: newFlashcardForm.preceptorNoteHtml,
+        preceptor_note_html: newFlashcardForm.preceptorNoteHtml,
       };
 
       const nextFlashcards = [...flashcards];
@@ -6426,6 +6665,12 @@ export default function AdvancedFlashcardPoC() {
       question: card.question || '',
       answer: card.answer || '',
       preceptor_note: card.preceptor_note || '',
+      question_html: card.question_html || card.questionHtml || plainTextToPremiumEditorHtml(card.question || ''),
+      answer_html: card.answer_html || card.answerHtml || plainTextToPremiumEditorHtml(card.answer || ''),
+      preceptor_note_html:
+        card.preceptor_note_html ||
+        card.preceptorNoteHtml ||
+        plainTextToPremiumEditorHtml(card.preceptor_note || ''),
       difficulty: card.difficulty || 'medium',
       deck_id: card.deck_id || '',
     });
@@ -6439,6 +6684,9 @@ export default function AdvancedFlashcardPoC() {
       preceptor_note: '',
       difficulty: 'medium',
       deck_id: '',
+      question_html: '',
+      answer_html: '',
+      preceptor_note_html: '',
     });
   };
 
@@ -6460,6 +6708,9 @@ export default function AdvancedFlashcardPoC() {
             preceptor_note: editingLibraryCardForm.preceptor_note,
             difficulty: editingLibraryCardForm.difficulty,
             deck_id: editingLibraryCardForm.deck_id || null,
+            question_html: editingLibraryCardForm.question_html,
+            answer_html: editingLibraryCardForm.answer_html,
+            preceptor_note_html: editingLibraryCardForm.preceptor_note_html,
           }),
         }
       );
@@ -6483,6 +6734,88 @@ export default function AdvancedFlashcardPoC() {
       setError(`Falha ao salvar edição do flashcard: ${err.message}`);
     } finally {
       setIsSavingLibraryCardEdit(false);
+    }
+  };
+
+  const uploadLibraryCardFieldImage = async (cardId, file, field = 'question') => {
+    if (!cardId || !file) return;
+
+    const isQuestion = field === 'question';
+
+    try {
+      setIsUploadingFlashcardImage(true);
+      setError(null);
+
+      const contentType = file.type || 'image/png';
+
+      const uploadResponse = await fetch(
+        `${API_BASE}/api/flashcards-library/${cardId}/image-upload-url`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: `${isQuestion ? 'pergunta' : 'resposta'}-${file.name || 'imagem.png'}`,
+            contentType,
+          }),
+        }
+      );
+
+      const uploadData = await parseResponseSafely(uploadResponse);
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadData.error || 'Erro ao preparar upload da imagem.');
+      }
+
+      const putResponse = await fetch(uploadData.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+
+      if (!putResponse.ok) {
+        throw new Error('Falha ao enviar imagem para o R2.');
+      }
+
+      const patchResponse = await fetch(`${API_BASE}/api/flashcards-library/${cardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          isQuestion
+            ? {
+                question_image_url: uploadData.publicUrl || '',
+                question_image_object_key: uploadData.key || '',
+              }
+            : {
+                answer_image_url: uploadData.publicUrl || '',
+                answer_image_object_key: uploadData.key || '',
+              }
+        ),
+      });
+
+      const patchData = await parseResponseSafely(patchResponse);
+
+      if (!patchResponse.ok) {
+        throw new Error(patchData.error || 'Erro ao salvar imagem no card.');
+      }
+
+      setEditingLibraryCardForm((prev) => ({
+        ...prev,
+        ...(isQuestion
+          ? {
+              question_image_url: uploadData.publicUrl || '',
+              question_image_object_key: uploadData.key || '',
+            }
+          : {
+              answer_image_url: uploadData.publicUrl || '',
+              answer_image_object_key: uploadData.key || '',
+            }),
+      }));
+
+      await refreshLibraryData();
+    } catch (err) {
+      setError(`Falha ao enviar imagem da ${isQuestion ? 'pergunta' : 'resposta'}: ${err.message}`);
+    } finally {
+      setIsUploadingFlashcardImage(false);
     }
   };
 
@@ -6763,6 +7096,39 @@ export default function AdvancedFlashcardPoC() {
       await refreshLibraryData();
     } catch (err) {
       setError(`Falha ao mover pasta: ${err.message}`);
+    }
+  };
+
+  const clearArchiveFolder = async ({ type, id, name, cards = [] }) => {
+    const confirmed = window.confirm(
+      `Limpar "${name}"? A pasta continuará existindo, mas os flashcards dela serão arquivados.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError(null);
+
+      if (type === 'deck' && id && id !== 'sem-deck') {
+        const response = await fetch(`${API_BASE}/api/flashcard-decks/${id}/clear-cards`, {
+          method: 'POST',
+        });
+
+        const data = await parseResponseSafely(response);
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao limpar pasta.');
+        }
+      } else if (cards.length) {
+        await patchLibraryCardsBulk(cards, () => ({
+          is_archived: true,
+        }));
+      }
+
+      await refreshLibraryData();
+      clearArchiveSelection();
+    } catch (err) {
+      setError(`Falha ao limpar pasta: ${err.message}`);
     }
   };
 
@@ -9447,6 +9813,15 @@ export default function AdvancedFlashcardPoC() {
                   </button>
 
                   <button
+                    type="button"
+                    onClick={openCreateFlashcardModal}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors"
+                  >
+                    <Plus size={16} />
+                    Novo flashcard
+                  </button>
+
+                  <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
                     className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
@@ -9530,7 +9905,7 @@ export default function AdvancedFlashcardPoC() {
                               <label className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
                                 {isUploadingFlashcardImage && flashcardActionIndex === index
                                   ? 'Enviando...'
-                                  : 'Imagem manual'}
+                                  : 'Imagem da pergunta'}
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -9539,7 +9914,24 @@ export default function AdvancedFlashcardPoC() {
                                   onChange={(event) => {
                                     const file = event.target.files?.[0];
                                     event.target.value = '';
-                                    uploadManualFlashcardImage(index, file);
+                                    uploadFlashcardFieldImage(index, file, 'question');
+                                  }}
+                                />
+                              </label>
+
+                              <label className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
+                                {isUploadingFlashcardImage && flashcardActionIndex === index
+                                  ? 'Enviando...'
+                                  : 'Imagem da resposta'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={isUploadingFlashcardImage}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = '';
+                                    uploadFlashcardFieldImage(index, file, 'answer');
                                   }}
                                 />
                               </label>
@@ -9567,9 +9959,27 @@ export default function AdvancedFlashcardPoC() {
                               </button>
                             </div>
 
-                            <h3 className="text-lg font-bold text-slate-900 mb-6 leading-snug">
-                              {card.question}
-                            </h3>
+                            <RichFlashcardText
+                              html={card.questionHtml || card.question_html}
+                              fallback={card.question}
+                              className="text-lg font-bold text-slate-900 mb-6 leading-snug [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                            />
+
+                            {card.questionImageUrl ? (
+                              <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(card.questionImageUrl, '_blank', 'noopener,noreferrer')}
+                                  className="block w-full"
+                                >
+                                  <img
+                                    src={card.questionImageUrl}
+                                    alt={`Imagem da pergunta do flashcard ${index + 1}`}
+                                    className="w-full max-h-[280px] rounded-xl object-contain bg-black"
+                                  />
+                                </button>
+                              </div>
+                            ) : null}
 
                             <hr className="border-slate-100 mb-5" />
 
@@ -9577,20 +9987,21 @@ export default function AdvancedFlashcardPoC() {
                               <span className="text-slate-400 text-xs font-bold tracking-widest mb-2 uppercase">
                                 Resposta
                               </span>
-                              <FormattedAiText
-                                text={card.answer}
-                                className="text-slate-600 text-sm leading-relaxed mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
+                              <RichFlashcardText
+                                html={card.answerHtml || card.answer_html}
+                                fallback={card.answer}
+                                className="text-slate-600 text-sm leading-relaxed mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
                               />
 
-                              {card.imageUrl ? (
+                              {card.answerImageUrl || card.imageUrl ? (
                                 <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <button
                                     type="button"
-                                    onClick={() => window.open(card.imageUrl, '_blank', 'noopener,noreferrer')}
+                                    onClick={() => window.open(card.answerImageUrl || card.imageUrl, '_blank', 'noopener,noreferrer')}
                                     className="block w-full"
                                   >
                                     <img
-                                      src={card.imageUrl}
+                                      src={card.answerImageUrl || card.imageUrl}
                                       alt={`Imagem explicativa do flashcard ${index + 1}`}
                                       className="w-full max-h-[360px] rounded-xl object-contain bg-black"
                                     />
@@ -9752,9 +10163,21 @@ export default function AdvancedFlashcardPoC() {
                                 <Lightbulb size={32} />
                               </div>
               
-                              <h3 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight">
-                                {currentStudyCard.question}
-                              </h3>
+                              <RichFlashcardText
+                                html={currentStudyCard.questionHtml || currentStudyCard.question_html}
+                                fallback={currentStudyCard.question}
+                                className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                              />
+
+                              {currentStudyCard.questionImageUrl || currentStudyCard.question_image_url ? (
+                                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <img
+                                    src={currentStudyCard.questionImageUrl || currentStudyCard.question_image_url}
+                                    alt="Imagem da pergunta do flashcard atual"
+                                    className="max-h-[180px] w-full rounded-xl object-contain bg-black"
+                                  />
+                                </div>
+                              ) : null}
                               <p className="absolute bottom-6 text-slate-400 text-sm flex items-center gap-2">
                                 <RefreshCw
                                   size={14}
@@ -9772,16 +10195,25 @@ export default function AdvancedFlashcardPoC() {
                                 </span>
                               </div>
 
-                              <FormattedAiText
-                                text={currentStudyCard.answer}
-                                className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
+                              <RichFlashcardText
+                                html={currentStudyCard.answerHtml || currentStudyCard.answer_html}
+                                fallback={currentStudyCard.answer}
+                                className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
                               />
 
-                              {currentStudyCard.imageUrl ? (
+                              {currentStudyCard.answerImageUrl ||
+                              currentStudyCard.answer_image_url ||
+                              currentStudyCard.imageUrl ||
+                              currentStudyCard.image_url ? (
                                 <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <img
-                                    src={currentStudyCard.imageUrl}
-                                    alt="Imagem explicativa do flashcard atual"
+                                    src={
+                                      currentStudyCard.answerImageUrl ||
+                                      currentStudyCard.answer_image_url ||
+                                      currentStudyCard.imageUrl ||
+                                      currentStudyCard.image_url
+                                    }
+                                    alt="Imagem da resposta do flashcard atual"
                                     className="w-full max-h-[320px] rounded-xl object-contain bg-black"
                                   />
                                 </div>
@@ -11831,6 +12263,27 @@ export default function AdvancedFlashcardPoC() {
                       <p className="text-sm text-slate-500 mt-1">
                         {selectedArchiveCards.length} flashcards nesta seleção.
                       </p>
+
+                      {selectedArchiveCards.length > 0 ? (
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          Primeiro card:{' '}
+                          {formatShortDateTime(
+                            selectedArchiveCards
+                              .map((card) => card.created_at || card.createdAt)
+                              .filter(Boolean)
+                              .sort()[0]
+                          ) || 'data não registrada'}
+                          {' · '}
+                          Última atualização:{' '}
+                          {formatShortDateTime(
+                            selectedArchiveCards
+                              .map((card) => card.updated_at || card.updatedAt || card.created_at || card.createdAt)
+                              .filter(Boolean)
+                              .sort()
+                              .at(-1)
+                          ) || 'data não registrada'}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -11959,6 +12412,23 @@ export default function AdvancedFlashcardPoC() {
                           <button
                             type="button"
                             onClick={() =>
+                              clearArchiveFolder({
+                                type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
+                                id: selectedArchiveDeckId || '',
+                                name: selectedArchiveDeckId
+                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  : selectedArchiveTopic || selectedArchiveSpecialty,
+                                cards: selectedArchiveCards,
+                              })
+                            }
+                            className="px-4 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100"
+                          >
+                            Limpar pasta
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
                               deleteArchiveFolder({
                                 type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
                                 id: selectedArchiveDeckId || '',
@@ -12004,6 +12474,10 @@ export default function AdvancedFlashcardPoC() {
 
                                 <p className="text-xs text-slate-500 mt-2 line-clamp-2">
                                   {card.answer || 'Resposta não preenchida.'}
+                                </p>
+
+                                <p className="text-[11px] text-slate-400 mt-3">
+                                  Criado em {formatShortDateTime(card.created_at || card.createdAt) || 'data não registrada'}
                                 </p>
                               </button>
                             ))}
@@ -12139,7 +12613,7 @@ export default function AdvancedFlashcardPoC() {
           </div>
         ) : null}
 
-          {previewLibraryCard ? (
+        {previewLibraryCard ? (
           <div className="fixed inset-0 z-[80] bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="w-full max-w-3xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
@@ -12147,9 +12621,11 @@ export default function AdvancedFlashcardPoC() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500">
                     Prévia do flashcard
                   </p>
-                  <h3 className="text-xl font-black text-slate-900 mt-1">
-                    {previewLibraryCard.question}
-                  </h3>
+                  <RichFlashcardText
+                    html={previewLibraryCard.question_html || previewLibraryCard.questionHtml}
+                    fallback={previewLibraryCard.question}
+                    className="text-xl font-black text-slate-900 mt-1 [&_strong]:font-black [&_em]:italic [&_u]:underline"
+                  />
                 </div>
 
                 <button
@@ -12160,16 +12636,45 @@ export default function AdvancedFlashcardPoC() {
                 </button>
               </div>
 
+              {previewLibraryCard.question_image_url || previewLibraryCard.questionImageUrl ? (
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                  <img
+                    src={previewLibraryCard.question_image_url || previewLibraryCard.questionImageUrl}
+                    alt="Imagem da pergunta"
+                    className="w-full max-h-[260px] rounded-xl object-contain bg-black"
+                  />
+                </div>
+              ) : null}
+
               <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
                 <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
                   <p className="text-xs font-black uppercase text-slate-400 mb-2">
                     Resposta
                   </p>
-                  <FormattedAiText
-                    text={previewLibraryCard.answer}
-                    className="text-sm text-slate-700 leading-relaxed [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900"
+                  <RichFlashcardText
+                    html={previewLibraryCard.answer_html || previewLibraryCard.answerHtml}
+                    fallback={previewLibraryCard.answer}
+                    className="text-sm text-slate-700 leading-relaxed [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
                   />
                 </div>
+
+                {previewLibraryCard.answer_image_url ||
+                previewLibraryCard.answerImageUrl ||
+                previewLibraryCard.image_url ||
+                previewLibraryCard.imageUrl ? (
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <img
+                      src={
+                        previewLibraryCard.answer_image_url ||
+                        previewLibraryCard.answerImageUrl ||
+                        previewLibraryCard.image_url ||
+                        previewLibraryCard.imageUrl
+                      }
+                      alt="Imagem da resposta"
+                      className="w-full max-h-[300px] rounded-xl object-contain bg-black"
+                    />
+                  </div>
+                ) : null}
 
                 {previewLibraryCard.preceptor_note ? (
                   <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
@@ -12220,6 +12725,192 @@ export default function AdvancedFlashcardPoC() {
                 >
                   Editar flashcard
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {editingLibraryCardId ? (
+          <div className="fixed inset-0 z-[85] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white border border-slate-200 shadow-2xl">
+              <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
+                    Biblioteca
+                  </p>
+                  <h3 className="text-xl font-black text-slate-900">
+                    Editar flashcard do acervo
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cancelEditingLibraryCard}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <label className="block">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                    Pergunta
+                  </span>
+
+                  <FlashcardRichTextEditor
+                    value={
+                      editingLibraryCardForm.question_html ||
+                      plainTextToPremiumEditorHtml(editingLibraryCardForm.question)
+                    }
+                    minHeight={140}
+                    onChange={(html) =>
+                      setEditingLibraryCardForm((prev) => ({
+                        ...prev,
+                        question_html: html,
+                        question: premiumEditorHtmlToText(html),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="inline-flex w-fit cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  Imagem da pergunta
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="hidden"
+                    disabled={isUploadingFlashcardImage}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      uploadLibraryCardFieldImage(editingLibraryCardId, file, 'question');
+                    }}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                    Resposta
+                  </span>
+
+                  <FlashcardRichTextEditor
+                    value={
+                      editingLibraryCardForm.answer_html ||
+                      plainTextToPremiumEditorHtml(editingLibraryCardForm.answer)
+                    }
+                    minHeight={220}
+                    onChange={(html) =>
+                      setEditingLibraryCardForm((prev) => ({
+                        ...prev,
+                        answer_html: html,
+                        answer: premiumEditorHtmlToText(html),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="inline-flex w-fit cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  Imagem da resposta
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="hidden"
+                    disabled={isUploadingFlashcardImage}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      uploadLibraryCardFieldImage(editingLibraryCardId, file, 'answer');
+                    }}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                    Nota do preceptor
+                  </span>
+
+                  <FlashcardRichTextEditor
+                    value={
+                      editingLibraryCardForm.preceptor_note_html ||
+                      plainTextToPremiumEditorHtml(editingLibraryCardForm.preceptor_note)
+                    }
+                    minHeight={120}
+                    onChange={(html) =>
+                      setEditingLibraryCardForm((prev) => ({
+                        ...prev,
+                        preceptor_note_html: html,
+                        preceptor_note: premiumEditorHtmlToText(html),
+                      }))
+                    }
+                  />
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Dificuldade
+                    </span>
+
+                    <select
+                      value={editingLibraryCardForm.difficulty}
+                      onChange={(event) =>
+                        setEditingLibraryCardForm((prev) => ({
+                          ...prev,
+                          difficulty: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="easy">Fácil</option>
+                      <option value="medium">Médio</option>
+                      <option value="hard">Difícil</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Deck
+                    </span>
+
+                    <select
+                      value={editingLibraryCardForm.deck_id || ''}
+                      onChange={(event) =>
+                        setEditingLibraryCardForm((prev) => ({
+                          ...prev,
+                          deck_id: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="">Sem deck</option>
+                      {libraryDecks.map((deck) => (
+                        <option key={deck.id} value={deck.id}>
+                          {deck.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={cancelEditingLibraryCard}
+                    className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={saveLibraryCardEdit}
+                    disabled={isSavingLibraryCardEdit}
+                    className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {isSavingLibraryCardEdit ? 'Salvando...' : 'Salvar alterações'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -12728,9 +13419,21 @@ export default function AdvancedFlashcardPoC() {
                             {currentLibraryStudyResponseMeta.label}
                           </span>
                         </div>
-                        <h3 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight">
-                          {currentLibraryStudyCard.question}
-                        </h3>
+                        <RichFlashcardText
+                          html={currentLibraryStudyCard.question_html || currentLibraryStudyCard.questionHtml}
+                          fallback={currentLibraryStudyCard.question}
+                          className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                        />
+
+                        {currentLibraryStudyCard.question_image_url || currentLibraryStudyCard.questionImageUrl ? (
+                          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <img
+                              src={currentLibraryStudyCard.question_image_url || currentLibraryStudyCard.questionImageUrl}
+                              alt="Imagem da pergunta do flashcard da biblioteca"
+                              className="max-h-[180px] w-full rounded-xl object-contain bg-black"
+                            />
+                          </div>
+                        ) : null}
                         <p className="absolute bottom-6 text-slate-400 text-sm">Clique para virar</p>
                       </div>
 
@@ -12753,18 +13456,39 @@ export default function AdvancedFlashcardPoC() {
 
                         <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center">
                           <div className="w-full max-w-xl mx-auto text-center">
-                            <FormattedAiText
-                              text={currentLibraryStudyCard.answer}
-                              className="text-slate-700 text-lg leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_ul]:text-left [&_ol]:text-left"
+                            <RichFlashcardText
+                              html={currentLibraryStudyCard.answer_html || currentLibraryStudyCard.answerHtml}
+                              fallback={currentLibraryStudyCard.answer}
+                              className="text-slate-700 text-lg leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline [&_ul]:text-left [&_ol]:text-left"
                             />
 
-                            {currentLibraryStudyCard.preceptor_note && (
-                              <div className="mt-8 bg-amber-50 border border-amber-100 rounded-2xl p-5 text-left">
-                                <p className="text-amber-900 text-sm leading-relaxed">
-                                  {currentLibraryStudyCard.preceptor_note}
-                                </p>
+                            {currentLibraryStudyCard.answer_image_url ||
+                            currentLibraryStudyCard.answerImageUrl ||
+                            currentLibraryStudyCard.image_url ||
+                            currentLibraryStudyCard.imageUrl ? (
+                              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <img
+                                  src={
+                                    currentLibraryStudyCard.answer_image_url ||
+                                    currentLibraryStudyCard.answerImageUrl ||
+                                    currentLibraryStudyCard.image_url ||
+                                    currentLibraryStudyCard.imageUrl
+                                  }
+                                  alt="Imagem da resposta do flashcard da biblioteca"
+                                  className="w-full max-h-[260px] rounded-xl object-contain bg-black"
+                                />
                               </div>
-                            )}
+                            ) : null}
+
+                            {currentLibraryStudyCard.preceptor_note || currentLibraryStudyCard.preceptor_note_html ? (
+                              <div className="mt-8 bg-amber-50 border border-amber-100 rounded-2xl p-5 text-left">
+                                <RichFlashcardText
+                                  html={currentLibraryStudyCard.preceptor_note_html || currentLibraryStudyCard.preceptorNoteHtml}
+                                  fallback={currentLibraryStudyCard.preceptor_note}
+                                  className="text-amber-900 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -14257,6 +14981,166 @@ export default function AdvancedFlashcardPoC() {
         </div>
         )}
 
+        {isCreatingFlashcard ? (
+          <div className="fixed inset-0 z-[80] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white border border-slate-200 shadow-2xl">
+              <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
+                    Novo flashcard
+                  </p>
+                  <h3 className="text-xl font-black text-slate-900">
+                    Criar flashcard do zero
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeCreateFlashcardModal}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Pergunta
+                    </span>
+
+                    <FlashcardRichTextEditor
+                      value={newFlashcardForm.questionHtml || plainTextToPremiumEditorHtml(newFlashcardForm.question)}
+                      minHeight={140}
+                      onChange={(html) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          questionHtml: html,
+                          question: premiumEditorHtmlToText(html),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Resposta
+                    </span>
+
+                    <FlashcardRichTextEditor
+                      value={newFlashcardForm.answerHtml || plainTextToPremiumEditorHtml(newFlashcardForm.answer)}
+                      minHeight={220}
+                      onChange={(html) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          answerHtml: html,
+                          answer: premiumEditorHtmlToText(html),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Nota do preceptor
+                    </span>
+
+                    <FlashcardRichTextEditor
+                      value={newFlashcardForm.preceptorNoteHtml || plainTextToPremiumEditorHtml(newFlashcardForm.preceptorNote)}
+                      minHeight={120}
+                      onChange={(html) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          preceptorNoteHtml: html,
+                          preceptorNote: premiumEditorHtmlToText(html),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Dificuldade
+                    </span>
+
+                    <select
+                      value={newFlashcardForm.difficulty}
+                      onChange={(event) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          difficulty: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="easy">Fácil</option>
+                      <option value="medium">Médio</option>
+                      <option value="hard">Difícil</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Posição
+                    </span>
+
+                    <input
+                      type="number"
+                      min="1"
+                      max={flashcards.length + 1}
+                      value={newFlashcardForm.position}
+                      onChange={(event) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          position: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+
+                  <label className="md:col-span-2">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                      Tags, separadas por vírgula
+                    </span>
+
+                    <input
+                      value={newFlashcardForm.tags}
+                      onChange={(event) =>
+                        setNewFlashcardForm((prev) => ({
+                          ...prev,
+                          tags: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeCreateFlashcardModal}
+                    className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={createFlashcardFromScratch}
+                    disabled={isSavingFlashcardList}
+                    className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {isSavingFlashcardList ? 'Criando...' : 'Criar flashcard'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {editingFlashcardIndex !== null && (
           <div className="fixed inset-0 z-[90] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center px-4 py-8">
             <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl border border-slate-200">
@@ -14303,16 +15187,16 @@ export default function AdvancedFlashcardPoC() {
                       Pergunta
                     </span>
 
-                    <textarea
-                      value={editingFlashcardForm.question}
-                      onChange={(event) =>
+                    <FlashcardRichTextEditor
+                      value={editingFlashcardForm.questionHtml || plainTextToPremiumEditorHtml(editingFlashcardForm.question)}
+                      minHeight={140}
+                      onChange={(html) =>
                         setEditingFlashcardForm((prev) => ({
                           ...prev,
-                          question: event.target.value,
+                          questionHtml: html,
+                          question: premiumEditorHtmlToText(html),
                         }))
                       }
-                      rows={3}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
 
@@ -14321,16 +15205,16 @@ export default function AdvancedFlashcardPoC() {
                       Resposta
                     </span>
 
-                    <textarea
-                      value={editingFlashcardForm.answer}
-                      onChange={(event) =>
+                    <FlashcardRichTextEditor
+                      value={editingFlashcardForm.answerHtml || plainTextToPremiumEditorHtml(editingFlashcardForm.answer)}
+                      minHeight={240}
+                      onChange={(html) =>
                         setEditingFlashcardForm((prev) => ({
                           ...prev,
-                          answer: event.target.value,
+                          answerHtml: html,
+                          answer: premiumEditorHtmlToText(html),
                         }))
                       }
-                      rows={7}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
 
@@ -14339,16 +15223,16 @@ export default function AdvancedFlashcardPoC() {
                       Nota do preceptor
                     </span>
 
-                    <textarea
-                      value={editingFlashcardForm.preceptorNote}
-                      onChange={(event) =>
+                    <FlashcardRichTextEditor
+                      value={editingFlashcardForm.preceptorNoteHtml || plainTextToPremiumEditorHtml(editingFlashcardForm.preceptorNote)}
+                      minHeight={140}
+                      onChange={(html) =>
                         setEditingFlashcardForm((prev) => ({
                           ...prev,
-                          preceptorNote: event.target.value,
+                          preceptorNoteHtml: html,
+                          preceptorNote: premiumEditorHtmlToText(html),
                         }))
                       }
-                      rows={4}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
 

@@ -13,6 +13,8 @@ const {
   AlignmentType,
   HeadingLevel,
   PageBreak,
+  ImageRun,
+  UnderlineType,
 } = require('docx');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
@@ -438,6 +440,12 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
   return {
     question: card.question ?? card.pergunta ?? '',
     answer: card.answer ?? card.resposta ?? '',
+    question_html: card.questionHtml ?? card.question_html ?? null,
+    answer_html: card.answerHtml ?? card.answer_html ?? null,
+    preceptor_note_html:
+      card.preceptorNoteHtml ??
+      card.preceptor_note_html ??
+      null,
     preceptor_note:
       card.preceptorNote ??
       card.nota_preceptor ??
@@ -452,6 +460,33 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
 
     image_url: card.imageUrl ?? card.image_url ?? null,
     image_object_key: card.imageObjectKey ?? card.image_object_key ?? null,
+    question_image_url:
+      card.questionImageUrl ??
+      card.question_image_url ??
+      card.frontImageUrl ??
+      card.front_image_url ??
+      null,
+
+    question_image_object_key:
+      card.questionImageObjectKey ??
+      card.question_image_object_key ??
+      card.frontImageObjectKey ??
+      card.front_image_object_key ??
+      null,
+
+    answer_image_url:
+      card.answerImageUrl ??
+      card.answer_image_url ??
+      card.backImageUrl ??
+      card.back_image_url ??
+      null,
+
+    answer_image_object_key:
+      card.answerImageObjectKey ??
+      card.answer_image_object_key ??
+      card.backImageObjectKey ??
+      card.back_image_object_key ??
+      null,
     image_source: card.imageSource ?? card.image_source ?? null,
     image_prompt: card.imagePrompt ?? card.image_prompt ?? null,
     image_generated_at: card.imageGeneratedAt ?? card.image_generated_at ?? null,
@@ -727,6 +762,19 @@ async function updateLibraryCard(cardId, updates = {}) {
   if (updates.question !== undefined) payload.question = updates.question;
   if (updates.answer !== undefined) payload.answer = updates.answer;
   if (updates.preceptor_note !== undefined) payload.preceptor_note = updates.preceptor_note;
+  if (updates.question_html !== undefined) payload.question_html = updates.question_html || null;
+  if (updates.questionHtml !== undefined) payload.question_html = updates.questionHtml || null;
+
+  if (updates.answer_html !== undefined) payload.answer_html = updates.answer_html || null;
+  if (updates.answerHtml !== undefined) payload.answer_html = updates.answerHtml || null;
+
+  if (updates.preceptor_note_html !== undefined) {
+    payload.preceptor_note_html = updates.preceptor_note_html || null;
+  }
+
+  if (updates.preceptorNoteHtml !== undefined) {
+    payload.preceptor_note_html = updates.preceptorNoteHtml || null;
+  }
   if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
   if (updates.specialty !== undefined) payload.specialty = updates.specialty || null;
   if (updates.sub_specialty !== undefined) payload.sub_specialty = updates.sub_specialty || null;
@@ -735,7 +783,37 @@ async function updateLibraryCard(cardId, updates = {}) {
   if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
   if (updates.image_url !== undefined) payload.image_url = updates.image_url || null;
   if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl || null;
+  if (updates.question_image_url !== undefined) {
+    payload.question_image_url = updates.question_image_url || null;
+  }
 
+  if (updates.questionImageUrl !== undefined) {
+    payload.question_image_url = updates.questionImageUrl || null;
+  }
+
+  if (updates.question_image_object_key !== undefined) {
+    payload.question_image_object_key = updates.question_image_object_key || null;
+  }
+
+  if (updates.questionImageObjectKey !== undefined) {
+    payload.question_image_object_key = updates.questionImageObjectKey || null;
+  }
+
+  if (updates.answer_image_url !== undefined) {
+    payload.answer_image_url = updates.answer_image_url || null;
+  }
+
+  if (updates.answerImageUrl !== undefined) {
+    payload.answer_image_url = updates.answerImageUrl || null;
+  }
+
+  if (updates.answer_image_object_key !== undefined) {
+    payload.answer_image_object_key = updates.answer_image_object_key || null;
+  }
+
+  if (updates.answerImageObjectKey !== undefined) {
+    payload.answer_image_object_key = updates.answerImageObjectKey || null;
+  }
   if (updates.image_object_key !== undefined) {
     payload.image_object_key = updates.image_object_key || null;
   }
@@ -894,6 +972,11 @@ async function saveFlashcardsToLibrary({
       question: card.question,
       answer: card.answer,
       preceptor_note: card.preceptor_note,
+
+      question_html: card.question_html || null,
+      answer_html: card.answer_html || null,
+      preceptor_note_html: card.preceptor_note_html || null,
+
       difficulty: card.difficulty,
       specialty: card.specialty || specialty || null,
       sub_specialty: card.sub_specialty || subSpecialty || null,
@@ -903,6 +986,13 @@ async function saveFlashcardsToLibrary({
 
       image_url: card.image_url || null,
       image_object_key: card.image_object_key || null,
+
+      question_image_url: card.question_image_url || null,
+      question_image_object_key: card.question_image_object_key || null,
+
+      answer_image_url: card.answer_image_url || null,
+      answer_image_object_key: card.answer_image_object_key || null,
+
       image_source: card.image_source || null,
       image_prompt: card.image_prompt || null,
       image_generated_at: card.image_generated_at || null,
@@ -1327,6 +1417,26 @@ function normalizeFlashcardPatch(updates = {}) {
 
   if (updates.question !== undefined) payload.question = String(updates.question || '').trim();
   if (updates.answer !== undefined) payload.answer = String(updates.answer || '').trim();
+  if (updates.questionHtml !== undefined || updates.question_html !== undefined) {
+    const value = updates.questionHtml ?? updates.question_html ?? '';
+    payload.questionHtml = value || '';
+    payload.question_html = value || '';
+  }
+
+  if (updates.answerHtml !== undefined || updates.answer_html !== undefined) {
+    const value = updates.answerHtml ?? updates.answer_html ?? '';
+    payload.answerHtml = value || '';
+    payload.answer_html = value || '';
+  }
+
+  if (
+    updates.preceptorNoteHtml !== undefined ||
+    updates.preceptor_note_html !== undefined
+  ) {
+    const value = updates.preceptorNoteHtml ?? updates.preceptor_note_html ?? '';
+    payload.preceptorNoteHtml = value || '';
+    payload.preceptor_note_html = value || '';
+  }
 
   if (updates.preceptorNote !== undefined || updates.preceptor_note !== undefined) {
     const value = updates.preceptorNote ?? updates.preceptor_note ?? '';
@@ -1347,6 +1457,37 @@ function normalizeFlashcardPatch(updates = {}) {
     const value = updates.imageObjectKey ?? updates.image_object_key ?? '';
     payload.imageObjectKey = value || '';
     payload.image_object_key = value || '';
+  }
+
+  if (updates.questionImageUrl !== undefined || updates.question_image_url !== undefined) {
+    const value = updates.questionImageUrl ?? updates.question_image_url ?? '';
+    payload.questionImageUrl = value || '';
+    payload.question_image_url = value || '';
+  }
+
+  if (
+    updates.questionImageObjectKey !== undefined ||
+    updates.question_image_object_key !== undefined
+  ) {
+    const value =
+      updates.questionImageObjectKey ?? updates.question_image_object_key ?? '';
+    payload.questionImageObjectKey = value || '';
+    payload.question_image_object_key = value || '';
+  }
+
+  if (updates.answerImageUrl !== undefined || updates.answer_image_url !== undefined) {
+    const value = updates.answerImageUrl ?? updates.answer_image_url ?? '';
+    payload.answerImageUrl = value || '';
+    payload.answer_image_url = value || '';
+  }
+
+  if (
+    updates.answerImageObjectKey !== undefined ||
+    updates.answer_image_object_key !== undefined
+  ) {
+    const value = updates.answerImageObjectKey ?? updates.answer_image_object_key ?? '';
+    payload.answerImageObjectKey = value || '';
+    payload.answer_image_object_key = value || '';
   }
 
   if (updates.imageSource !== undefined || updates.image_source !== undefined) {
@@ -1390,12 +1531,38 @@ function buildLibraryUpdateFromFlashcardPatch(patch = {}) {
 
   if (patch.question !== undefined) payload.question = patch.question;
   if (patch.answer !== undefined) payload.answer = patch.answer;
+  if (patch.question_html !== undefined) {
+    payload.question_html = patch.question_html || null;
+  }
+
+  if (patch.answer_html !== undefined) {
+    payload.answer_html = patch.answer_html || null;
+  }
+
+  if (patch.preceptor_note_html !== undefined) {
+    payload.preceptor_note_html = patch.preceptor_note_html || null;
+  }
   if (patch.preceptor_note !== undefined) payload.preceptor_note = patch.preceptor_note;
   if (patch.difficulty !== undefined) payload.difficulty = patch.difficulty;
   if (patch.tags !== undefined) payload.tags = Array.isArray(patch.tags) ? patch.tags : [];
 
   if (patch.image_url !== undefined) payload.image_url = patch.image_url || null;
   if (patch.image_object_key !== undefined) payload.image_object_key = patch.image_object_key || null;
+  if (patch.question_image_url !== undefined) {
+    payload.question_image_url = patch.question_image_url || null;
+  }
+
+  if (patch.question_image_object_key !== undefined) {
+    payload.question_image_object_key = patch.question_image_object_key || null;
+  }
+
+  if (patch.answer_image_url !== undefined) {
+    payload.answer_image_url = patch.answer_image_url || null;
+  }
+
+  if (patch.answer_image_object_key !== undefined) {
+    payload.answer_image_object_key = patch.answer_image_object_key || null;
+  }
   if (patch.image_source !== undefined) payload.image_source = patch.image_source || null;
   if (patch.image_prompt !== undefined) payload.image_prompt = patch.image_prompt || null;
   if (patch.image_generated_at !== undefined) payload.image_generated_at = patch.image_generated_at || null;
@@ -3681,14 +3848,21 @@ function buildGoogleCalendarReviewEventFromCard(card) {
 function normalizeExportFlashcards(cards = []) {
   return (Array.isArray(cards) ? cards : [])
     .map((card, index) => ({
-      index: index + 1,
+      index: Number(card.position || card.sort_order || index + 1),
       question: String(card.question || card.pergunta || '').trim(),
       answer: String(card.answer || card.resposta || '').trim(),
+      questionHtml: String(card.questionHtml || card.question_html || '').trim(),
+      answerHtml: String(card.answerHtml || card.answer_html || '').trim(),
       preceptorNote: String(card.preceptorNote || card.preceptor_note || card.nota_preceptor || '').trim(),
+      preceptorNoteHtml: String(card.preceptorNoteHtml || card.preceptor_note_html || '').trim(),
       specialty: String(card.specialty || '').trim(),
       topic: String(card.sub_specialty || card.theme || '').trim(),
+      imageUrl: String(card.imageUrl || card.image_url || '').trim(),
+      questionImageUrl: String(card.questionImageUrl || card.question_image_url || '').trim(),
+      answerImageUrl: String(card.answerImageUrl || card.answer_image_url || '').trim(),
     }))
-    .filter((card) => card.question && card.answer);
+    .filter((card) => card.question && card.answer)
+    .sort((a, b) => a.index - b.index);
 }
 
 function safeExportFilename(value = 'flashcards') {
@@ -3701,60 +3875,478 @@ function safeExportFilename(value = 'flashcards') {
     .toLowerCase();
 }
 
+function stripHtmlToPlainText(value = '') {
+  return String(value || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function fetchImageBuffer(url = '') {
+  if (!url) return null;
+
+  try {
+    const response = await fetchWithTimeout(url, {}, REQUEST_TIMEOUT_MS);
+
+    if (!response.ok) return null;
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.warn('⚠️ Falha ao baixar imagem para exportação:', error.message);
+    return null;
+  }
+}
+
+function decodeHtmlEntities(value = '') {
+  return String(value || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
+function normalizeExportColor(value = '') {
+  const raw = String(value || '').trim().replace(/["']/g, '');
+
+  if (!raw) return '';
+
+  if (/^#[0-9a-f]{3}$/i.test(raw)) {
+    const r = raw[1];
+    const g = raw[2];
+    const b = raw[3];
+    return `${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+
+  if (/^#[0-9a-f]{6}$/i.test(raw)) {
+    return raw.replace('#', '').toUpperCase();
+  }
+
+  const rgbMatch = raw.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+
+  if (rgbMatch) {
+    return rgbMatch
+      .slice(1)
+      .map((part) => Math.max(0, Math.min(255, Number(part))).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+  }
+
+  const namedColors = {
+    black: '000000',
+    white: 'FFFFFF',
+    red: 'DC2626',
+    blue: '2563EB',
+    green: '16A34A',
+    yellow: 'CA8A04',
+    orange: 'EA580C',
+    purple: '9333EA',
+    pink: 'DB2777',
+    gray: '64748B',
+    grey: '64748B',
+  };
+
+  return namedColors[raw.toLowerCase()] || '';
+}
+
+function extractStyleValue(style = '', property = '') {
+  const parts = String(style || '').split(';');
+
+  for (const part of parts) {
+    const [key, ...valueParts] = part.split(':');
+
+    if (String(key || '').trim().toLowerCase() === property.toLowerCase()) {
+      return valueParts.join(':').trim();
+    }
+  }
+
+  return '';
+}
+
+function extractHtmlAttribute(rawTag = '', attribute = '') {
+  const pattern = new RegExp(`${attribute}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const match = String(rawTag || '').match(pattern);
+
+  return match?.[2] || match?.[3] || match?.[4] || '';
+}
+
+function cleanExportHtml(html = '') {
+  return String(html || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+function parseFlashcardHtmlToRichParagraphs(html = '', fallback = '') {
+  const sourceHtml = cleanExportHtml(html || '');
+
+  if (!sourceHtml.trim()) {
+    const text = String(fallback || '').trim();
+
+    if (!text) return [];
+
+    return text.split(/\n{2,}|\n/g).map((line) => [
+      {
+        text: line,
+        bold: false,
+        italics: false,
+        underline: false,
+        strike: false,
+        color: '',
+        highlight: false,
+      },
+    ]);
+  }
+
+  const paragraphs = [[]];
+  const styleStack = [
+    {
+      bold: false,
+      italics: false,
+      underline: false,
+      strike: false,
+      color: '',
+      highlight: false,
+    },
+  ];
+
+  const currentStyle = () => styleStack[styleStack.length - 1] || styleStack[0];
+
+  const startNewParagraph = () => {
+    const last = paragraphs[paragraphs.length - 1];
+
+    if (last && last.length === 0) return;
+
+    paragraphs.push([]);
+  };
+
+  const pushText = (text) => {
+    const decoded = decodeHtmlEntities(text).replace(/\s+/g, ' ');
+
+    if (!decoded.trim()) {
+      const last = paragraphs[paragraphs.length - 1];
+      const previous = last[last.length - 1];
+
+      if (previous && !previous.text.endsWith(' ')) {
+        previous.text += ' ';
+      }
+
+      return;
+    }
+
+    paragraphs[paragraphs.length - 1].push({
+      ...currentStyle(),
+      text: decoded,
+    });
+  };
+
+  const tokens = sourceHtml.match(/<[^>]+>|[^<]+/g) || [];
+
+  for (const token of tokens) {
+    if (!token.startsWith('<')) {
+      pushText(token);
+      continue;
+    }
+
+    const rawTag = token;
+    const tagMatch = rawTag.match(/^<\/?\s*([a-z0-9]+)/i);
+    const tagName = String(tagMatch?.[1] || '').toLowerCase();
+    const isClosing = /^<\//.test(rawTag);
+    const isSelfClosing = /\/>$/.test(rawTag) || ['br', 'hr', 'img'].includes(tagName);
+
+    if (!tagName) continue;
+
+    if (tagName === 'br') {
+      startNewParagraph();
+      continue;
+    }
+
+    if (isClosing) {
+      if (['p', 'div', 'li'].includes(tagName)) {
+        startNewParagraph();
+      }
+
+      if (styleStack.length > 1) {
+        styleStack.pop();
+      }
+
+      continue;
+    }
+
+    if (['p', 'div', 'li'].includes(tagName)) {
+      startNewParagraph();
+    }
+
+    const nextStyle = { ...currentStyle() };
+
+    if (tagName === 'strong' || tagName === 'b') {
+      nextStyle.bold = true;
+    }
+
+    if (tagName === 'em' || tagName === 'i') {
+      nextStyle.italics = true;
+    }
+
+    if (tagName === 'u') {
+      nextStyle.underline = true;
+    }
+
+    if (tagName === 's' || tagName === 'strike' || tagName === 'del') {
+      nextStyle.strike = true;
+    }
+
+    if (tagName === 'mark') {
+      nextStyle.highlight = true;
+    }
+
+    const style = extractHtmlAttribute(rawTag, 'style');
+
+    if (style) {
+      const color = normalizeExportColor(extractStyleValue(style, 'color'));
+      const background =
+        normalizeExportColor(extractStyleValue(style, 'background-color')) ||
+        normalizeExportColor(extractStyleValue(style, 'background'));
+
+      if (color) {
+        nextStyle.color = color;
+      }
+
+      if (background) {
+        nextStyle.highlight = true;
+      }
+    }
+
+    if (!isSelfClosing) {
+      styleStack.push(nextStyle);
+    }
+  }
+
+  return paragraphs
+    .map((paragraph) =>
+      paragraph
+        .map((segment) => ({
+          ...segment,
+          text: String(segment.text || '').replace(/\s+/g, ' ').trim(),
+        }))
+        .filter((segment) => segment.text)
+    )
+    .filter((paragraph) => paragraph.length > 0);
+}
+
+function getPdfFontForRichSegment(segment = {}, forceBold = false) {
+  const bold = forceBold || Boolean(segment.bold);
+  const italics = Boolean(segment.italics);
+
+  if (bold && italics) return 'Helvetica-BoldOblique';
+  if (bold) return 'Helvetica-Bold';
+  if (italics) return 'Helvetica-Oblique';
+
+  return 'Helvetica';
+}
+
+function splitRichSegmentsIntoTokens(segments = []) {
+  const tokens = [];
+
+  for (const segment of segments) {
+    const parts = String(segment.text || '').split(/(\s+)/).filter(Boolean);
+
+    for (const part of parts) {
+      tokens.push({
+        ...segment,
+        text: part,
+      });
+    }
+  }
+
+  return tokens;
+}
+
+function drawRichPdfText(doc, {
+  paragraphs = [],
+  fallbackText = '',
+  x = 72,
+  y = 150,
+  width = 576,
+  height = 300,
+  fontSize = 30,
+  baseColor = '#243447',
+  forceBold = false,
+  align = 'center',
+  lineGap = 10,
+}) {
+  const safeParagraphs =
+    paragraphs && paragraphs.length
+      ? paragraphs
+      : parseFlashcardHtmlToRichParagraphs('', fallbackText);
+
+  let cursorY = y;
+  const maxY = y + height;
+  const lineHeight = fontSize + lineGap;
+
+  const drawLine = (lineTokens) => {
+    if (!lineTokens.length || cursorY + lineHeight > maxY) return;
+
+    let totalWidth = 0;
+
+    for (const token of lineTokens) {
+      doc.font(getPdfFontForRichSegment(token, forceBold)).fontSize(fontSize);
+      totalWidth += doc.widthOfString(token.text);
+    }
+
+    let cursorX = align === 'center'
+      ? x + Math.max(0, (width - totalWidth) / 2)
+      : x;
+
+    for (const token of lineTokens) {
+      const pdfColor = token.color ? `#${token.color}` : baseColor;
+
+      doc.font(getPdfFontForRichSegment(token, forceBold)).fontSize(fontSize);
+
+      const tokenWidth = doc.widthOfString(token.text);
+
+      if (token.highlight) {
+        doc.save();
+        doc.rect(cursorX, cursorY - 2, tokenWidth, fontSize + 6).fill('#FEF08A');
+        doc.restore();
+      }
+
+      doc.fillColor(pdfColor).text(token.text, cursorX, cursorY, {
+        lineBreak: false,
+        underline: Boolean(token.underline),
+        strike: Boolean(token.strike),
+      });
+
+      cursorX += tokenWidth;
+    }
+
+    cursorY += lineHeight;
+  };
+
+  for (const paragraph of safeParagraphs) {
+    const tokens = splitRichSegmentsIntoTokens(paragraph);
+    let line = [];
+    let lineWidth = 0;
+
+    for (const token of tokens) {
+      doc.font(getPdfFontForRichSegment(token, forceBold)).fontSize(fontSize);
+      const tokenWidth = doc.widthOfString(token.text);
+
+      if (line.length && lineWidth + tokenWidth > width) {
+        drawLine(line);
+        line = [];
+        lineWidth = 0;
+      }
+
+      line.push(token);
+      lineWidth += tokenWidth;
+    }
+
+    drawLine(line);
+    cursorY += lineGap;
+
+    if (cursorY > maxY) break;
+  }
+}
+
+function richSegmentToDocxTextRun(segment = {}) {
+  const options = {
+    text: segment.text,
+    bold: Boolean(segment.bold),
+    italics: Boolean(segment.italics),
+    strike: Boolean(segment.strike),
+  };
+
+  if (segment.color) {
+    options.color = segment.color;
+  }
+
+  if (segment.underline) {
+    options.underline = {
+      type: UnderlineType.SINGLE,
+    };
+  }
+
+  if (segment.highlight) {
+    options.highlight = 'yellow';
+  }
+
+  return new TextRun(options);
+}
+
+function buildDocxParagraphsFromRichHtml(html = '', fallback = '', paragraphOptions = {}) {
+  const paragraphs = parseFlashcardHtmlToRichParagraphs(html, fallback);
+
+  if (!paragraphs.length) {
+    return [
+      new Paragraph({
+        text: fallback || '',
+        ...paragraphOptions,
+      }),
+    ];
+  }
+
+  return paragraphs.map((segments) =>
+    new Paragraph({
+      children: segments.map(richSegmentToDocxTextRun),
+      ...paragraphOptions,
+    })
+  );
+}
+
 function drawFlashcardPdfPage(doc, {
   type = 'Pergunta',
   text = '',
+  richHtml = '',
   specialty = '',
   topic = '',
   cardNumber = 1,
   totalCards = 1,
+  imageBuffer = null,
 }) {
   const width = doc.page.width;
   const height = doc.page.height;
+  const isQuestion = type.toLowerCase().includes('pergunta');
+  const accent = isQuestion ? '#dc2626' : '#16a34a';
 
   doc.rect(0, 0, width, height).fill('#ffffff');
 
-  // Fundo quadriculado leve
-  doc.strokeColor('#eef2f7').lineWidth(0.5);
-  for (let x = 0; x <= width; x += 24) {
-    doc.moveTo(x, 0).lineTo(x, height).stroke();
-  }
-  for (let y = 0; y <= height; y += 24) {
-    doc.moveTo(0, y).lineTo(width, y).stroke();
-  }
-
-  const accent = type === 'Pergunta' ? '#0f9aa6' : '#3b82f6';
-
-  // Borda
-  doc.roundedRect(24, 24, width - 48, height - 48, 18)
-    .lineWidth(3)
-    .strokeColor(accent)
+  doc.roundedRect(40, 40, width - 80, height - 80, 24)
+    .lineWidth(2)
+    .strokeColor('#e2e8f0')
     .stroke();
 
-  // Pílula superior
-  doc.font('Helvetica-Bold').fontSize(18);
+  const pillWidth = 170;
+  const pillHeight = 46;
+  const pillX = 72;
+  const pillY = 60;
 
-  const pillX = 48;
-  const pillY = 46;
-  const pillHeight = 42;
-  const pillTextWidth = doc.widthOfString(type);
-  const pillTextHeight = doc.currentLineHeight();
-  const pillWidth = Math.max(180, pillTextWidth + 64);
-  const pillTextY = pillY + ((pillHeight - pillTextHeight) / 2) - 1;
-
-  doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 12)
-    .fillAndStroke('#ffffff', '#94a3b8');
+  doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 23)
+    .fillAndStroke(isQuestion ? '#fee2e2' : '#dcfce7', isQuestion ? '#fecaca' : '#bbf7d0');
 
   doc.fillColor('#1f2937')
     .font('Helvetica-Bold')
     .fontSize(18)
-    .text(type, pillX, pillTextY, {
+    .text(type, pillX, pillY + 13, {
       width: pillWidth,
       align: 'center',
       lineBreak: false,
     });
 
-  // Contador
   doc.fillColor('#94a3b8')
     .fontSize(10)
     .font('Helvetica-Bold')
@@ -3763,27 +4355,42 @@ function drawFlashcardPdfPage(doc, {
       align: 'right',
     });
 
-  // Texto principal
-  const fontSize = text.length > 220 ? 26 : text.length > 130 ? 32 : 38;
+  const plainText = stripHtmlToPlainText(richHtml) || text || '';
+  const fontSize = plainText.length > 260 ? 22 : plainText.length > 180 ? 26 : plainText.length > 100 ? 30 : 36;
+  const richParagraphs = parseFlashcardHtmlToRichParagraphs(richHtml, text);
 
-  doc.fillColor('#243447')
-    .font('Helvetica-Bold')
-    .fontSize(fontSize)
-    .text(text, 72, 180, {
-      width: width - 144,
-      height: 300,
-      align: 'center',
-      lineGap: 10,
-    });
+  drawRichPdfText(doc, {
+    paragraphs: richParagraphs,
+    fallbackText: text,
+    x: 72,
+    y: 145,
+    width: width - 144,
+    height: imageBuffer ? 185 : 315,
+    fontSize,
+    baseColor: '#243447',
+    forceBold: false,
+    align: 'center',
+    lineGap: 9,
+  });
 
-  // Linha decorativa
+  if (imageBuffer) {
+    try {
+      doc.image(imageBuffer, 110, 355, {
+        fit: [width - 220, 210],
+        align: 'center',
+        valign: 'center',
+      });
+    } catch (error) {
+      console.warn('⚠️ Falha ao inserir imagem no PDF:', error.message);
+    }
+  }
+
   doc.strokeColor(accent)
     .lineWidth(4)
     .moveTo(76, height - 150)
     .lineTo(160, height - 150)
     .stroke();
 
-  // Especialidade/tema
   const footer = [specialty, topic].filter(Boolean).join(' · ');
 
   doc.fillColor(accent)
@@ -3796,45 +4403,61 @@ function drawFlashcardPdfPage(doc, {
 }
 
 async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
-  return await new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: [720, 720],
-      margin: 0,
-      autoFirstPage: false,
-    });
+  const doc = new PDFDocument({
+    size: [720, 720],
+    margin: 0,
+    autoFirstPage: false,
+  });
 
-    const chunks = [];
+  const chunks = [];
 
+  const finished = new Promise((resolve, reject) => {
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
+  });
 
-    cards.forEach((card, index) => {
-      doc.addPage();
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index];
 
-      drawFlashcardPdfPage(doc, {
-        type: 'Pergunta',
-        text: card.question,
-        specialty: card.specialty,
-        topic: card.topic,
-        cardNumber: index + 1,
-        totalCards: cards.length,
-      });
+    const questionImageBuffer = await fetchImageBuffer(
+      card.questionImageUrl || card.imageUrl
+    );
 
-      doc.addPage();
+    const answerImageBuffer = await fetchImageBuffer(
+      card.answerImageUrl || card.imageUrl
+    );
 
-      drawFlashcardPdfPage(doc, {
-        type: 'Resposta',
-        text: card.answer,
-        specialty: card.specialty,
-        topic: card.topic,
-        cardNumber: index + 1,
-        totalCards: cards.length,
-      });
+    doc.addPage();
+
+    drawFlashcardPdfPage(doc, {
+      type: 'Pergunta',
+      text: card.question,
+      richHtml: card.questionHtml,
+      specialty: card.specialty,
+      topic: card.topic,
+      cardNumber: index + 1,
+      totalCards: cards.length,
+      imageBuffer: questionImageBuffer,
     });
 
-    doc.end();
-  });
+    doc.addPage();
+
+    drawFlashcardPdfPage(doc, {
+      type: 'Resposta',
+      text: card.answer,
+      richHtml: card.answerHtml,
+      specialty: card.specialty,
+      topic: card.topic,
+      cardNumber: index + 1,
+      totalCards: cards.length,
+      imageBuffer: answerImageBuffer,
+    });
+  }
+
+  doc.end();
+
+  return await finished;
 }
 
 async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
@@ -3843,20 +4466,21 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
       text: title,
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `${cards.length} flashcards`,
-          bold: true,
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
     }),
   ];
 
-  cards.forEach((card, index) => {
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index];
+
+    const questionImageBuffer = await fetchImageBuffer(
+      card.questionImageUrl || card.imageUrl
+    );
+
+    const answerImageBuffer = await fetchImageBuffer(
+      card.answerImageUrl || card.imageUrl
+    );
+
     children.push(
       new Paragraph({
         children: [
@@ -3875,11 +4499,31 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
             bold: true,
           }),
         ],
+        spacing: { after: 120 },
       }),
-      new Paragraph({
-        text: card.question,
-        spacing: { after: 240 },
-      }),
+      ...buildDocxParagraphsFromRichHtml(card.questionHtml, card.question, {
+        spacing: { after: 160 },
+      })
+    );
+
+    if (questionImageBuffer) {
+      children.push(
+        new Paragraph({
+          children: [
+            new ImageRun({
+              data: questionImageBuffer,
+              transformation: {
+                width: 420,
+                height: 260,
+              },
+            }),
+          ],
+          spacing: { after: 240 },
+        })
+      );
+    }
+
+    children.push(
       new Paragraph({
         children: [
           new TextRun({
@@ -3887,14 +4531,41 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
             bold: true,
           }),
         ],
+        spacing: { after: 120 },
       }),
-      new Paragraph({
-        text: card.answer,
+      ...buildDocxParagraphsFromRichHtml(card.answerHtml, card.answer, {
         spacing: { after: 160 },
       })
     );
 
-    if (card.preceptorNote) {
+    if (answerImageBuffer) {
+      children.push(
+        new Paragraph({
+          children: [
+            new ImageRun({
+              data: answerImageBuffer,
+              transformation: {
+                width: 420,
+                height: 260,
+              },
+            }),
+          ],
+          spacing: { after: 240 },
+        })
+      );
+    }
+
+    const noteParagraphs = buildDocxParagraphsFromRichHtml(
+      card.preceptorNoteHtml,
+      card.preceptorNote,
+      { spacing: { after: 160 } }
+    );
+
+    const hasNote =
+      stripHtmlToPlainText(card.preceptorNoteHtml) ||
+      String(card.preceptorNote || '').trim();
+
+    if (hasNote) {
       children.push(
         new Paragraph({
           children: [
@@ -3903,11 +4574,9 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
               bold: true,
             }),
           ],
+          spacing: { before: 120, after: 120 },
         }),
-        new Paragraph({
-          text: card.preceptorNote,
-          spacing: { after: 160 },
-        })
+        ...noteParagraphs
       );
     }
 
@@ -3920,6 +4589,7 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
             color: '64748B',
           }),
         ],
+        spacing: { before: 160, after: 160 },
       })
     );
 
@@ -3930,9 +4600,9 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
         })
       );
     }
-  });
+  }
 
-  const doc = new Document({
+  const document = new Document({
     sections: [
       {
         properties: {},
@@ -3941,7 +4611,7 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
     ],
   });
 
-  return await Packer.toBuffer(doc);
+  return await Packer.toBuffer(document);
 }
 
 app.get('/health', (_, res) => {
@@ -4343,6 +5013,40 @@ app.patch('/api/flashcard-decks/:id', async (req, res) => {
   }
 });
 
+app.post('/api/flashcard-decks/:id/clear-cards', async (req, res) => {
+  try {
+    if (!supabase) {
+      throw new Error('Supabase não configurado no backend.');
+    }
+
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('flashcards_library')
+      .update({
+        deck_id: null,
+        is_archived: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('deck_id', id)
+      .select('id');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    await touchDeck(id);
+
+    return res.json({
+      ok: true,
+      clearedCount: data?.length || 0,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao limpar pasta:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/api/flashcard-decks/:id', async (req, res) => {
   try {
     if (!supabase) {
@@ -4556,6 +5260,36 @@ app.get('/api/library-analytics', async (req, res) => {
   }
 });
 
+app.post('/api/flashcards-library/:id/image-upload-url', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { filename = 'library-flashcard-image.png', contentType = 'image/png' } = req.body || {};
+
+    if (!String(contentType || '').startsWith('image/')) {
+      return res.status(400).json({ error: 'O arquivo precisa ser uma imagem.' });
+    }
+
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(String(contentType).toLowerCase())) {
+      return res.status(400).json({
+        error: 'Use PNG ou JPG para garantir compatibilidade com PDF e Word.',
+      });
+    }
+
+    const key = `flashcard-images/library-card-${sanitizeObjectKeyPart(id)}/${Date.now()}-${sanitizeFilename(filename)}`;
+
+    const upload = await createR2PresignedUploadUrl({
+      key,
+      contentType,
+      expiresIn: 60 * 20,
+    });
+
+    return res.json(upload);
+  } catch (error) {
+    console.error('❌ Erro ao criar URL de upload de imagem da biblioteca:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch('/api/flashcards-library/:id', async (req, res) => {
   try {
     if (!supabase) {
@@ -4573,6 +5307,15 @@ app.patch('/api/flashcards-library/:id', async (req, res) => {
       question,
       answer,
       preceptor_note,
+      question_html,
+      answer_html,
+      preceptor_note_html,
+      question_image_url,
+      question_image_object_key,
+      answer_image_url,
+      answer_image_object_key,
+      image_url,
+      image_object_key,
       difficulty,
       review_state,
       review_stats,
@@ -4591,6 +5334,30 @@ app.patch('/api/flashcards-library/:id', async (req, res) => {
     if (question !== undefined) payload.question = question;
     if (answer !== undefined) payload.answer = answer;
     if (preceptor_note !== undefined) payload.preceptor_note = preceptor_note;
+    if (question_html !== undefined) payload.question_html = question_html || null;
+    if (answer_html !== undefined) payload.answer_html = answer_html || null;
+    if (preceptor_note_html !== undefined) {
+      payload.preceptor_note_html = preceptor_note_html || null;
+    }
+
+    if (question_image_url !== undefined) {
+      payload.question_image_url = question_image_url || null;
+    }
+
+    if (question_image_object_key !== undefined) {
+      payload.question_image_object_key = question_image_object_key || null;
+    }
+
+    if (answer_image_url !== undefined) {
+      payload.answer_image_url = answer_image_url || null;
+    }
+
+    if (answer_image_object_key !== undefined) {
+      payload.answer_image_object_key = answer_image_object_key || null;
+    }
+
+    if (image_url !== undefined) payload.image_url = image_url || null;
+    if (image_object_key !== undefined) payload.image_object_key = image_object_key || null;
     if (difficulty !== undefined) payload.difficulty = difficulty;
     if (review_state !== undefined) payload.review_state = review_state || {};
     if (review_stats !== undefined) payload.review_stats = review_stats || {};
