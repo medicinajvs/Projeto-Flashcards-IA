@@ -5106,11 +5106,59 @@ app.post('/api/processing-jobs', async (req, res) => {
   }
 });
 
+async function getProcessingJobQueueInfo(job) {
+  if (!supabase || !job?.id) {
+    return {
+      position: null,
+      waitingCount: null,
+    };
+  }
+
+  const status = String(job.status || '').toLowerCase();
+
+  if (!['uploaded', 'queued'].includes(status)) {
+    return {
+      position: 0,
+      waitingCount: 0,
+    };
+  }
+
+  const { count, error } = await supabase
+    .from('processing_jobs')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['uploaded', 'queued'])
+    .lt('created_at', job.created_at);
+
+  if (error) {
+    console.warn('⚠️ Falha ao calcular posição na fila:', error.message);
+
+    return {
+      position: null,
+      waitingCount: null,
+    };
+  }
+
+  const waitingCount = Number(count || 0);
+
+  return {
+    position: waitingCount + 1,
+    waitingCount,
+  };
+}
+
 app.get('/api/processing-jobs/:id', async (req, res) => {
   try {
     const job = await getProcessingJobById(req.params.id);
+    const queue = await getProcessingJobQueueInfo(job);
 
-    return res.json({ job });
+    return res.json({
+      job: {
+        ...job,
+        queue_position: queue.position,
+        queue_waiting_count: queue.waitingCount,
+      },
+      queue,
+    });
   } catch (error) {
     console.error('❌ Erro ao consultar job:', error.message);
     return res.status(500).json({ error: error.message });

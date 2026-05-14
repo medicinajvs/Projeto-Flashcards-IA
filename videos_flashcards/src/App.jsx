@@ -62,11 +62,12 @@ import {
 const HISTORY_ITEMS_PER_PAGE = 6;
 const HISTORY_FETCH_LIMIT = 120;
 const SMART_REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90];
-const MULTIPART_UPLOAD_THRESHOLD_BYTES = 200 * 1024 * 1024;
+const MULTIPART_UPLOAD_THRESHOLD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_UPLOAD_RETRY_LIMIT = 3;
 const MULTIPART_UPLOAD_CONCURRENCY = 3;
 const AUTO_INSIGHTS_DELAY_MS = 9000;
 const ARCHIVE_CARDS_PER_PAGE = 10;
+const ACTIVE_PROCESSING_JOB_KEY = 'medicinajvs_active_processing_job';
 
 const UI = {
   page: 'bg-slate-50 text-slate-900',
@@ -2869,42 +2870,79 @@ export default function AdvancedFlashcardPoC() {
   };
 
   const waitForProcessingJob = async (jobId) => {
-    const maxAttempts = 1200;
+    const maxAttempts = 9600; // 8 horas com intervalo de 3s
     const intervalMs = 3000;
+    let transientFailures = 0;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const response = await fetch(`${API_BASE}/api/processing-jobs/${jobId}`);
-      const data = await parseResponseSafely(response);
+      try {
+        const response = await fetch(`${API_BASE}/api/processing-jobs/${jobId}`);
+        const data = await parseResponseSafely(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao consultar status do processamento.');
-      }
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao consultar status do processamento.');
+        }
 
-      const job = data.job;
+        transientFailures = 0;
 
-      updateProcessingJobInfo({
-        id: job.id,
-        status: job.status,
-        current_step: job.current_step || 'Processando...',
-        progress: Number(job.progress || 0),
-        uploadProgress: 100,
-        error_message: job.error_message || '',
-        study_run_id: job.study_run_id || null,
-        audio_url: job.audio_url || null,
-      });
+        const job = data.job;
 
-      if (job.status === 'completed') {
-        return job;
-      }
+        updateProcessingJobInfo({
+          id: job.id,
+          status: job.status,
+          current_step: job.current_step || 'Processando...',
+          progress: Number(job.progress || 0),
+          uploadProgress: 100,
+          error_message: job.error_message || '',
+          study_run_id: job.study_run_id || null,
+          audio_url: job.audio_url || null,
+          queue_position: data.queue?.position ?? job.queue_position ?? null,
+          queue_waiting_count: data.queue?.waitingCount ?? job.queue_waiting_count ?? null,
+        });
 
-      if (job.status === 'error') {
-        throw new Error(job.error_message || 'Erro no processamento assíncrono.');
+        if (job.status === 'completed') {
+          localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
+          return job;
+        }
+
+        if (job.status === 'error') {
+          localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
+
+          const processingError = new Error(
+            job.error_message || 'Erro no processamento assíncrono.'
+          );
+
+          processingError.isProcessingJobError = true;
+
+          throw processingError;
+        }
+      } catch (error) {
+        if (error.isProcessingJobError) {
+          throw error;
+        }
+
+        transientFailures += 1;
+
+        updateProcessingJobInfo({
+          current_step:
+            transientFailures >= 2
+              ? 'Conexão instável. Continuando a verificar o processamento...'
+              : 'Verificando processamento...',
+        });
+
+        if (transientFailures >= 120) {
+          throw new Error(
+            `Não foi possível consultar o processamento por alguns minutos. O job pode continuar rodando em segundo plano. Detalhes: ${error.message}`
+          );
+        }
       }
 
       await wait(intervalMs);
     }
 
-    throw new Error('Tempo limite ao aguardar conclusão do processamento.');
+    throw new Error(
+      'Tempo limite ao aguardar conclusão do processamento. O vídeo pode continuar processando em segundo plano.'
+    );
   };
 
   const processVideo = async () => {
@@ -3034,6 +3072,15 @@ export default function AdvancedFlashcardPoC() {
         throw new Error('Backend não retornou o ID do job.');
       }
 
+      localStorage.setItem(
+        ACTIVE_PROCESSING_JOB_KEY,
+        JSON.stringify({
+          id: jobId,
+          filename: videoFile.name || uploadData.originalFilename || '',
+          createdAt: new Date().toISOString(),
+        })
+      );
+
       updateProcessingJobInfo({
         id: jobId,
         status: jobData.job.status || 'uploaded',
@@ -3043,6 +3090,7 @@ export default function AdvancedFlashcardPoC() {
       });
 
       const completedJob = await waitForProcessingJob(jobId);
+      localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
 
       updateProcessingJobInfo({
         ...completedJob,
@@ -5429,6 +5477,87 @@ export default function AdvancedFlashcardPoC() {
       console.warn('Falha ao atualizar biblioteca após processamento:', err.message);
     }
   };
+
+  useEffect(() => {
+    const savedRaw = localStorage.getItem(ACTIVE_PROCESSING_JOB_KEY);
+
+    if (!savedRaw) return;
+
+    let saved = null;
+
+    try {
+      saved = JSON.parse(savedRaw);
+    } catch {
+      localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
+      return;
+    }
+
+    if (!saved?.id) return;
+
+    const createdAtMs = Date.parse(saved.createdAt || '');
+
+    if (Number.isFinite(createdAtMs)) {
+      const ageHours = (Date.now() - createdAtMs) / (1000 * 60 * 60);
+
+      if (ageHours > 24) {
+        localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
+        return;
+      }
+    }
+
+    let cancelled = false;
+
+    const resumeProcessingJob = async () => {
+      try {
+        setError(null);
+        setIsProcessing(true);
+
+        updateProcessingJobInfo({
+          id: saved.id,
+          status: 'resuming',
+          current_step: 'Retomando acompanhamento do processamento...',
+          progress: 5,
+          uploadProgress: 100,
+        });
+
+        const completedJob = await waitForProcessingJob(saved.id);
+
+        if (cancelled) return;
+
+        localStorage.removeItem(ACTIVE_PROCESSING_JOB_KEY);
+
+        updateProcessingJobInfo({
+          ...completedJob,
+          status: 'completed',
+          current_step: completedJob.current_step || 'Processamento concluído.',
+          progress: 100,
+          uploadProgress: 100,
+        });
+
+        if (completedJob.study_run_id) {
+          await openHistoryItem(completedJob.study_run_id);
+          loadHistoryDebounced(historySearch);
+          await refreshLibraryAfterProcessing();
+        }
+      } catch (error) {
+        if (cancelled) return;
+
+        setError(
+          `Não foi possível retomar automaticamente o processamento: ${error.message}`
+        );
+      } finally {
+        if (!cancelled) {
+          setIsProcessing(false);
+        }
+      }
+    };
+
+    resumeProcessingJob();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchLibraryCardsDirectly = async ({
     deckId = '',
@@ -8526,6 +8655,18 @@ export default function AdvancedFlashcardPoC() {
                                     >
                                       {processingJobInfo.current_step || 'Preparando processamento...'}
                                     </p>
+
+                                    {['uploaded', 'queued'].includes(String(processingJobInfo.status || '').toLowerCase()) ? (
+                                      <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                                        Seu vídeo já foi recebido e está aguardando o worker iniciar.
+                                        {processingJobInfo.queue_position ? (
+                                          <>
+                                            {' '}Posição atual na fila: <strong>{processingJobInfo.queue_position}</strong>.
+                                          </>
+                                        ) : null}
+                                        {' '}Você pode deixar esta página aberta ou voltar depois.
+                                      </p>
+                                    ) : null}
                                   </div>
 
                                   <span

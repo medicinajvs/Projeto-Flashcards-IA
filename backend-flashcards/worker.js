@@ -96,6 +96,8 @@ const TRANSCRIPTION_CONCURRENCY = Number(process.env.TRANSCRIPTION_CONCURRENCY |
 const SAVE_AUDIO_SEGMENTS_TO_R2 =
   String(process.env.SAVE_AUDIO_SEGMENTS_TO_R2 || 'false').toLowerCase() === 'true';
 const AUDIO_SEGMENT_SECONDS = Number(process.env.AUDIO_SEGMENT_SECONDS || 15 * 60);
+const STALE_PROCESSING_MINUTES = Number(process.env.STALE_PROCESSING_MINUTES || 180);
+const STALE_QUEUE_NOTICE_MINUTES = Number(process.env.STALE_QUEUE_NOTICE_MINUTES || 30);
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não definidos.');
@@ -301,25 +303,64 @@ async function updateJob(id, updates) {
 }
 
 async function claimNextJob() {
-  const { data: jobs, error } = await supabase
+  const { data, error } = await supabase.rpc('claim_next_processing_job');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (Array.isArray(data)) {
+    return data[0] || null;
+  }
+
+  return data || null;
+}
+
+async function recoverStaleJobs() {
+  const now = Date.now();
+
+  const processingCutoff = new Date(
+    now - STALE_PROCESSING_MINUTES * 60 * 1000
+  ).toISOString();
+
+  const queueCutoff = new Date(
+    now - STALE_QUEUE_NOTICE_MINUTES * 60 * 1000
+  ).toISOString();
+
+  const { error: processingError } = await supabase
     .from('processing_jobs')
-    .select('*')
+    .update({
+      status: 'queued',
+      current_step:
+        'Processamento retomado automaticamente após demora excessiva.',
+      progress: 5,
+      started_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('status', 'processing')
+    .lt('updated_at', processingCutoff);
+
+  if (processingError) {
+    console.warn(
+      '⚠️ Falha ao recuperar jobs em processamento:',
+      processingError.message
+    );
+  }
+
+  const { error: queueError } = await supabase
+    .from('processing_jobs')
+    .update({
+      status: 'queued',
+      current_step:
+        'Seu vídeo continua na fila. O sistema está aguardando um worker disponível.',
+      updated_at: new Date().toISOString(),
+    })
     .in('status', ['uploaded', 'queued'])
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .lt('updated_at', queueCutoff);
 
-  if (error) throw new Error(error.message);
-  if (!jobs?.length) return null;
-
-  const job = jobs[0];
-
-  return await updateJob(job.id, {
-    status: 'processing',
-    current_step: 'Iniciando processamento.',
-    progress: 10,
-    started_at: new Date().toISOString(),
-    error_message: null,
-  });
+  if (queueError) {
+    console.warn('⚠️ Falha ao atualizar jobs antigos na fila:', queueError.message);
+  }
 }
 
 async function downloadR2ObjectToFile(key, localPath) {
@@ -2130,6 +2171,8 @@ async function mainLoop() {
 
   while (true) {
     try {
+      await recoverStaleJobs();
+
       const job = await claimNextJob();
 
       if (job) {
