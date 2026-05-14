@@ -1760,11 +1760,7 @@ async function ensureDeckHierarchy({
   }
 
   if (createLeafDeck) {
-    const leafName = safeTheme
-      ? `${safeTheme} — Deck Principal`
-      : safeSubSpecialty
-        ? `${safeSubSpecialty} — Deck Principal`
-        : `${safeSpecialty} — Deck Principal`;
+    const leafName = safeTheme || safeSubSpecialty || safeSpecialty;
 
     finalDeck = await resolveOrCreateDeck({
       name: leafName,

@@ -198,6 +198,27 @@ function normalizeFlashcards(rawFlashcards) {
   });
 }
 
+function pickRunFlashcardsForDefaultView(run = {}) {
+  const original = Array.isArray(run.flashcards) ? run.flashcards : [];
+  const enriched = Array.isArray(run.enriched_flashcards) ? run.enriched_flashcards : [];
+
+  if (original.length > 0) {
+    return {
+      cards: normalizeFlashcards(original),
+      origin: 'original',
+      originalCount: original.length,
+      enrichedCount: enriched.length,
+    };
+  }
+
+  return {
+    cards: normalizeFlashcards(enriched),
+    origin: enriched.length > 0 ? 'enriched' : 'original',
+    originalCount: original.length,
+    enrichedCount: enriched.length,
+  };
+}
+
 function isEnrichedGeneratedFlashcard(card) {
   const tags = Array.isArray(card?.tags)
     ? card.tags.map((tag) => String(tag).toLowerCase())
@@ -209,6 +230,18 @@ function isEnrichedGeneratedFlashcard(card) {
     tags.includes('texto enriquecido') ||
     tags.includes('flashcard enriquecido')
   );
+}
+
+function isAutoDeckPrincipalName(value = '') {
+  return /\s+—\s+Deck Principal$/i.test(String(value || '').trim());
+}
+
+function formatDeckDisplayName(value = '') {
+  const clean = String(value || '').trim();
+
+  if (!clean) return 'Sem deck';
+
+  return clean.replace(/\s+—\s+Deck Principal$/i, '').trim() || clean;
 }
 
 function normalizeFolderText(value = '') {
@@ -284,7 +317,7 @@ function buildHistoryPreview(text) {
 }
 
 function mapRunToHistoryItem(run) {
-  const flashcards = normalizeFlashcards(run.enriched_flashcards || run.flashcards);
+  const { cards: flashcards } = pickRunFlashcardsForDefaultView(run);
   const videoUrl = run.video_url || run.videoUrl || null;
   const audioUrl = run.audio_url || run.audioUrl || null;
   const specialty = run.specialty || '';
@@ -3326,14 +3359,13 @@ export default function AdvancedFlashcardPoC() {
       setCurrentRunId(run.id);
       setCurrentFilename(run.original_filename || '');
       setTranscript(run.transcript || '');
-      const loadedFlashcards = normalizeFlashcards(run.enriched_flashcards || run.flashcards || []);
+      const {
+        cards: loadedFlashcards,
+        origin: loadedFlashcardsOrigin,
+      } = pickRunFlashcardsForDefaultView(run);
 
       setFlashcards(loadedFlashcards);
-      setFlashcardsOrigin(
-        Array.isArray(run.enriched_flashcards) && run.enriched_flashcards.length > 0
-          ? 'enriched'
-          : 'original'
-      );
+      setFlashcardsOrigin(loadedFlashcardsOrigin);
       setFlashcardsLibrarySaveStatus('idle');
       setCurrentSpecialty(run.specialty || '');
       setCurrentSecondaryTopics(Array.isArray(run.secondary_topics) ? run.secondary_topics : []);
@@ -6588,7 +6620,7 @@ export default function AdvancedFlashcardPoC() {
       if (!topic.decks.has(safeDeckId)) {
         topic.decks.set(safeDeckId, {
           id: safeDeckId,
-          name: deckName || 'Sem deck',
+          name: formatDeckDisplayName(deckName || 'Sem deck'),
           cards: [],
         });
       }
@@ -6601,6 +6633,7 @@ export default function AdvancedFlashcardPoC() {
       const specialty = ensureSpecialty(specialtyName);
 
       if (deck.deck_type === 'specialty-root') return;
+      if (deck.deck_type === 'leaf-deck' && isAutoDeckPrincipalName(deck.name)) return;
 
       const topicName = deck.sub_specialty || deck.name || 'Geral';
 
@@ -6856,6 +6889,36 @@ export default function AdvancedFlashcardPoC() {
         })
       )
     );
+  };
+
+  const deleteLibraryCard = async (card) => {
+    if (!card?.id) return;
+
+    const confirmed = window.confirm('Excluir este flashcard da biblioteca?');
+
+    if (!confirmed) return;
+
+    try {
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/flashcards-library/${card.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir flashcard.');
+      }
+
+      setPreviewLibraryCard((current) =>
+        current?.id === card.id ? null : current
+      );
+
+      await refreshLibraryData();
+    } catch (err) {
+      setError(`Falha ao excluir flashcard: ${err.message}`);
+    }
   };
 
   const viewArchiveFolder = async ({ cards = [], deckId = '', specialty = '' }) => {
@@ -9753,11 +9816,11 @@ export default function AdvancedFlashcardPoC() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(220px,1.3fr)_minmax(150px,0.9fr)_90px_100px_minmax(160px,0.9fr)] gap-2">
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(150px,1fr)_minmax(120px,0.8fr)_78px_84px_minmax(110px,0.75fr)_minmax(110px,0.75fr)] gap-2">
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(false)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white shadow-sm shadow-red-100 transition-colors hover:bg-red-700 disabled:opacity-50"
+                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-3 text-xs font-black text-white shadow-sm shadow-red-100 transition-colors hover:bg-red-700 disabled:opacity-50"
                     title="Usar salvos / gerar se faltar"
                   >
                     {isGeneratingSavedFlashcards ? (
@@ -9765,13 +9828,13 @@ export default function AdvancedFlashcardPoC() {
                     ) : (
                       <Wand2 size={16} className="shrink-0" />
                     )}
-                    <span className="truncate">Usar salvos / gerar se faltar</span>
+                    <span className="truncate">Usar salvos</span>
                   </button>
 
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(true)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
                     title="Regenerar do original"
                   >
                     <RefreshCw size={16} className="shrink-0" />
@@ -9788,7 +9851,7 @@ export default function AdvancedFlashcardPoC() {
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
-                    className="h-11 min-w-0 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-10 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     title="Baixar PDF"
                   >
                     <Download size={16} className="shrink-0" />
@@ -9805,7 +9868,7 @@ export default function AdvancedFlashcardPoC() {
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
-                    className="h-11 min-w-0 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-10 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     title="Baixar Word"
                   >
                     <FileText size={16} className="shrink-0" />
@@ -9815,16 +9878,16 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     type="button"
                     onClick={openCreateFlashcardModal}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors"
+                    className="h-10 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-red-700 hover:bg-red-100 transition-colors"
                   >
                     <Plus size={16} />
-                    Novo flashcard
+                    Novo card
                   </button>
 
                   <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
-                    className="h-11 min-w-0 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
+                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 text-xs font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
                     title="Analisar evidência"
                   >
                     {isAnalyzingEvidence ? (
@@ -9832,7 +9895,7 @@ export default function AdvancedFlashcardPoC() {
                     ) : (
                       <Sparkles size={16} className="shrink-0" />
                     )}
-                    <span className="truncate">Analisar evidência</span>
+                    <span className="truncate">Evidência</span>
                   </button>
                 </div>
               </div>
@@ -12462,24 +12525,38 @@ export default function AdvancedFlashcardPoC() {
                         <>
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                             {selectedArchiveVisibleCards.map((card) => (
-                              <button
+                              <div
                                 key={card.id}
-                                type="button"
-                                onClick={() => setPreviewLibraryCard(card)}
                                 className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-red-200 hover:bg-red-50/40 transition-colors"
                               >
-                                <p className="text-sm font-bold text-slate-900 line-clamp-2">
-                                  {card.question || 'Pergunta sem título'}
-                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewLibraryCard(card)}
+                                  className="block w-full text-left"
+                                >
+                                  <p className="text-sm font-bold text-slate-900 line-clamp-2">
+                                    {card.question || 'Pergunta sem título'}
+                                  </p>
 
-                                <p className="text-xs text-slate-500 mt-2 line-clamp-2">
-                                  {card.answer || 'Resposta não preenchida.'}
-                                </p>
+                                  <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                                    {card.answer || 'Resposta não preenchida.'}
+                                  </p>
 
-                                <p className="text-[11px] text-slate-400 mt-3">
-                                  Criado em {formatShortDateTime(card.created_at || card.createdAt) || 'data não registrada'}
-                                </p>
-                              </button>
+                                  <p className="text-[11px] text-slate-400 mt-3">
+                                    Criado em {formatShortDateTime(card.created_at || card.createdAt) || 'data não registrada'}
+                                  </p>
+                                </button>
+
+                                <div className="mt-3 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteLibraryCard(card)}
+                                    className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-[11px] font-black text-red-700 hover:bg-red-100"
+                                  >
+                                    Excluir
+                                  </button>
+                                </div>
+                              </div>
                             ))}
                           </div>
 
@@ -12714,6 +12791,14 @@ export default function AdvancedFlashcardPoC() {
                   className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
                 >
                   Fechar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteLibraryCard(previewLibraryCard)}
+                  className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-bold text-red-700 hover:bg-red-100"
+                >
+                  Excluir
                 </button>
 
                 <button

@@ -637,11 +637,7 @@ async function ensureDeckHierarchy({
   }
 
   if (createLeafDeck) {
-    const leafName = safeTheme
-      ? `${safeTheme} — Deck Principal`
-      : safeSubSpecialty
-        ? `${safeSubSpecialty} — Deck Principal`
-        : `${safeSpecialty} — Deck Principal`;
+    const leafName = safeTheme || safeSubSpecialty || safeSpecialty;
 
     finalDeck = await resolveOrCreateDeck({
       name: leafName,
@@ -5290,6 +5286,60 @@ app.post('/api/flashcards-library/:id/image-upload-url', async (req, res) => {
   }
 });
 
+app.delete('/api/flashcards-library/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      throw new Error('Supabase não configurado no backend.');
+    }
+
+    const { id } = req.params;
+    const permanent = String(req.query.permanent || 'false') === 'true';
+
+    if (permanent) {
+      const { error } = await supabase
+        .from('flashcards_library')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return res.json({
+        ok: true,
+        deleted: true,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('flashcards_library')
+      .update({
+        is_archived: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data?.deck_id) {
+      await touchDeck(data.deck_id);
+    }
+
+    return res.json({
+      ok: true,
+      archived: true,
+      card: data,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao excluir flashcard da biblioteca:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch('/api/flashcards-library/:id', async (req, res) => {
   try {
     if (!supabase) {
@@ -6493,32 +6543,35 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
       result.modelUsed
     );
 
+    const shouldSaveToLibrary = req.body?.saveToLibrary === true;
     let librarySaved = false;
     let libraryWarning = null;
 
-    try {
-      const savedLibraryCards = await saveFlashcardsToLibrary({
-        theme:
-          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 1
-            ? updatedRun.secondary_topics[1]
-            : '',
-        runId: updatedRun.id,
-        flashcards: updatedRun.enriched_flashcards || [],
-        specialty: updatedRun.specialty || 'Clínica Médica',
-        subSpecialty:
-          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 0
-            ? updatedRun.secondary_topics[0]
-            : '',
-      });
+    if (shouldSaveToLibrary) {
+      try {
+        const savedLibraryCards = await saveFlashcardsToLibrary({
+          theme:
+            Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 1
+              ? updatedRun.secondary_topics[1]
+              : '',
+          runId: updatedRun.id,
+          flashcards: updatedRun.enriched_flashcards || [],
+          specialty: updatedRun.specialty || 'Clínica Médica',
+          subSpecialty:
+            Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 0
+              ? updatedRun.secondary_topics[0]
+              : '',
+        });
 
-      librarySaved = Array.isArray(savedLibraryCards) && savedLibraryCards.length > 0;
-    } catch (libraryError) {
-      libraryWarning = libraryError.message;
+        librarySaved = Array.isArray(savedLibraryCards) && savedLibraryCards.length > 0;
+      } catch (libraryError) {
+        libraryWarning = libraryError.message;
 
-      console.warn(
-        '⚠️ Falha ao salvar flashcards enriquecidos na biblioteca:',
-        libraryError.message
-      );
+        console.warn(
+          '⚠️ Falha ao salvar flashcards enriquecidos na biblioteca:',
+          libraryError.message
+        );
+      }
     }
 
     return res.json({
