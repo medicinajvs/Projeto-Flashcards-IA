@@ -5050,26 +5050,94 @@ app.delete('/api/flashcard-decks/:id', async (req, res) => {
     }
 
     const { id } = req.params;
+    const rootDeckId = String(id || '').trim();
 
-    await supabase
+    if (!rootDeckId) {
+      return res.status(400).json({ error: 'ID da pasta é obrigatório.' });
+    }
+
+    const { data: allDecks, error: decksError } = await supabase
+      .from('flashcard_decks')
+      .select('id, parent_deck_id');
+
+    if (decksError) {
+      throw new Error(decksError.message);
+    }
+
+    const deckMap = new Map(
+      (allDecks || []).map((deck) => [String(deck.id), deck])
+    );
+
+    if (!deckMap.has(rootDeckId)) {
+      return res.json({
+        ok: true,
+        alreadyDeleted: true,
+        deletedDeckIds: [],
+        archivedCardsCount: 0,
+      });
+    }
+
+    const childMap = new Map();
+
+    for (const deck of allDecks || []) {
+      const parentId = deck.parent_deck_id ? String(deck.parent_deck_id) : '';
+
+      if (!parentId) continue;
+
+      if (!childMap.has(parentId)) {
+        childMap.set(parentId, []);
+      }
+
+      childMap.get(parentId).push(String(deck.id));
+    }
+
+    const idsToDelete = [];
+
+    const collectDeckAndChildren = (deckId) => {
+      if (!deckId || idsToDelete.includes(deckId)) return;
+
+      idsToDelete.push(deckId);
+
+      const children = childMap.get(deckId) || [];
+      children.forEach(collectDeckAndChildren);
+    };
+
+    collectDeckAndChildren(rootDeckId);
+
+    const now = new Date().toISOString();
+
+    const { data: archivedCards, error: cardsError } = await supabase
       .from('flashcards_library')
       .update({
         deck_id: null,
         is_archived: true,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
-      .eq('deck_id', id);
+      .in('deck_id', idsToDelete)
+      .select('id');
 
-    const { error } = await supabase
-      .from('flashcard_decks')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      throw new Error(error.message);
+    if (cardsError) {
+      throw new Error(cardsError.message);
     }
 
-    return res.json({ ok: true });
+    const deleteOrder = [...idsToDelete].reverse();
+
+    for (const deckId of deleteOrder) {
+      const { error: deleteError } = await supabase
+        .from('flashcard_decks')
+        .delete()
+        .eq('id', deckId);
+
+      if (deleteError) {
+        throw new Error(deleteError.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      deletedDeckIds: idsToDelete,
+      archivedCardsCount: archivedCards?.length || 0,
+    });
   } catch (error) {
     console.error('❌ Erro ao excluir deck:', error.message);
     return res.status(500).json({ error: error.message });

@@ -58,6 +58,7 @@ import {
   Droplets,
   Syringe,
   Plus,
+  Trash2,
 } from 'lucide-react';
 
 const HISTORY_ITEMS_PER_PAGE = 6;
@@ -576,6 +577,7 @@ function FolderTreeNode({
   const isSelected = selectedId === node.id;
   const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const Icon = node.icon || Folder;
+  const canDelete = typeof node.onDelete === 'function' && node.deletable !== false;
 
   const handleClick = () => {
     if (hasChildren) {
@@ -592,74 +594,104 @@ function FolderTreeNode({
     onSelect?.(node);
   };
 
+  const handleDelete = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!canDelete || node.disabled) return;
+
+    node.onDelete(node);
+  };
+
   return (
     <div>
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={node.disabled}
-        className={`group w-full flex items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+      <div
+        className={`group flex items-start gap-1 rounded-xl transition-all ${
           isSelected
             ? 'bg-red-600 text-white shadow-sm shadow-red-100'
             : 'text-slate-700 hover:bg-slate-100'
         }`}
-        style={{ paddingLeft: `${10 + level * 16}px` }}
-        title={node.label}
       >
-        <span className="w-5 h-5 flex items-center justify-center shrink-0">
-          {hasChildren ? (
-            <ChevronDown
-              size={15}
-              className={`transition-transform ${
-                isOpen ? 'rotate-0' : '-rotate-90'
-              } ${isSelected ? 'text-white' : 'text-slate-400'}`}
-            />
-          ) : (
-            <span className="w-[15px]" />
-          )}
-        </span>
-
-        <span
-          className={`w-8 h-8 mt-0.5 rounded-xl border flex items-center justify-center shrink-0 ${
-            isSelected
-              ? 'bg-white/15 border-white/15 text-white'
-              : node.iconClass || 'bg-red-50 text-red-600 border-red-100'
-          }`}
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={node.disabled}
+          className="flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ paddingLeft: `${10 + level * 16}px` }}
+          title={node.label}
         >
-          <Icon size={16} />
-        </span>
-
-        <span className="min-w-0 flex-1 overflow-hidden">
-          <span
-            className={`block text-sm font-bold leading-snug ${
-              level >= 2 ? 'line-clamp-2' : 'truncate'
-            }`}
-            title={node.label}
-          >
-            {node.label}
+          <span className="w-5 h-5 flex items-center justify-center shrink-0">
+            {hasChildren ? (
+              <ChevronDown
+                size={15}
+                className={`transition-transform ${
+                  isOpen ? 'rotate-0' : '-rotate-90'
+                } ${isSelected ? 'text-white' : 'text-slate-400'}`}
+              />
+            ) : (
+              <span className="w-[15px]" />
+            )}
           </span>
 
-          {node.description ? (
+          <span
+            className={`w-8 h-8 mt-0.5 rounded-xl border flex items-center justify-center shrink-0 ${
+              isSelected
+                ? 'bg-white/15 border-white/15 text-white'
+                : node.iconClass || 'bg-red-50 text-red-600 border-red-100'
+            }`}
+          >
+            <Icon size={16} />
+          </span>
+
+          <span className="min-w-0 flex-1 overflow-hidden">
             <span
-              className={`block text-[11px] truncate ${
-                isSelected ? 'text-white/75' : 'text-slate-400'
+              className={`block text-sm font-bold leading-snug ${
+                level >= 2 ? 'line-clamp-2' : 'truncate'
+              }`}
+              title={node.label}
+            >
+              {node.label}
+            </span>
+
+            {node.description ? (
+              <span
+                className={`block text-[11px] truncate ${
+                  isSelected ? 'text-white/75' : 'text-slate-400'
+                }`}
+              >
+                {node.description}
+              </span>
+            ) : null}
+          </span>
+
+          {node.count !== undefined && node.count !== null ? (
+            <span
+              className={`text-[11px] font-black rounded-full px-2 py-0.5 shrink-0 ${
+                isSelected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
               }`}
             >
-              {node.description}
+              {node.count}
             </span>
           ) : null}
-        </span>
+        </button>
 
-        {node.count !== undefined && node.count !== null ? (
-          <span
-            className={`text-[11px] font-black rounded-full px-2 py-0.5 shrink-0 ${
-              isSelected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
+        {canDelete ? (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={node.disabled}
+            title={`Excluir ${node.label}`}
+            aria-label={`Excluir pasta ${node.label}`}
+            className={`mt-2 mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 disabled:opacity-30 ${
+              isSelected
+                ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+                : 'border-red-100 bg-red-50 text-red-600 hover:bg-red-100'
             }`}
           >
-            {node.count}
-          </span>
+            <Trash2 size={15} />
+          </button>
         ) : null}
-      </button>
+      </div>
 
       {hasChildren && isOpen ? (
         <div className="mt-1 space-y-1">
@@ -7261,6 +7293,8 @@ export default function AdvancedFlashcardPoC() {
       }
 
       await refreshLibraryData();
+      clearArchiveSelection();
+      setSelectedDeckId('');
     } catch (err) {
       setError(`Falha ao excluir pasta: ${err.message}`);
     }
@@ -8228,6 +8262,10 @@ export default function AdvancedFlashcardPoC() {
     return archiveTree.map((specialty) => {
       const visual = getFolderVisualForLabel(specialty.name);
 
+      const specialtyCards = libraryCards.filter(
+        (card) => getArchiveCardSpecialty(card) === specialty.name
+      );
+
       return {
         id: `archive:specialty:${specialty.name}`,
         label: specialty.name,
@@ -8236,27 +8274,61 @@ export default function AdvancedFlashcardPoC() {
         iconClass: visual.iconClass,
         count: specialty.cardCount || 0,
         onSelect: () => selectArchiveSpecialty(specialty.name),
-        children: (specialty.topics || []).map((topic) => ({
-          id: `archive:topic:${specialty.name}:${topic.name}`,
-          label: topic.name,
-          description: 'Tema',
-          icon: FolderOpen,
-          iconClass: 'bg-red-50 text-red-600 border-red-100',
-          count: topic.cardCount || 0,
-          onSelect: () => selectArchiveTopic(specialty.name, topic.name),
-          children: (topic.decks || []).map((deck) => ({
-            id: `archive:deck:${specialty.name}:${topic.name}:${deck.id}`,
-            label: deck.name,
-            description: 'Deck',
-            icon: BookOpen,
-            iconClass: 'bg-slate-100 text-slate-600 border-slate-200',
-            count: Array.isArray(deck.cards) ? deck.cards.length : 0,
-            onSelect: () => selectArchiveDeck(specialty.name, topic.name, deck.id),
-          })),
-        })),
+        onDelete: () =>
+          deleteArchiveFolder({
+            type: 'specialty',
+            name: specialty.name,
+            specialtyName: specialty.name,
+            cards: specialtyCards,
+          }),
+        children: (specialty.topics || []).map((topic) => {
+          const topicCards = specialtyCards.filter(
+            (card) => getArchiveCardTopic(card) === topic.name
+          );
+
+          return {
+            id: `archive:topic:${specialty.name}:${topic.name}`,
+            label: topic.name,
+            description: 'Tema',
+            icon: FolderOpen,
+            iconClass: 'bg-red-50 text-red-600 border-red-100',
+            count: topic.cardCount || 0,
+            onSelect: () => selectArchiveTopic(specialty.name, topic.name),
+            onDelete: () =>
+              deleteArchiveFolder({
+                type: 'topic',
+                name: topic.name,
+                specialtyName: specialty.name,
+                cards: topicCards,
+              }),
+            children: (topic.decks || []).map((deck) => {
+              const deckCards = topicCards.filter(
+                (card) => String(card.deck_id || 'sem-deck') === String(deck.id)
+              );
+
+              return {
+                id: `archive:deck:${specialty.name}:${topic.name}:${deck.id}`,
+                label: deck.name,
+                description: 'Deck',
+                icon: BookOpen,
+                iconClass: 'bg-slate-100 text-slate-600 border-slate-200',
+                count: Array.isArray(deck.cards) ? deck.cards.length : 0,
+                onSelect: () => selectArchiveDeck(specialty.name, topic.name, deck.id),
+                onDelete: () =>
+                  deleteArchiveFolder({
+                    type: 'deck',
+                    id: deck.id,
+                    name: deck.name,
+                    specialtyName: specialty.name,
+                    cards: deckCards,
+                  }),
+              };
+            }),
+          };
+        }),
       };
     });
-  }, [archiveTree, selectedArchiveSpecialty, selectedArchiveTopic, selectedArchiveDeckId]);
+  }, [archiveTree, libraryCards, libraryDecks]);
 
   const startStudyFromArchiveCards = (cards) => {
     const folderCards = normalizeFlashcards(cards);
