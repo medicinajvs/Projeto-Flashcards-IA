@@ -4,6 +4,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 const {
   Document,
@@ -496,7 +497,9 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
 
     review_state: card.review_state || {},
     review_stats: card.review_stats || {},
-    sort_order: index,
+    sort_order: Number.isFinite(Number(card.sort_order ?? card.sortOrder ?? card.position))
+      ? Number(card.sort_order ?? card.sortOrder ?? card.position)
+      : index,
   };
 }
 
@@ -997,7 +1000,9 @@ async function saveFlashcardsToLibrary({
 
       review_state: card.review_state || {},
       review_stats: card.review_stats || {},
-      sort_order: index,
+      sort_order: Number.isFinite(Number(card.sort_order))
+        ? Number(card.sort_order)
+        : index,
     }));
 
   if (!payload.length) {
@@ -1016,6 +1021,124 @@ async function saveFlashcardsToLibrary({
   await touchDeck(finalDeckId);
 
   return data || [];
+}
+
+function buildLibraryFlashcardIdentityKey(card = {}) {
+  const question = String(card.question || card.pergunta || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  const answer = String(card.answer || card.resposta || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (!question && !answer) return '';
+
+  return `${question}::${answer}`;
+}
+
+async function syncRunFlashcardsToLibrarySet({ run = {}, flashcards = [] }) {
+  if (!supabase || !run?.id) {
+    return {
+      insertedCount: 0,
+      archivedCount: 0,
+    };
+  }
+
+  const currentCards = (Array.isArray(flashcards) ? flashcards : [])
+    .filter((card) => card && (card.question || card.pergunta) && (card.answer || card.resposta));
+
+  if (!currentCards.length) {
+    return {
+      insertedCount: 0,
+      archivedCount: 0,
+    };
+  }
+
+  const { data: existingCards, error: existingError } = await supabase
+    .from('flashcards_library')
+    .select('id, question, answer, is_archived')
+    .eq('source_run_id', run.id);
+
+  if (existingError) {
+    console.warn('⚠️ Falha ao buscar cards da biblioteca para sincronização:', existingError.message);
+    return {
+      insertedCount: 0,
+      archivedCount: 0,
+    };
+  }
+
+  const activeExistingCards = (existingCards || []).filter((card) => !card.is_archived);
+
+  const existingKeys = new Set(
+    activeExistingCards
+      .map(buildLibraryFlashcardIdentityKey)
+      .filter(Boolean)
+  );
+
+  const currentKeys = new Set(
+    currentCards
+      .map(buildLibraryFlashcardIdentityKey)
+      .filter(Boolean)
+  );
+
+  const missingCards = currentCards.filter((card) => {
+    const key = buildLibraryFlashcardIdentityKey(card);
+    return key && !existingKeys.has(key);
+  });
+
+  const staleIds = activeExistingCards
+    .filter((card) => {
+      const key = buildLibraryFlashcardIdentityKey(card);
+      return key && !currentKeys.has(key);
+    })
+    .map((card) => card.id)
+    .filter(Boolean);
+
+  let insertedCount = 0;
+  let archivedCount = 0;
+
+  if (missingCards.length > 0) {
+    const inserted = await saveFlashcardsToLibrary({
+      runId: run.id,
+      flashcards: missingCards,
+      specialty: run.specialty || 'Clínica Médica',
+      subSpecialty:
+        Array.isArray(run.secondary_topics) && run.secondary_topics.length > 0
+          ? run.secondary_topics[0]
+          : '',
+      theme:
+        Array.isArray(run.secondary_topics) && run.secondary_topics.length > 1
+          ? run.secondary_topics[1]
+          : '',
+    });
+
+    insertedCount = inserted?.length || 0;
+  }
+
+  if (staleIds.length > 0) {
+    const { data: archived, error: archiveError } = await supabase
+      .from('flashcards_library')
+      .update({
+        is_archived: true,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', staleIds)
+      .select('id');
+
+    if (archiveError) {
+      console.warn('⚠️ Falha ao arquivar cards obsoletos da biblioteca:', archiveError.message);
+    } else {
+      archivedCount = archived?.length || 0;
+    }
+  }
+
+  return {
+    insertedCount,
+    archivedCount,
+  };
 }
 
 async function convertVideoToMp3(inputPath, outputPath) {
@@ -1386,6 +1509,22 @@ function buildFlashcardImageKey({
   }-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension || 'png'}`;
 }
 
+function buildFlashcardPreviewImageKey({
+  runId,
+  field = 'question',
+  filename = '',
+  contentType = 'image/png',
+}) {
+  const extension =
+    filename && filename.includes('.')
+      ? sanitizeObjectKeyPart(filename.split('.').pop())
+      : getImageExtensionFromContentType(contentType);
+
+  return `flashcard-images/run-${sanitizeObjectKeyPart(runId)}/new-card-${sanitizeObjectKeyPart(
+    field
+  )}-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension || 'png'}`;
+}
+
 function getFlashcardsColumnForRun(run = {}, origin = 'current') {
   const normalizedOrigin = String(origin || 'current').toLowerCase();
 
@@ -1406,6 +1545,139 @@ function getFlashcardsColumnForRun(run = {}, origin = 'current') {
   }
 
   return 'flashcards';
+}
+
+function buildFlashcardIdentityKey(card = {}) {
+  const question = String(card.question || card.pergunta || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  const answer = String(card.answer || card.resposta || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (!question && !answer) return '';
+
+  return `${question}::${answer}`;
+}
+
+function normalizeRunFlashcardForDisplay(card = {}, index = 0, sourceOrigin = 'original') {
+  const safeSourceOrigin =
+    card.sourceOrigin ||
+    card.source_origin ||
+    sourceOrigin;
+
+  return {
+    ...card,
+    id: card.id || `${safeSourceOrigin}-${index + 1}`,
+    sourceOrigin: safeSourceOrigin,
+    source_origin: safeSourceOrigin,
+    position: index + 1,
+    sort_order: index,
+  };
+}
+
+function hasCanonicalCurrentMarkers(cards = []) {
+  return cards.some((card) => {
+    const source = String(card.sourceOrigin || card.source_origin || '').toLowerCase();
+    return source === 'current' || source === 'original';
+  });
+}
+
+function enrichedAlreadyContainsOriginals(original = [], enriched = []) {
+  if (!original.length || !enriched.length) return false;
+
+  const enrichedKeys = new Set(
+    enriched
+      .map(buildFlashcardIdentityKey)
+      .filter(Boolean)
+  );
+
+  const overlapCount = original.filter((card) =>
+    enrichedKeys.has(buildFlashcardIdentityKey(card))
+  ).length;
+
+  return overlapCount >= Math.min(2, original.length);
+}
+
+function mergeFlashcardGroupsForDisplay(groups = []) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const group of groups) {
+    const cards = Array.isArray(group.cards) ? group.cards : [];
+    const origin = group.origin || 'original';
+
+    for (const rawCard of cards) {
+      const key = buildFlashcardIdentityKey(rawCard);
+
+      if (!key || seen.has(key)) continue;
+
+      seen.add(key);
+
+      merged.push(
+        normalizeRunFlashcardForDisplay(rawCard, merged.length, origin)
+      );
+    }
+  }
+
+  return merged;
+}
+
+function buildRunEditableFlashcards(run = {}) {
+  const original = Array.isArray(run.flashcards) ? run.flashcards : [];
+  const enriched = Array.isArray(run.enriched_flashcards) ? run.enriched_flashcards : [];
+
+  if (!enriched.length) {
+    return mergeFlashcardGroupsForDisplay([
+      { cards: original, origin: 'original' },
+    ]);
+  }
+
+  const enrichedIsCurrentList =
+    hasCanonicalCurrentMarkers(enriched) ||
+    enrichedAlreadyContainsOriginals(original, enriched);
+
+  if (enrichedIsCurrentList) {
+    return mergeFlashcardGroupsForDisplay([
+      { cards: enriched, origin: 'current' },
+    ]);
+  }
+
+  return mergeFlashcardGroupsForDisplay([
+    { cards: original, origin: 'original' },
+    { cards: enriched, origin: 'enriched' },
+  ]);
+}
+
+function buildStudyRunFlashcardView(run = {}) {
+  const displayFlashcards = buildRunEditableFlashcards(run);
+
+  return {
+    ...run,
+    display_flashcards: displayFlashcards,
+    display_flashcards_count: displayFlashcards.length,
+  };
+}
+
+function resolveFlashcardListForWrite(run = {}, origin = 'current') {
+  const normalizedOrigin = String(origin || 'current').toLowerCase();
+
+  if (normalizedOrigin === 'original' || normalizedOrigin === 'flashcards') {
+    return {
+      column: 'flashcards',
+      origin: 'original',
+      cards: Array.isArray(run.flashcards) ? [...run.flashcards] : [],
+    };
+  }
+
+  return {
+    column: 'enriched_flashcards',
+    origin: 'current',
+    cards: buildRunEditableFlashcards(run),
+  };
 }
 
 function normalizeFlashcardPatch(updates = {}) {
@@ -1605,8 +1877,9 @@ async function updateRunFlashcardAtIndex({
   }
 
   const run = await getStudyRunById(runId);
-  const column = getFlashcardsColumnForRun(run, origin);
-  const cards = Array.isArray(run[column]) ? [...run[column]] : [];
+  const resolvedList = resolveFlashcardListForWrite(run, origin);
+  const column = resolvedList.column;
+  const cards = Array.isArray(resolvedList.cards) ? [...resolvedList.cards] : [];
   const normalizedIndex = Number(cardIndex);
 
   if (
@@ -1645,13 +1918,21 @@ async function updateRunFlashcardAtIndex({
     patch,
   });
 
+  const runView = buildStudyRunFlashcardView(updatedRun);
+
+  const librarySetSync = await syncRunFlashcardsToLibrarySet({
+    run: runView,
+    flashcards: runView.display_flashcards || cards,
+  });
+
   return {
-    run: updatedRun,
-    flashcards: cards,
+    run: runView,
+    flashcards: runView.display_flashcards || cards,
     flashcard: updatedCard,
     column,
-    origin: column === 'enriched_flashcards' ? 'enriched' : 'original',
+    origin: resolvedList.origin,
     syncedLibraryCards,
+    librarySetSync,
   };
 }
 
@@ -1704,44 +1985,435 @@ function pickFlashcardImageKeyword(card = {}) {
   return question.split(/\s+/).slice(0, 4).join(' ') || 'medical learning concept';
 }
 
-function buildFlashcardImagePrompt(card = {}) {
-  const insights = card.cardInsights || card.card_insights || {};
-  const keyword = pickFlashcardImageKeyword(card);
+function cleanImagePromptConcept(value = '') {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1200);
+}
 
-  const answerBase = String(
-    insights.corrected_answer ||
-      card.answer ||
-      card.resposta ||
-      ''
+function extractIllustrationSubject(value = '') {
+  let text = cleanImagePromptConcept(value);
+
+  if (!text) return '';
+
+  text = text
+    .replace(/\bde acordo com o texto\b/gi, '')
+    .replace(/\bde acordo com a definição apresentada\b/gi, '')
+    .replace(/\bsegundo o texto\b/gi, '')
+    .replace(/\bsegundo a definição apresentada\b/gi, '')
+    .replace(/\bcom base no texto\b/gi, '')
+    .replace(/\bapresentada\b/gi, '')
+    .replace(/\bo que é\b/gi, '')
+    .replace(/\bqual(?:is)?\s+(?:é|são)\b/gi, '')
+    .replace(/\bqual\s+a\s+definição\s+de\b/gi, '')
+    .replace(/\bqual\s+é\s+a\s+definição\s+de\b/gi, '')
+    .replace(/\bqual\s+o\s+conceito\s+de\b/gi, '')
+    .replace(/\bqual\s+é\s+o\s+conceito\s+de\b/gi, '')
+    .replace(/\bqual\s+é\s+a\s+função\s+de\b/gi, '')
+    .replace(/\bqual\s+a\s+função\s+de\b/gi, '')
+    .replace(/\bquais\s+são\b/gi, '')
+    .replace(/\?+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/^[,.:;\-\s]+|[,.:;\-\s]+$/g, '');
+
+  return text.slice(0, 160);
+}
+
+function buildVisualSubjectFromConcept(value = '') {
+  const extracted = extractIllustrationSubject(value);
+  const cleaned = cleanImagePromptConcept(value);
+
+  return (
+    extracted ||
+    cleaned ||
+    'a single central medical illustration directly representing the concept'
+  );
+}
+
+function buildSubjectSpecificIllustrationHint(subject = '') {
+  return [
+    'Create one single central hero illustration only.',
+    'The illustration must represent the medical concept in one unified scene or one unified object.',
+    'Use one dominant primary subject.',
+    'If a secondary element is needed, it must be directly integrated into the same scene.',
+    'Do not scatter multiple unrelated medical objects across the image.',
+    'Do not create a collection, lineup, sheet, board, collage, or infographic panel of separate elements.',
+    'Do not create several isolated icons.',
+    'Avoid decorative extra objects.',
+    'Keep the image highly relevant to the concept and visually focused.',
+    `The central subject should represent: ${subject || 'the medical concept'}.`,
+  ].join(' ');
+}
+
+function buildKawaiiMedicalFlashcardImagePrompt({
+  field = 'answer',
+  concept = '',
+}) {
+  const cleanConcept = cleanImagePromptConcept(concept);
+  const subject = buildVisualSubjectFromConcept(cleanConcept);
+
+  return [
+    'Create ONE single isolated medical visual asset.',
+    `Central medical concept to represent visually: ${subject}.`,
+    'The image must contain exactly ONE main subject or ONE unified scene.',
+    'The main subject must occupy most of the image.',
+    'Represent the concept as a single coherent medical illustration, not as a panel.',
+    'If the idea requires more than one element, merge the elements into one connected object or one connected scene.',
+    'Example of acceptable structure: one DNA helix integrated with a laboratory interface; one cell interacting with a drug molecule; one organ showing one pathological process.',
+    'ABSOLUTE RULE: no written text anywhere in the image.',
+    'No words.',
+    'No titles.',
+    'No labels.',
+    'No captions.',
+    'No legends.',
+    'No letters.',
+    'No numbers.',
+    'No typography.',
+    'No readable marks.',
+    'No banners.',
+    'No cards.',
+    'No panels.',
+    'No posters.',
+    'No slides.',
+    'No UI.',
+    'No headers.',
+    'No footers.',
+    'No text boxes.',
+    'Do not create an infographic board.',
+    'Do not create a collection of separate objects.',
+    'Do not create a lineup of medical objects.',
+    'Do not create a grid.',
+    'Do not scatter multiple isolated icons.',
+    'Do not place separate lab equipment around the subject unless it is physically integrated into the same central scene.',
+    'Do not include decorative extra objects.',
+    'Use a clean polished vector-style medical illustration.',
+    'Use a plain neutral solid background or transparent background.',
+    'Output only the illustration asset.',
+  ].join(' ');
+}
+
+function buildFlashcardImagePrompt(card = {}, field = 'answer') {
+  const insights = card.cardInsights || card.card_insights || {};
+
+  const concept = String(
+    field === 'question'
+      ? card.question || card.pergunta || insights.image_keyword || ''
+      : insights.corrected_answer ||
+          card.answer ||
+          card.resposta ||
+          insights.image_keyword ||
+          card.question ||
+          card.pergunta ||
+          ''
   )
     .replace(/\s+/g, ' ')
     .trim();
 
-  const shortTitle = String(
-    insights.image_keyword ||
-      keyword ||
-      'FLASHCARD MÉDICO'
-  )
-    .toUpperCase()
-    .slice(0, 56);
+  return buildKawaiiMedicalFlashcardImagePrompt({
+    field,
+    concept,
+  }).slice(0, 2600);
+}
 
-  return [
-    'Create a single educational mnemonic illustration in Brazilian Portuguese.',
-    `Main title: "${shortTitle}".`,
-    answerBase
-      ? `Base the illustration on this medical concept: ${answerBase.slice(0, 600)}.`
-      : '',
-    'The result must look like a didactic study figure, similar to a visual memory aid.',
-    'Visual style: black or very dark background, bold short title, central cartoon-style or infographic-style illustration, clean composition, high contrast, educational.',
-    'Use very little text. Only the short title and, if needed, one very short supporting label.',
-    'Do not write the full flashcard question.',
-    'Do not create a footer.',
-    'Do not add logos, watermark, UI elements, or long paragraphs.',
-    'The illustration must be the main focus.',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .slice(0, 1800);
+function looksLikeBase64Image(value = '') {
+  const text = String(value || '').trim();
+
+  if (!text || text.length < 500) return false;
+
+  return /^[A-Za-z0-9+/=\s]+$/.test(text);
+}
+
+function findImageBytesInObject(value, depth = 0) {
+  if (!value || depth > 6) return '';
+
+  if (typeof value === 'string') {
+    return '';
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findImageBytesInObject(item, depth + 1);
+      if (found) return found;
+    }
+
+    return '';
+  }
+
+  if (typeof value !== 'object') return '';
+
+  const preferredKeys = [
+    'imageBytes',
+    'bytesBase64Encoded',
+    'bytesBase64',
+    'base64Data',
+    'data',
+  ];
+
+  for (const key of preferredKeys) {
+    if (looksLikeBase64Image(value[key])) {
+      return String(value[key]).replace(/\s+/g, '');
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    const found = findImageBytesInObject(item, depth + 1);
+    if (found) return found;
+  }
+
+  return '';
+}
+
+function summarizeImagenResponse(response = {}) {
+  try {
+    const generatedImages = Array.isArray(response?.generatedImages)
+      ? response.generatedImages
+      : [];
+
+    const firstGenerated = generatedImages[0] || {};
+    const firstImage = firstGenerated.image || {};
+
+    return JSON.stringify({
+      topLevelKeys: Object.keys(response || {}),
+      generatedImagesCount: generatedImages.length,
+      firstGeneratedKeys: Object.keys(firstGenerated || {}),
+      firstImageKeys: Object.keys(firstImage || {}),
+      safetyAttributes:
+        firstGenerated.safetyAttributes ||
+        firstGenerated.safety_attributes ||
+        response.safetyAttributes ||
+        response.safety_attributes ||
+        null,
+      finishReason:
+        firstGenerated.finishReason ||
+        firstGenerated.finish_reason ||
+        response.finishReason ||
+        response.finish_reason ||
+        null,
+      filteredReason:
+        firstGenerated.filteredReason ||
+        firstGenerated.filtered_reason ||
+        response.filteredReason ||
+        response.filtered_reason ||
+        null,
+    }).slice(0, 900);
+  } catch {
+    return 'Não foi possível resumir a resposta do modelo de imagem.';
+  }
+}
+
+function buildImageValidationPrompt() {
+  return `
+You are validating a generated medical illustration for a flashcard system.
+
+Return only valid JSON.
+
+The image is approved ONLY if all conditions are true:
+1. It contains no readable text of any kind.
+2. It contains no title, label, caption, letter, number, logo, watermark, or typography.
+3. It is not a poster, card, slide, UI, infographic board, or text panel.
+4. It does not show a collection/grid/lineup of many disconnected objects.
+5. It has one dominant central subject or one unified connected scene.
+
+Reject the image if:
+- any readable word appears;
+- a medical topic title appears, such as "Biotecnologia";
+- there are many separate objects scattered around the canvas;
+- it looks like a board, poster, panel, or infographic sheet;
+- it has multiple independent icons instead of one central illustration.
+
+JSON schema:
+{
+  "approved": boolean,
+  "has_text": boolean,
+  "has_multiple_disconnected_objects": boolean,
+  "looks_like_poster_or_panel": boolean,
+  "reason": string
+}
+`.trim();
+}
+
+function parseImageValidationJson(text = '') {
+  const cleaned = String(text || '')
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const first = cleaned.indexOf('{');
+    const last = cleaned.lastIndexOf('}');
+
+    if (first >= 0 && last > first) {
+      return JSON.parse(cleaned.slice(first, last + 1));
+    }
+
+    return {
+      approved: false,
+      has_text: true,
+      has_multiple_disconnected_objects: true,
+      looks_like_poster_or_panel: true,
+      reason: 'Não foi possível validar a imagem em JSON.',
+    };
+  }
+}
+
+async function validateGeneratedIllustrationBuffer(buffer) {
+  if (!buffer) {
+    return {
+      approved: false,
+      reason: 'Buffer vazio.',
+    };
+  }
+
+  const imageBase64 = buffer.toString('base64');
+  const prompt = buildImageValidationPrompt();
+
+  const errors = [];
+
+  for (const apiKey of getGeminiKeysToTry()) {
+    for (const modelName of GEMINI_METADATA_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+        const response = await fetchWithTimeout(
+          url,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: prompt },
+                    {
+                      inline_data: {
+                        mime_type: 'image/png',
+                        data: imageBase64,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0,
+                responseMimeType: 'application/json',
+              },
+            }),
+          },
+          REQUEST_TIMEOUT_MS
+        );
+
+        const responseText = await response.text();
+        const data = parseJsonSafe(responseText);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error?.message || `Falha na validação da imagem: HTTP ${response.status}`
+          );
+        }
+
+        const text = getGeminiText(data);
+        const parsed = parseImageValidationJson(text);
+
+        return {
+          approved: Boolean(parsed.approved),
+          has_text: Boolean(parsed.has_text),
+          has_multiple_disconnected_objects: Boolean(parsed.has_multiple_disconnected_objects),
+          looks_like_poster_or_panel: Boolean(parsed.looks_like_poster_or_panel),
+          reason: parsed.reason || '',
+          modelUsed: modelName,
+        };
+      } catch (error) {
+        errors.push(`${modelName} | ${maskGeminiKey(apiKey)}: ${error.message}`);
+
+        if (isGeminiQuotaError(error)) {
+          putGeminiKeyOnCooldown(apiKey, error);
+        }
+      }
+    }
+  }
+
+  return {
+    approved: false,
+    has_text: true,
+    has_multiple_disconnected_objects: true,
+    looks_like_poster_or_panel: true,
+    reason: `Falha ao validar imagem: ${errors.slice(0, 3).join(' | ')}`,
+  };
+}
+
+async function sanitizeGeneratedIllustrationBuffer(buffer) {
+  if (!buffer) return buffer;
+
+  const image = sharp(buffer);
+  const metadata = await image.metadata();
+
+  const width = metadata.width || 1024;
+  const height = metadata.height || 1024;
+
+  // O Imagen às vezes cria "card/poster" com título no topo.
+  // Este corte remove a faixa superior onde o texto costuma aparecer
+  // e mantém a área central da ilustração.
+  const cropTop = Math.round(height * 0.18);
+  const cropHeight = Math.round(height * 0.72);
+
+  const safeCropHeight = Math.min(cropHeight, height - cropTop);
+
+  return await sharp(buffer)
+    .extract({
+      left: 0,
+      top: cropTop,
+      width,
+      height: safeCropHeight,
+    })
+    .trim({ threshold: 10 })
+    .resize({
+      width: 900,
+      height: 640,
+      fit: 'inside',
+      withoutEnlargement: false,
+      background: { r: 248, g: 251, b: 253, alpha: 0 },
+    })
+    .extend({
+      top: 40,
+      bottom: 40,
+      left: 40,
+      right: 40,
+      background: { r: 248, g: 251, b: 253, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+}
+
+async function normalizeGeneratedIllustrationBuffer(buffer) {
+  if (!buffer) return buffer;
+
+  return await sharp(buffer)
+    .trim({ threshold: 8 })
+    .resize({
+      width: 900,
+      height: 900,
+      fit: 'inside',
+      withoutEnlargement: true,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    })
+    .extend({
+      top: 28,
+      right: 28,
+      bottom: 28,
+      left: 28,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    })
+    .png()
+    .toBuffer();
 }
 
 async function generateImagenIllustrationBuffer(prompt) {
@@ -1752,64 +2424,94 @@ async function generateImagenIllustrationBuffer(prompt) {
   const { GoogleGenAI } = await import('@google/genai');
   const errors = [];
 
-  for (const modelName of GEMINI_IMAGE_MODELS) {
+  const imageModelsToTry = GEMINI_IMAGE_MODELS
+    .map((model) => String(model || '').trim())
+    .filter(Boolean);
+
+  if (!imageModelsToTry.length) {
+    throw new Error('Nenhum modelo de imagem configurado. Defina GEMINI_IMAGE_MODELS ou GEMINI_IMAGE_MODEL.');
+  }
+
+  const attemptsPerModel = 3;
+
+  for (const modelName of imageModelsToTry) {
     for (const apiKey of getGeminiKeysToTry()) {
-      try {
-        const ai = new GoogleGenAI({ apiKey });
+      for (let attempt = 1; attempt <= attemptsPerModel; attempt += 1) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
 
-        const response = await ai.models.generateImages({
-          model: modelName,
-          prompt,
-          config: {
-            numberOfImages: 1,
-            aspectRatio: '3:4',
-            personGeneration: 'dont_allow',
-          },
-        });
+          const attemptPrompt = [
+            prompt,
+            attempt > 1
+              ? `Previous attempt was rejected. Generate again following the rules strictly. Attempt ${attempt}/${attemptsPerModel}. The image must have no text and must show only one central unified medical illustration.`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n');
 
-        const imageBytes = response?.generatedImages?.[0]?.image?.imageBytes;
+          const response = await ai.models.generateImages({
+            model: modelName,
+            prompt: attemptPrompt,
+            config: {
+              numberOfImages: 1,
+              aspectRatio: '1:1',
+              personGeneration: 'dont_allow',
+            },
+          });
 
-        if (!imageBytes) {
-          throw new Error('O modelo de imagem não retornou bytes de imagem.');
+          const imageBytes =
+            response?.generatedImages?.[0]?.image?.imageBytes ||
+            findImageBytesInObject(response);
+
+          if (!imageBytes) {
+            const responseSummary = summarizeImagenResponse(response);
+
+            errors.push(
+              `${modelName} | ${maskGeminiKey(apiKey)} tentativa ${attempt} [sem-bytes]: ${responseSummary}`
+            );
+
+            continue;
+          }
+
+          const rawBuffer = Buffer.from(imageBytes, 'base64');
+          const normalizedBuffer = await normalizeGeneratedIllustrationBuffer(rawBuffer);
+          const validation = await validateGeneratedIllustrationBuffer(normalizedBuffer);
+
+          if (validation.approved) {
+            return normalizedBuffer;
+          }
+
+          errors.push(
+            `${modelName} | ${maskGeminiKey(apiKey)} tentativa ${attempt} [rejeitada]: ${validation.reason || 'Imagem rejeitada.'}`
+          );
+
+          console.warn(
+            '⚠️ Imagem IA rejeitada pela validação:',
+            validation
+          );
+        } catch (error) {
+          const message = error.message || 'Erro desconhecido';
+
+          errors.push(
+            `${modelName} | ${maskGeminiKey(apiKey)} tentativa ${attempt} [${error.statusCode || 'sem-status'}]: ${message}`
+          );
+
+          if (isGeminiQuotaError(error)) {
+            putGeminiKeyOnCooldown(apiKey, error);
+          }
+
+          console.warn(
+            `⚠️ Falha ao gerar imagem no modelo ${modelName} com chave ${maskGeminiKey(apiKey)}. Tentando próximo fallback:`,
+            message
+          );
         }
-
-        return Buffer.from(imageBytes, 'base64');
-      } catch (error) {
-        const message = error.message || 'Erro desconhecido';
-
-        errors.push(
-          `${modelName} | ${maskGeminiKey(apiKey)} [${error.statusCode || 'sem-status'}]: ${message}`
-        );
-
-        if (isGeminiQuotaError(error)) {
-          putGeminiKeyOnCooldown(apiKey, error);
-        }
-
-        const lowerMessage = message.toLowerCase();
-
-        const shouldTryNextImageModel =
-          isRetryableGeminiError(error.statusCode, message) ||
-          lowerMessage.includes('paid plan') ||
-          lowerMessage.includes('billing') ||
-          lowerMessage.includes('not available') ||
-          lowerMessage.includes('unsupported') ||
-          lowerMessage.includes('not supported') ||
-          lowerMessage.includes('permission') ||
-          lowerMessage.includes('invalid_argument');
-
-        if (!shouldTryNextImageModel) {
-          throw error;
-        }
-
-        console.warn(
-          `⚠️ Geração de imagem indisponível no modelo ${modelName} com chave ${maskGeminiKey(apiKey)}. Tentando próximo fallback:`,
-          message
-        );
       }
     }
   }
 
-  throw new Error(`Falha ao gerar imagem com IA. Detalhes: ${errors.join(' | ')}`);
+  throw new Error(
+    `Nenhum modelo de imagem retornou uma imagem aprovada. Últimos erros: ${errors.slice(-6).join(' | ')}`
+  );
 }
 
 async function composeFlashcardPosterImage({ illustrationBuffer, card = {}, keyword = '' }) {
@@ -1906,6 +2608,9 @@ async function generateFlashcardInsights({ run = {}, card = {}, cardIndex = 0 })
       preceptor_note_suggestion: { type: 'string' },
       image_keyword: { type: 'string' },
       image_prompt: { type: 'string' },
+      mnemonic_detected: { type: 'boolean' },
+      mnemonic_value: { type: 'string' },
+      mnemonic_application: { type: 'string' },
       suggested_tags: {
         type: 'array',
         items: { type: 'string' },
@@ -1919,6 +2624,9 @@ async function generateFlashcardInsights({ run = {}, card = {}, cardIndex = 0 })
       'image_keyword',
       'image_prompt',
       'suggested_tags',
+      'mnemonic_detected',
+      'mnemonic_value',
+      'mnemonic_application',
     ],
   };
 
@@ -1947,12 +2655,23 @@ ${evidenceText || 'Não disponível.'}
 
 Tarefa:
 1. Aponte a principal lacuna do flashcard.
-2. Sugira melhoria objetiva.
-3. Escreva uma resposta corrigida, mais completa e didática, mas sem ficar prolixa.
-4. Sugira nota de preceptor.
-5. Sugira uma palavra-chave visual para imagem.
-6. Gere um prompt em inglês para Imagen, sem texto dentro da imagem, com estilo de ilustração médica educacional.
-7. Sugira tags curtas.
+2. Verifique se existe algum mnemônico aplicável a este flashcard, usando:
+   - a pergunta;
+   - a resposta;
+   - a nota do preceptor;
+   - a análise macro;
+   - a transcrição.
+3. Se houver mnemônico clinicamente correto e útil, retorne:
+   - mnemonic_detected = true;
+   - mnemonic_value com o mnemônico;
+   - mnemonic_application explicando exatamente como o aluno deve usar esse mnemônico neste card.
+4. Se não houver mnemônico útil, retorne mnemonic_detected = false e strings vazias nos campos de mnemônico.
+5. Sugira melhoria objetiva. Se houver mnemônico útil, a melhoria deve incorporar o mnemônico de forma ponderada, sem transformar todo card em mnemônico.
+6. Escreva uma resposta corrigida, mais completa e didática, mas sem ficar prolixa. Se o mnemônico for útil, inclua uma frase curta ensinando como aplicá-lo.
+7. Sugira nota de preceptor. Se houver mnemônico útil, inclua uma orientação específica de uso.
+8. Sugira uma palavra-chave visual para imagem.
+9. Sugira apenas uma palavra-chave visual curta para imagem. Não gere prompt final de imagem.
+10. Sugira tags curtas.
 `,
     responseSchema,
   });
@@ -1965,6 +2684,9 @@ Tarefa:
     image_keyword: result.image_keyword || '',
     image_prompt: result.image_prompt || '',
     suggested_tags: Array.isArray(result.suggested_tags) ? result.suggested_tags : [],
+    mnemonic_detected: Boolean(result.mnemonic_detected),
+    mnemonic_value: result.mnemonic_value || '',
+    mnemonic_application: result.mnemonic_application || '',
   };
 }
 
@@ -2306,7 +3028,7 @@ async function updateStudyRunFlashcards(id, flashcards, modelUsed) {
     throw new Error(`Falha ao atualizar flashcards no Supabase: ${error.message}`);
   }
 
-  return data;
+  return buildStudyRunFlashcardView(data);
 }
 
 async function updateStudyRunEnrichment(id, enrichedTranscript, enrichedSummary) {
@@ -2353,7 +3075,7 @@ async function updateStudyRunEnrichedFlashcards(id, flashcards, modelUsed) {
     throw new Error(`Falha ao salvar flashcards enriquecidos no Supabase: ${error.message}`);
   }
 
-  return data;
+  return buildStudyRunFlashcardView(data);
 }
 
 async function updateStudyRunMeta(id, updates) {
@@ -2439,7 +3161,7 @@ async function getStudyRunById(id) {
     throw new Error(`Falha ao carregar registro no Supabase: ${error.message}`);
   }
 
-  return data;
+  return buildStudyRunFlashcardView(data);
 }
 
 async function deleteStudyRunById(id) {
@@ -4304,105 +5026,446 @@ function buildDocxParagraphsFromRichHtml(html = '', fallback = '', paragraphOpti
   );
 }
 
-function drawFlashcardPdfPage(doc, {
+function escapeSvg(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function wrapSvgText(value = '', maxChars = 28, maxLines = 7) {
+  const words = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+
+    if (lines.length >= maxLines) break;
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  return lines;
+}
+
+async function fetchImageAsset(url = '') {
+  if (!url) return null;
+
+  try {
+    const response = await fetchWithTimeout(url, {}, REQUEST_TIMEOUT_MS);
+
+    if (!response.ok) return null;
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      mimeType: response.headers.get('content-type') || 'image/png',
+    };
+  } catch (error) {
+    console.warn('⚠️ Falha ao baixar imagem para exportação:', error.message);
+    return null;
+  }
+}
+
+async function buildEmbeddedImageDataUrl(imageAsset) {
+  if (!imageAsset?.buffer) return '';
+
+  const normalized = await sharp(imageAsset.buffer)
+    .trim({ threshold: 12 })
+    .resize({
+      width: 760,
+      height: 420,
+      fit: 'inside',
+      background: { r: 248, g: 251, b: 253, alpha: 0 },
+      withoutEnlargement: true,
+    })
+    .png()
+    .toBuffer();
+
+  return `data:image/png;base64,${normalized.toString('base64')}`;
+}
+
+function buildSiteGlassesLogoSvg({
+  x = 0,
+  y = 0,
+  size = 74,
+  background = '#2563EB',
+  foreground = '#FFFFFF',
+}) {
+  const scale = size / 24;
+  const radius = Math.round(size * 0.22);
+
+  return `
+    <g transform="translate(${x} ${y})">
+      <rect
+        x="0"
+        y="0"
+        width="${size}"
+        height="${size}"
+        rx="${radius}"
+        fill="${background}"
+      />
+
+      <g transform="translate(${size * 0.12} ${size * 0.18}) scale(${scale * 0.76})">
+        <path
+          d="M2.5 13.5 5.3 7.1C6 5.5 7.1 5 8.4 5"
+          fill="none"
+          stroke="${foreground}"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M21.5 13.5 18.7 7.1C18 5.5 16.9 5 15.6 5"
+          fill="none"
+          stroke="${foreground}"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <circle
+          cx="7"
+          cy="15"
+          r="4"
+          fill="none"
+          stroke="${foreground}"
+          stroke-width="2.4"
+        />
+        <circle
+          cx="17"
+          cy="15"
+          r="4"
+          fill="none"
+          stroke="${foreground}"
+          stroke-width="2.4"
+        />
+        <path
+          d="M11 15h2"
+          fill="none"
+          stroke="${foreground}"
+          stroke-width="2.4"
+          stroke-linecap="round"
+        />
+      </g>
+    </g>
+  `;
+}
+
+function buildCardLabelSvg({
+  type = 'Pergunta',
+  width = 1772,
+  accent = '#10A8B5',
+}) {
+  const isQuestion = type === 'Pergunta';
+
+  if (isQuestion) {
+    return `
+      <rect x="32" y="34" width="760" height="106" rx="53" fill="none" stroke="#8D8D8D" stroke-width="4"/>
+      <text x="118" y="106" font-size="68" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#213A5B">Pergunta</text>
+      <circle cx="718" cy="84" r="28" fill="none" stroke="#8D8D8D" stroke-width="5"/>
+      <line x1="698" y1="104" x2="662" y2="140" stroke="#8D8D8D" stroke-width="7" stroke-linecap="round"/>
+    `;
+  }
+
+  const labelWidth = 725;
+  const labelX = Math.round((width - labelWidth) / 2);
+
+  return `
+    <rect x="${labelX}" y="34" width="${labelWidth}" height="92" rx="46" fill="none" stroke="#8D8D8D" stroke-width="4"/>
+    <text x="${labelX + 128}" y="97" font-size="58" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#213A5B">Resposta</text>
+    <circle cx="${labelX + labelWidth - 78}" cy="80" r="25" fill="none" stroke="${accent}" stroke-width="5"/>
+    <path d="M${labelX + labelWidth - 92} 80 l12 13 l28 -35" fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  `;
+}
+
+function buildFlashcardHeaderBrandSvg({
+  cardNumber = 1,
+  totalCards = 1,
+  accent = '#10A8B5',
+}) {
+  return `
+    <g transform="translate(1320 36)">
+      ${buildSiteGlassesLogoSvg({
+        x: 0,
+        y: 0,
+        size: 74,
+        background: '#2563EB',
+        foreground: '#FFFFFF',
+      })}
+      <text x="96" y="54" font-size="54" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="${accent}">Flashcard</text>
+      <text x="98" y="102" font-size="20" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#94A3B8">CARD ${cardNumber} / ${totalCards}</text>
+    </g>
+  `;
+}
+
+function buildDecorativeSideBarsSvg({
+  x = 0,
+  y = 220,
+  accent = '#10A8B5',
+  muted = '#BFC7CE',
+}) {
+  return `
+    <rect x="${x}" y="${y}" width="22" height="300" rx="11" fill="${accent}" opacity="0.72"/>
+    <rect x="${x}" y="${y + 34}" width="116" height="26" rx="13" fill="${accent}" opacity="0.95"/>
+    <rect x="${x}" y="${y + 68}" width="76" height="22" rx="11" fill="${muted}" opacity="0.95"/>
+  `;
+}
+
+async function buildFlashcardFaceSvg({
   type = 'Pergunta',
   text = '',
-  richHtml = '',
   specialty = '',
   topic = '',
   cardNumber = 1,
   totalCards = 1,
-  imageBuffer = null,
+  imageAsset = null,
 }) {
-  const width = doc.page.width;
-  const height = doc.page.height;
-  const isQuestion = type.toLowerCase().includes('pergunta');
-  const accent = isQuestion ? '#dc2626' : '#16a34a';
+  const isQuestion = type === 'Pergunta';
+  const width = 1772;
+  const height = 1185;
 
-  doc.rect(0, 0, width, height).fill('#ffffff');
+  const accent = isQuestion ? '#10A8B5' : '#5BA7E5';
+  const accentDark = isQuestion ? '#0C8C97' : '#428FD2';
 
-  doc.roundedRect(40, 40, width - 80, height - 80, 24)
-    .lineWidth(2)
-    .strokeColor('#e2e8f0')
-    .stroke();
+  const specialtyLabel = String(specialty || topic || 'Clínica Médica').trim();
+  const subSpecialtyLabel = String(topic || specialty || 'Flashcard').trim();
 
-  const pillWidth = 170;
-  const pillHeight = 46;
-  const pillX = 72;
-  const pillY = 60;
+  const plainText = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 23)
-    .fillAndStroke(isQuestion ? '#fee2e2' : '#dcfce7', isQuestion ? '#fecaca' : '#bbf7d0');
+  const imageDataUrl = await buildEmbeddedImageDataUrl(imageAsset);
 
-  doc.fillColor('#1f2937')
-    .font('Helvetica-Bold')
-    .fontSize(18)
-    .text(type, pillX, pillY + 13, {
-      width: pillWidth,
-      align: 'center',
-      lineBreak: false,
-    });
+  const maxChars = isQuestion
+    ? imageDataUrl
+      ? 20
+      : 27
+    : imageDataUrl
+    ? 21
+    : 30;
 
-  doc.fillColor('#94a3b8')
-    .fontSize(10)
-    .font('Helvetica-Bold')
-    .text(`CARD ${cardNumber} / ${totalCards}`, width - 170, 60, {
-      width: 120,
-      align: 'right',
-    });
+  const maxLines = isQuestion
+    ? imageDataUrl
+      ? 6
+      : 7
+    : imageDataUrl
+    ? 6
+    : 7;
 
-  const plainText = stripHtmlToPlainText(richHtml) || text || '';
-  const fontSize = plainText.length > 260 ? 22 : plainText.length > 180 ? 26 : plainText.length > 100 ? 30 : 36;
-  const richParagraphs = parseFlashcardHtmlToRichParagraphs(richHtml, text);
+  const textLines = wrapSvgText(plainText, maxChars, maxLines);
 
-  drawRichPdfText(doc, {
-    paragraphs: richParagraphs,
-    fallbackText: text,
-    x: 72,
-    y: 145,
-    width: width - 144,
-    height: imageBuffer ? 185 : 315,
-    fontSize,
-    baseColor: '#243447',
-    forceBold: false,
-    align: 'center',
-    lineGap: 9,
-  });
-
-  if (imageBuffer) {
-    try {
-      doc.image(imageBuffer, 110, 355, {
-        fit: [width - 220, 210],
-        align: 'center',
-        valign: 'center',
-      });
-    } catch (error) {
-      console.warn('⚠️ Falha ao inserir imagem no PDF:', error.message);
+  const fontSize = (() => {
+    if (imageDataUrl) {
+      if (plainText.length > 300) return 50;
+      if (plainText.length > 220) return 56;
+      if (plainText.length > 150) return 62;
+      return 70;
     }
+
+    if (isQuestion) {
+      if (plainText.length > 260) return 62;
+      if (plainText.length > 200) return 70;
+      if (plainText.length > 140) return 78;
+      return 86;
+    }
+
+    if (plainText.length > 300) return 56;
+    if (plainText.length > 220) return 64;
+    if (plainText.length > 150) return 72;
+    return 82;
+  })();
+
+  const lineHeight = Math.round(fontSize * 1.22);
+  const textBlockHeight = textLines.length * lineHeight;
+
+  const questionTextX = 115;
+  const questionTextY = imageDataUrl ? 345 : 375;
+
+  const questionTextBottom =
+    questionTextY + Math.max(0, textLines.length - 1) * lineHeight;
+
+  const questionDividerY = Math.min(height - 170, questionTextBottom + 115);
+
+  const answerTextX = imageDataUrl ? 118 : width / 2;
+  const answerTextY = imageDataUrl
+    ? 390
+    : Math.max(430, Math.round((height - textBlockHeight) / 2) + 20);
+
+  const textSvg = textLines
+    .map((line, index) => {
+      const x = isQuestion ? questionTextX : answerTextX;
+      const y = (isQuestion ? questionTextY : answerTextY) + index * lineHeight;
+      const anchor = isQuestion ? 'start' : imageDataUrl ? 'start' : 'middle';
+
+      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#213A5B">${escapeSvg(
+        line
+      )}</text>`;
+    })
+    .join('\n');
+
+  const repeatedWatermarks = '';
+
+  const imageSvg = imageDataUrl
+    ? isQuestion
+      ? `
+        <defs>
+          <clipPath id="questionImageClip">
+            <rect x="1160" y="204" width="530" height="430" rx="24" ry="24"/>
+          </clipPath>
+        </defs>
+
+        <rect x="1138" y="180" width="574" height="478" rx="28" fill="#FFFFFF" stroke="${accent}" stroke-width="3"/>
+        ${buildDecorativeSideBarsSvg({
+          x: 1092,
+          y: 244,
+          accent,
+          muted: '#BFC7CE',
+        })}
+
+        <image
+          href="${imageDataUrl}"
+          x="1160"
+          y="204"
+          width="530"
+          height="430"
+          preserveAspectRatio="xMidYMid meet"
+          clip-path="url(#questionImageClip)"
+        />
+
+        <rect x="1160" y="204" width="530" height="430" rx="24" fill="none" stroke="${accent}" stroke-width="2"/>
+      `
+      : `
+        <defs>
+          <clipPath id="answerImageClip">
+            <rect x="1160" y="300" width="540" height="420" rx="24" ry="24"/>
+          </clipPath>
+        </defs>
+
+        <rect x="1138" y="274" width="584" height="470" rx="28" fill="#FFFFFF" stroke="${accent}" stroke-width="3"/>
+        ${buildDecorativeSideBarsSvg({
+          x: 1092,
+          y: 334,
+          accent,
+          muted: '#BFC7CE',
+        })}
+
+        <image
+          href="${imageDataUrl}"
+          x="1160"
+          y="300"
+          width="540"
+          height="420"
+          preserveAspectRatio="xMidYMid meet"
+          clip-path="url(#answerImageClip)"
+        />
+
+        <rect x="1160" y="300" width="540" height="420" rx="24" fill="none" stroke="${accent}" stroke-width="2"/>
+      `
+    : '';
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
+      <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#DEE6ED" stroke-width="1.6"/>
+    </pattern>
+  </defs>
+
+  <rect x="0" y="0" width="${width}" height="${height}" fill="${isQuestion ? '#08A9B7' : '#5AA1DE'}"/>
+  <rect x="6" y="6" width="${width - 12}" height="${height - 12}" rx="16" fill="#FBFDFE"/>
+  <rect x="6" y="6" width="${width - 12}" height="${height - 12}" rx="16" fill="url(#grid)" opacity="0.9"/>
+
+  ${repeatedWatermarks}
+
+  ${buildCardLabelSvg({
+    type,
+    width,
+    accent,
+  })}
+
+  ${buildFlashcardHeaderBrandSvg({
+    cardNumber,
+    totalCards,
+    accent: isQuestion ? '#10A8B5' : '#5BA7E5',
+  })}
+
+  ${
+    !isQuestion
+      ? `
+        ${buildDecorativeSideBarsSvg({
+          x: 0,
+          y: 210,
+          accent,
+          muted: '#BFC7CE',
+        })}
+        <text x="140" y="295" font-size="34" font-family="Arial, Helvetica, sans-serif" font-weight="800" fill="#8E8E8E">${escapeSvg(
+          subSpecialtyLabel
+        )}</text>
+      `
+      : ''
   }
 
-  doc.strokeColor(accent)
-    .lineWidth(4)
-    .moveTo(76, height - 150)
-    .lineTo(160, height - 150)
-    .stroke();
+  ${textSvg}
+  ${imageSvg}
 
-  const footer = [specialty, topic].filter(Boolean).join(' · ');
+  ${
+    isQuestion
+      ? `
+        <line x1="48" y1="${questionDividerY}" x2="190" y2="${questionDividerY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>
+        <text x="1660" y="1060" text-anchor="end" font-size="86" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="${accent}">${escapeSvg(
+          specialtyLabel
+        )}</text>
+        <rect x="1668" y="1016" width="110" height="18" rx="9" fill="${accent}" opacity="0.85"/>
+        <rect x="1708" y="1048" width="70" height="16" rx="8" fill="#BFC7CE"/>
+      `
+      : `
+        <g transform="translate(${width / 2 - 44} ${height - 155})">
+          ${buildSiteGlassesLogoSvg({
+            x: 0,
+            y: 0,
+            size: 88,
+            background: '#2563EB',
+            foreground: '#FFFFFF',
+          })}
+        </g>
+      `
+  }
+</svg>`;
+}
 
-  doc.fillColor(accent)
-    .font('Helvetica-Bold')
-    .fontSize(22)
-    .text(footer || 'Flashcards', 72, height - 110, {
-      width: width - 144,
-      align: 'right',
-    });
+async function buildFlashcardFacePngBuffer(options) {
+  const svg = await buildFlashcardFaceSvg(options);
+
+  return sharp(Buffer.from(svg))
+    .png()
+    .toBuffer();
 }
 
 async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
+  const PAGE_WIDTH = 1772;
+  const PAGE_HEIGHT = 1185;
+
   const doc = new PDFDocument({
-    size: [720, 720],
-    margin: 0,
     autoFirstPage: false,
+    margin: 0,
+    size: [PAGE_WIDTH, PAGE_HEIGHT],
   });
 
   const chunks = [];
@@ -4416,38 +5479,44 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
   for (let index = 0; index < cards.length; index += 1) {
     const card = cards[index];
 
-    const questionImageBuffer = await fetchImageBuffer(
+    const questionImageAsset = await fetchImageAsset(
       card.questionImageUrl || card.imageUrl
     );
 
-    const answerImageBuffer = await fetchImageBuffer(
+    const answerImageAsset = await fetchImageAsset(
       card.answerImageUrl || card.imageUrl
     );
 
-    doc.addPage();
-
-    drawFlashcardPdfPage(doc, {
+    const questionPng = await buildFlashcardFacePngBuffer({
       type: 'Pergunta',
-      text: card.question,
-      richHtml: card.questionHtml,
+      text: stripHtmlToPlainText(card.questionHtml) || card.question,
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,
       totalCards: cards.length,
-      imageBuffer: questionImageBuffer,
+      imageAsset: questionImageAsset,
     });
 
-    doc.addPage();
-
-    drawFlashcardPdfPage(doc, {
+    const answerPng = await buildFlashcardFacePngBuffer({
       type: 'Resposta',
-      text: card.answer,
-      richHtml: card.answerHtml,
+      text: stripHtmlToPlainText(card.answerHtml) || card.answer,
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,
       totalCards: cards.length,
-      imageBuffer: answerImageBuffer,
+      imageAsset: answerImageAsset,
+    });
+
+    doc.addPage({ size: [PAGE_WIDTH, PAGE_HEIGHT], margin: 0 });
+    doc.image(questionPng, 0, 0, {
+      width: PAGE_WIDTH,
+      height: PAGE_HEIGHT,
+    });
+
+    doc.addPage({ size: [PAGE_WIDTH, PAGE_HEIGHT], margin: 0 });
+    doc.image(answerPng, 0, 0, {
+      width: PAGE_WIDTH,
+      height: PAGE_HEIGHT,
     });
   }
 
@@ -4457,135 +5526,68 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
 }
 
 async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
-  const children = [
-    new Paragraph({
-      text: title,
-      heading: HeadingLevel.TITLE,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-    }),
-  ];
+  const children = [];
 
   for (let index = 0; index < cards.length; index += 1) {
     const card = cards[index];
 
-    const questionImageBuffer = await fetchImageBuffer(
+    const questionImageAsset = await fetchImageAsset(
       card.questionImageUrl || card.imageUrl
     );
 
-    const answerImageBuffer = await fetchImageBuffer(
+    const answerImageAsset = await fetchImageAsset(
       card.answerImageUrl || card.imageUrl
     );
 
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `Flashcard ${index + 1}`,
-            bold: true,
-            color: 'DC2626',
-          }),
-        ],
-        spacing: { before: 300, after: 160 },
-      }),
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: 'Pergunta',
-            bold: true,
-          }),
-        ],
-        spacing: { after: 120 },
-      }),
-      ...buildDocxParagraphsFromRichHtml(card.questionHtml, card.question, {
-        spacing: { after: 160 },
-      })
-    );
+    const questionPng = await buildFlashcardFacePngBuffer({
+      type: 'Pergunta',
+      text: stripHtmlToPlainText(card.questionHtml) || card.question,
+      specialty: card.specialty,
+      topic: card.topic,
+      cardNumber: index + 1,
+      totalCards: cards.length,
+      imageAsset: questionImageAsset,
+    });
 
-    if (questionImageBuffer) {
-      children.push(
-        new Paragraph({
-          children: [
-            new ImageRun({
-              data: questionImageBuffer,
-              transformation: {
-                width: 420,
-                height: 260,
-              },
-            }),
-          ],
-          spacing: { after: 240 },
-        })
-      );
-    }
+    const answerPng = await buildFlashcardFacePngBuffer({
+      type: 'Resposta',
+      text: stripHtmlToPlainText(card.answerHtml) || card.answer,
+      specialty: card.specialty,
+      topic: card.topic,
+      cardNumber: index + 1,
+      totalCards: cards.length,
+      imageAsset: answerImageAsset,
+    });
 
     children.push(
       new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
         children: [
-          new TextRun({
-            text: 'Resposta',
-            bold: true,
+          new ImageRun({
+            data: questionPng,
+            transformation: {
+              width: 1123,
+              height: 751,
+            },
           }),
         ],
-        spacing: { after: 120 },
       }),
-      ...buildDocxParagraphsFromRichHtml(card.answerHtml, card.answer, {
-        spacing: { after: 160 },
-      })
-    );
-
-    if (answerImageBuffer) {
-      children.push(
-        new Paragraph({
-          children: [
-            new ImageRun({
-              data: answerImageBuffer,
-              transformation: {
-                width: 420,
-                height: 260,
-              },
-            }),
-          ],
-          spacing: { after: 240 },
-        })
-      );
-    }
-
-    const noteParagraphs = buildDocxParagraphsFromRichHtml(
-      card.preceptorNoteHtml,
-      card.preceptorNote,
-      { spacing: { after: 160 } }
-    );
-
-    const hasNote =
-      stripHtmlToPlainText(card.preceptorNoteHtml) ||
-      String(card.preceptorNote || '').trim();
-
-    if (hasNote) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: 'Nota do preceptor',
-              bold: true,
-            }),
-          ],
-          spacing: { before: 120, after: 120 },
-        }),
-        ...noteParagraphs
-      );
-    }
-
-    children.push(
       new Paragraph({
+        children: [new PageBreak()],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
         children: [
-          new TextRun({
-            text: [card.specialty, card.topic].filter(Boolean).join(' · '),
-            italics: true,
-            color: '64748B',
+          new ImageRun({
+            data: answerPng,
+            transformation: {
+              width: 1123,
+              height: 751,
+            },
           }),
         ],
-        spacing: { before: 160, after: 160 },
       })
     );
 
@@ -4601,7 +5603,20 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
   const document = new Document({
     sections: [
       {
-        properties: {},
+        properties: {
+          page: {
+            size: {
+              width: 16838,
+              height: 11906,
+            },
+            margin: {
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+            },
+          },
+        },
         children,
       },
     ],
@@ -4666,6 +5681,103 @@ app.patch('/api/history/:id/flashcards/:cardIndex', async (req, res) => {
   }
 });
 
+app.put('/api/history/:id/flashcards', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { origin = 'current', flashcards = [] } = req.body || {};
+
+    if (!Array.isArray(flashcards)) {
+      return res.status(400).json({ error: 'Lista de flashcards inválida.' });
+    }
+
+    const run = await getStudyRunById(id);
+    const resolvedList = resolveFlashcardListForWrite(run, origin);
+    const column = resolvedList.column;
+
+    const normalizedFlashcards = flashcards
+      .filter((card) => card && (card.question || card.pergunta) && (card.answer || card.resposta))
+      .map((card, index) => ({
+        ...card,
+        position: index + 1,
+        sort_order: index,
+      }));
+
+    const updatePayload = {
+      [column]: normalizedFlashcards,
+    };
+
+    if (column === 'enriched_flashcards') {
+      updatePayload.enriched_flashcards_generated_at = new Date().toISOString();
+    }
+
+    const { data: updatedRun, error } = await supabase
+      .from('study_runs')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(`Falha ao salvar lista de flashcards: ${error.message}`);
+    }
+
+    const runView = buildStudyRunFlashcardView(updatedRun);
+
+    const librarySetSync = await syncRunFlashcardsToLibrarySet({
+      run: runView,
+      flashcards: runView.display_flashcards || normalizedFlashcards,
+    });
+
+    return res.json({
+      run: runView,
+      flashcards: runView.display_flashcards || normalizedFlashcards,
+      display_flashcards: runView.display_flashcards || normalizedFlashcards,
+      displayFlashcards: runView.display_flashcards || normalizedFlashcards,
+      origin: resolvedList.origin,
+      column,
+      librarySetSync,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao salvar lista de flashcards do histórico:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/history/:id/flashcards/preview-image-upload-url', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      filename = 'new-flashcard-image.png',
+      contentType = 'image/png',
+      field = 'question',
+    } = req.body || {};
+
+    if (!String(contentType || '').startsWith('image/')) {
+      return res.status(400).json({ error: 'O arquivo precisa ser uma imagem.' });
+    }
+
+    await getStudyRunById(id);
+
+    const key = buildFlashcardPreviewImageKey({
+      runId: id,
+      field,
+      filename,
+      contentType,
+    });
+
+    const upload = await createR2PresignedUploadUrl({
+      key,
+      contentType,
+      expiresIn: 60 * 20,
+    });
+
+    return res.json(upload);
+  } catch (error) {
+    console.error('❌ Erro ao criar URL temporária de upload de imagem:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/history/:id/flashcards/:cardIndex/image-upload-url', async (req, res) => {
   try {
     const { id, cardIndex } = req.params;
@@ -4703,8 +5815,8 @@ app.post('/api/history/:id/flashcards/:cardIndex/insights', async (req, res) => 
     const { origin = 'current' } = req.body || {};
 
     const run = await getStudyRunById(id);
-    const column = getFlashcardsColumnForRun(run, origin);
-    const cards = Array.isArray(run[column]) ? run[column] : [];
+    const resolvedList = resolveFlashcardListForWrite(run, origin);
+    const cards = Array.isArray(resolvedList.cards) ? resolvedList.cards : [];
     const normalizedIndex = Number(cardIndex);
 
     if (
@@ -4750,14 +5862,62 @@ app.post('/api/history/:id/flashcards/:cardIndex/insights', async (req, res) => 
   }
 });
 
+app.post('/api/history/:id/flashcards/generate-image-preview', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { concept = '', prompt = '', field = 'question' } = req.body || {};
+
+    await getStudyRunById(id);
+
+    const conceptBase = String(concept || prompt || '').trim();
+
+    if (!conceptBase) {
+      return res.status(400).json({ error: 'Conteúdo base da imagem é obrigatório.' });
+    }
+
+    const finalPrompt = buildKawaiiMedicalFlashcardImagePrompt({
+      field,
+      concept: conceptBase,
+    });
+
+    const illustrationBuffer = await generateImagenIllustrationBuffer(finalPrompt);
+
+    const key = buildFlashcardPreviewImageKey({
+      runId: id,
+      field,
+      filename: `ai-${field}-new-flashcard.png`,
+      contentType: 'image/png',
+    });
+
+    const uploaded = await uploadBufferToR2({
+      buffer: illustrationBuffer,
+      key,
+      contentType: 'image/png',
+    });
+
+    return res.json({
+      imageUrl: uploaded.publicUrl || '',
+      publicUrl: uploaded.publicUrl || '',
+      imageObjectKey: uploaded.key || '',
+      key: uploaded.key || '',
+      imagePrompt: finalPrompt,
+      field,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar imagem temporária para novo flashcard:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, res) => {
   try {
     const { id, cardIndex } = req.params;
-    const { origin = 'current', prompt = '' } = req.body || {};
+    const { origin = 'current', concept = '', field = 'card' } = req.body || {};
 
     const run = await getStudyRunById(id);
-    const column = getFlashcardsColumnForRun(run, origin);
-    const cards = Array.isArray(run[column]) ? run[column] : [];
+    const resolvedList = resolveFlashcardListForWrite(run, origin);
+    const cards = Array.isArray(resolvedList.cards) ? resolvedList.cards : [];
     const normalizedIndex = Number(cardIndex);
 
     if (
@@ -4769,7 +5929,33 @@ app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, re
     }
 
     const card = cards[normalizedIndex];
-    const finalPrompt = String(prompt || '').trim() || buildFlashcardImagePrompt(card);
+    const normalizedField =
+      field === 'question' || field === 'answer'
+        ? field
+        : 'answer';
+    
+    const insights = card.cardInsights || card.card_insights || {};
+
+    const conceptBase =
+      String(concept || '').trim() ||
+      String(
+        normalizedField === 'question'
+          ? card.question || card.pergunta || insights.image_keyword || ''
+          : insights.corrected_answer ||
+              card.answer ||
+              card.resposta ||
+              insights.image_keyword ||
+              card.question ||
+              card.pergunta ||
+              ''
+      )
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const finalPrompt = buildKawaiiMedicalFlashcardImagePrompt({
+      field: normalizedField,
+      concept: conceptBase,
+    });
 
     const illustrationBuffer = await generateImagenIllustrationBuffer(finalPrompt);
 
@@ -4792,18 +5978,45 @@ app.post('/api/history/:id/flashcards/:cardIndex/generate-image', async (req, re
       runId: id,
       cardIndex: normalizedIndex,
       origin,
-      updates: {
-        imageUrl: uploaded.publicUrl || '',
-        image_url: uploaded.publicUrl || '',
-        imageObjectKey: uploaded.key,
-        image_object_key: uploaded.key,
-        imageSource: 'ai',
-        image_source: 'ai',
-        imagePrompt: finalPrompt,
-        image_prompt: finalPrompt,
-        imageGeneratedAt: generatedAt,
-        image_generated_at: generatedAt,
-      },
+      updates:
+      field === 'question'
+        ? {
+            questionImageUrl: uploaded.publicUrl || '',
+            question_image_url: uploaded.publicUrl || '',
+            questionImageObjectKey: uploaded.key,
+            question_image_object_key: uploaded.key,
+            imageSource: 'ai',
+            image_source: 'ai',
+            imagePrompt: finalPrompt,
+            image_prompt: finalPrompt,
+            imageGeneratedAt: generatedAt,
+            image_generated_at: generatedAt,
+          }
+        : field === 'answer'
+        ? {
+            answerImageUrl: uploaded.publicUrl || '',
+            answer_image_url: uploaded.publicUrl || '',
+            answerImageObjectKey: uploaded.key,
+            answer_image_object_key: uploaded.key,
+            imageSource: 'ai',
+            image_source: 'ai',
+            imagePrompt: finalPrompt,
+            image_prompt: finalPrompt,
+            imageGeneratedAt: generatedAt,
+            image_generated_at: generatedAt,
+          }
+        : {
+            imageUrl: uploaded.publicUrl || '',
+            image_url: uploaded.publicUrl || '',
+            imageObjectKey: uploaded.key,
+            image_object_key: uploaded.key,
+            imageSource: 'ai',
+            image_source: 'ai',
+            imagePrompt: finalPrompt,
+            image_prompt: finalPrompt,
+            imageGeneratedAt: generatedAt,
+            image_generated_at: generatedAt,
+          },
     });
 
     return res.json({
@@ -6605,9 +7818,21 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
       };
     });
 
+    const existingEnrichedFlashcards = Array.isArray(run.enriched_flashcards)
+      ? run.enriched_flashcards
+      : [];
+
+    const mergedGeneratedFlashcards = buildRunEditableFlashcards({
+      ...run,
+      enriched_flashcards: [
+        ...existingEnrichedFlashcards,
+        ...enrichedGeneratedFlashcards,
+      ],
+    });
+
     const updatedRun = await updateStudyRunEnrichedFlashcards(
       run.id,
-      enrichedGeneratedFlashcards,
+      mergedGeneratedFlashcards,
       result.modelUsed
     );
 
@@ -6642,9 +7867,16 @@ app.post('/api/generate-flashcards-from-enriched-run/:id', async (req, res) => {
       }
     }
 
+    const displayFlashcards = Array.isArray(updatedRun.display_flashcards)
+      ? updatedRun.display_flashcards
+      : buildRunEditableFlashcards(updatedRun);
+
     return res.json({
       run: updatedRun,
-      flashcards: updatedRun.enriched_flashcards || [],
+      flashcards: displayFlashcards,
+      displayFlashcards,
+      display_flashcards: displayFlashcards,
+      displayFlashcardsCount: displayFlashcards.length,
       enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
       librarySaved,
       libraryWarning,
@@ -6683,7 +7915,8 @@ app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
         const useCase = item?.use_case || '';
 
         return {
-          pergunta: `Como usar o mnemônico "${title}"?`,
+          id: `mnemonic-${Date.now()}-${index}`,
+          pergunta: `Mnemônico: como lembrar ${title}?`,
           resposta: [
             mnemonic ? `Mnemônico: ${mnemonic}` : '',
             explanation ? `Explicação: ${explanation}` : '',
@@ -6695,18 +7928,16 @@ app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
             'Flashcard exclusivo criado a partir da seção Mnemônicos sugeridos da Análise de Evidência.',
           difficulty: 'medium',
           tags: ['mnemônico', 'análise de evidência'],
+          sourceOrigin: 'mnemonic',
+          source_origin: 'mnemonic',
         };
       })
       .filter((card) => card.pergunta && card.resposta);
 
-    const existingFlashcards = Array.isArray(run.enriched_flashcards)
-      ? run.enriched_flashcards
-      : Array.isArray(run.flashcards)
-        ? run.flashcards
-        : [];
+    const currentEditableFlashcards = buildRunEditableFlashcards(run);
 
     const existingQuestions = new Set(
-      existingFlashcards.map((card) =>
+      currentEditableFlashcards.map((card) =>
         String(card.question || card.pergunta || '').trim().toLowerCase()
       )
     );
@@ -6716,7 +7947,10 @@ app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
       return question && !existingQuestions.has(question);
     });
 
-    const mergedFlashcards = [...existingFlashcards, ...uniqueMnemonicFlashcards];
+    const mergedFlashcards = mergeFlashcardGroupsForDisplay([
+      { cards: currentEditableFlashcards, origin: 'current' },
+      { cards: uniqueMnemonicFlashcards, origin: 'mnemonic' },
+    ]);
 
     const updatedRun = await updateStudyRunEnrichedFlashcards(
       run.id,
@@ -6744,120 +7978,17 @@ app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
       );
     }
 
-    return res.json({
-      run: updatedRun,
-      mnemonicFlashcards: uniqueMnemonicFlashcards,
-      flashcards: updatedRun.enriched_flashcards || [],
-      enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
-    });
-  } catch (error) {
-    console.error('❌ Erro ao gerar flashcards dos mnemônicos:', error.message);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/generate-mnemonic-flashcards-from-run/:id', async (req, res) => {
-  try {
-    const run = await getStudyRunById(req.params.id);
-
-    if (!run?.id) {
-      return res.status(404).json({ error: 'Study run não encontrado.' });
-    }
-
-    const analysisPack = await getLatestEvidenceAnalysisByStudyRunId(run.id);
-    const mnemonics = Array.isArray(analysisPack?.analysis?.mnemonics)
-      ? analysisPack.analysis.mnemonics
-      : [];
-
-    if (!mnemonics.length) {
-      return res.status(400).json({
-        error: 'Nenhum mnemônico encontrado na análise de evidência.',
-      });
-    }
-
-    const mnemonicFlashcards = mnemonics
-      .map((item, index) => {
-        const title = item?.title || `Mnemônico ${index + 1}`;
-        const mnemonic = item?.mnemonic || '';
-        const explanation = item?.explanation || '';
-        const useCase = item?.use_case || '';
-
-        return {
-          pergunta: `Mnemônico: como lembrar ${title}?`,
-          resposta: [
-            mnemonic ? `Mnemônico: ${mnemonic}` : '',
-            explanation ? `Explicação: ${explanation}` : '',
-            useCase ? `Quando usar: ${useCase}` : '',
-          ]
-            .filter(Boolean)
-            .join('\n\n'),
-          nota_preceptor:
-            'Flashcard exclusivo criado a partir da seção Mnemônicos sugeridos da Análise de Evidência.',
-          difficulty: 'medium',
-          tags: ['mnemônico', 'análise de evidência'],
-        };
-      })
-      .filter((card) => card.pergunta && card.resposta);
-
-    const existingFlashcards = Array.isArray(run.enriched_flashcards)
-      ? run.enriched_flashcards
-      : Array.isArray(run.flashcards)
-        ? run.flashcards
-        : [];
-
-    const existingQuestions = new Set(
-      existingFlashcards.map((card) =>
-        String(card.question || card.pergunta || '').trim().toLowerCase()
-      )
-    );
-
-    const uniqueMnemonicFlashcards = mnemonicFlashcards.filter((card) => {
-      const question = String(card.pergunta || '').trim().toLowerCase();
-      return question && !existingQuestions.has(question);
-    });
-
-    if (!uniqueMnemonicFlashcards.length) {
-      return res.json({
-        run,
-        mnemonicFlashcards: [],
-        flashcards: existingFlashcards,
-        message: 'Os flashcards de mnemônicos já existiam para esta execução.',
-      });
-    }
-
-    const mergedFlashcards = [...existingFlashcards, ...uniqueMnemonicFlashcards];
-
-    const updatedRun = await updateStudyRunEnrichedFlashcards(
-      run.id,
-      mergedFlashcards,
-      'mnemonic-builder'
-    );
-
-    try {
-      await saveFlashcardsToLibrary({
-        theme:
-          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 1
-            ? updatedRun.secondary_topics[1]
-            : 'Mnemônicos',
-        runId: updatedRun.id,
-        flashcards: uniqueMnemonicFlashcards,
-        specialty: updatedRun.specialty || 'Clínica Médica',
-        subSpecialty:
-          Array.isArray(updatedRun.secondary_topics) && updatedRun.secondary_topics.length > 0
-            ? updatedRun.secondary_topics[0]
-            : '',
-      });
-    } catch (libraryError) {
-      console.warn(
-        '⚠️ Falha ao salvar flashcards de mnemônicos na biblioteca:',
-        libraryError.message
-      );
-    }
+    const displayFlashcards = Array.isArray(updatedRun.display_flashcards)
+      ? updatedRun.display_flashcards
+      : buildRunEditableFlashcards(updatedRun);
 
     return res.json({
       run: updatedRun,
       mnemonicFlashcards: uniqueMnemonicFlashcards,
-      flashcards: updatedRun.enriched_flashcards || [],
+      flashcards: displayFlashcards,
+      displayFlashcards,
+      display_flashcards: displayFlashcards,
+      displayFlashcardsCount: displayFlashcards.length,
       enrichedFlashcardsGeneratedAt: updatedRun.enriched_flashcards_generated_at,
     });
   } catch (error) {

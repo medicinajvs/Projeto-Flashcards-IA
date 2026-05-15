@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload,
   Loader2,
@@ -83,25 +83,25 @@ const UI = {
   sectionBody: 'p-6 md:p-8 bg-slate-50/40 space-y-6',
 
   eyebrow:
-    'text-xs font-black uppercase tracking-[0.18em] text-blue-500 mb-2',
+    'text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2',
   title: 'text-2xl font-black text-slate-900',
   description: 'text-sm text-slate-500 mt-2 leading-relaxed',
 
   primaryButton:
-    'inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-100 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-100 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
   secondaryButton:
     'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
   softButton:
-    'inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
   dangerButton:
-    'inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
 
   input:
-    'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100',
+    'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100',
   chip:
     'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600',
   chipRed:
-    'inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700',
+    'inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-bold text-red-700',
 };
 
 function normalizeFlashcards(rawFlashcards) {
@@ -379,26 +379,26 @@ function getFolderVisualForLabel(label = '') {
   const area = getMedicalAreaForLabel(label);
 
   const visualMap = {
-    Cardiologia: { icon: HeartPulse, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Neurologia: { icon: Brain, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Gastroenterologia: { icon: Activity, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Pneumologia: { icon: Stethoscope, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Nefrologia: { icon: Droplets, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Hematologia: { icon: Droplets, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Infectologia: { icon: Syringe, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Endocrinologia: { icon: Pill, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Reumatologia: { icon: ShieldCheck, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Psiquiatria: { icon: Brain, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Pediatria: { icon: Baby, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    'Ginecologia e Obstetrícia': { icon: Baby, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Cirurgia: { icon: Scissors, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Ortopedia: { icon: Bone, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Dermatologia: { icon: Microscope, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Oftalmologia: { icon: Eye, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    Otorrinolaringologia: { icon: Ear, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    'Medicina Preventiva': { icon: ShieldCheck, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
-    'Urgência e Terapia Intensiva': { icon: Activity, iconClass: 'bg-blue-50 text-blue-700 border-blue-100' },
-    'Clínica Médica': { icon: Stethoscope, iconClass: 'bg-blue-50 text-blue-600 border-blue-100' },
+    Cardiologia: { icon: HeartPulse, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Neurologia: { icon: Brain, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Gastroenterologia: { icon: Activity, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Pneumologia: { icon: Stethoscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Nefrologia: { icon: Droplets, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Hematologia: { icon: Droplets, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Infectologia: { icon: Syringe, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Endocrinologia: { icon: Pill, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Reumatologia: { icon: ShieldCheck, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Psiquiatria: { icon: Brain, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Pediatria: { icon: Baby, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    'Ginecologia e Obstetrícia': { icon: Baby, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Cirurgia: { icon: Scissors, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Ortopedia: { icon: Bone, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Dermatologia: { icon: Microscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Oftalmologia: { icon: Eye, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    Otorrinolaringologia: { icon: Ear, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    'Medicina Preventiva': { icon: ShieldCheck, iconClass: 'bg-red-50 text-red-600 border-red-100' },
+    'Urgência e Terapia Intensiva': { icon: Activity, iconClass: 'bg-red-50 text-red-700 border-red-100' },
+    'Clínica Médica': { icon: Stethoscope, iconClass: 'bg-red-50 text-red-600 border-red-100' },
     Outros: { icon: Folder, iconClass: 'bg-slate-100 text-slate-600 border-slate-200' },
   };
 
@@ -506,15 +506,15 @@ function SmartDropdown({
         onClick={() => setIsOpen((prev) => !prev)}
         className={`w-full flex items-center justify-between bg-white border px-4 py-3 rounded-xl shadow-sm transition-all ${
           isOpen
-            ? 'border-blue-500 ring-2 ring-blue-100'
-            : 'border-slate-200 hover:border-blue-200 hover:shadow-md'
+            ? 'border-red-500 ring-2 ring-red-100'
+            : 'border-slate-200 hover:border-red-200 hover:shadow-md'
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
           {selected?.groupIcon ? (
-            <span className="text-blue-500 shrink-0">{selected.groupIcon}</span>
+            <span className="text-red-500 shrink-0">{selected.groupIcon}</span>
           ) : (
-            <Layers className="w-5 h-5 text-blue-500 shrink-0" />
+            <Layers className="w-5 h-5 text-red-500 shrink-0" />
           )}
 
           <span
@@ -559,14 +559,14 @@ function SmartDropdown({
                     }
                   }}
                   className={`w-full flex items-center justify-between gap-3 p-2.5 rounded-xl transition-colors text-left ${
-                    isSelected ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'
+                    isSelected ? 'bg-red-50 text-red-700' : 'hover:bg-slate-50 text-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={`flex items-center justify-center w-8 h-8 rounded-full ${
                         isSelected || isExpanded
-                          ? 'bg-blue-100 text-blue-600'
+                          ? 'bg-red-100 text-red-600'
                           : 'bg-slate-100 text-slate-500'
                       }`}
                     >
@@ -595,7 +595,7 @@ function SmartDropdown({
                       }`}
                     />
                   ) : isSelected ? (
-                    <Check className="w-5 h-5 text-blue-600" />
+                    <Check className="w-5 h-5 text-red-600" />
                   ) : (
                     <span className="w-5 h-5 shrink-0" />
                   )}
@@ -616,14 +616,14 @@ function SmartDropdown({
                           }}
                           className={`flex items-center justify-between p-2 rounded-md text-sm transition-colors ${
                             isSubSelected
-                              ? 'bg-blue-50 text-blue-700 font-medium'
+                              ? 'bg-red-50 text-red-700 font-medium'
                               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                           }`}
                         >
                           <span className="min-w-0 flex-1 truncate text-left" title={sub.label}>
                             {sub.label}
                           </span>
-                          {isSubSelected ? <Check className="w-4 h-4 text-blue-600" /> : null}
+                          {isSubSelected ? <Check className="w-4 h-4 text-red-600" /> : null}
                         </button>
                       );
                     })}
@@ -702,7 +702,7 @@ function FolderTreeNode({
       <div
         className={`group flex items-start gap-1 rounded-xl transition-all ${
           isSelected
-            ? 'bg-blue-600 text-white shadow-sm shadow-blue-100'
+            ? 'bg-red-600 text-white shadow-sm shadow-red-100'
             : 'text-slate-700 hover:bg-slate-100'
         }`}
       >
@@ -731,7 +731,7 @@ function FolderTreeNode({
             className={`w-8 h-8 mt-0.5 rounded-xl border flex items-center justify-center shrink-0 ${
               isSelected
                 ? 'bg-white/15 border-white/15 text-white'
-                : node.iconClass || 'bg-blue-50 text-blue-600 border-blue-100'
+                : node.iconClass || 'bg-red-50 text-red-600 border-red-100'
             }`}
           >
             <Icon size={16} />
@@ -779,7 +779,7 @@ function FolderTreeNode({
             className={`mt-2 mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 disabled:opacity-30 ${
               isSelected
                 ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
-                : 'border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                : 'border-red-100 bg-red-50 text-red-600 hover:bg-red-100'
             }`}
           >
             <Trash2 size={15} />
@@ -826,7 +826,7 @@ function FolderTreePanel({
       <div className="p-5 border-b border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500 mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-1">
               Navegação
             </p>
 
@@ -841,7 +841,7 @@ function FolderTreePanel({
             ) : null}
           </div>
 
-          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center shrink-0">
             <FolderOpen size={18} />
           </div>
         </div>
@@ -855,7 +855,7 @@ function FolderTreePanel({
               value={searchValue}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Buscar pasta..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
             />
           </div>
         ) : null}
@@ -922,7 +922,7 @@ function AnimatedTopicCloud({ topics = [] }) {
           {safeTopics.map((topic, index) => (
             <div
               key={`${topic}-${index}`}
-              className="w-full rounded-full border border-blue-100 bg-blue-50 px-6 py-4 text-sm md:text-base leading-[1.55] text-blue-700 shadow-sm"
+              className="w-full rounded-full border border-red-100 bg-red-50 px-6 py-4 text-sm md:text-base leading-[1.55] text-red-700 shadow-sm"
             >
               {topic}
             </div>
@@ -969,7 +969,7 @@ function EvidenceApplyButton({
       } ${
         showSuccess
           ? 'bg-emerald-500'
-          : 'bg-blue-600 hover:bg-blue-700'
+          : 'bg-red-600 hover:bg-red-700'
       } ${className}`}
     >
       {!showSuccess ? (
@@ -1023,7 +1023,7 @@ function SuggestionAddedPreview({ visible = false }) {
           <div
             className={`bg-white border-2 rounded-2xl shadow-sm w-full h-full px-8 py-7 flex flex-col relative overflow-hidden z-10 transition-all duration-500 ${
               visible
-                ? 'border-blue-100 bg-gradient-to-tr from-blue-50/50 to-emerald-50/40'
+                ? 'border-red-100 bg-gradient-to-tr from-red-50/50 to-emerald-50/40'
                 : 'border-slate-100 bg-slate-50/80'
             }`}
           >
@@ -1097,7 +1097,7 @@ function formatAiTextToHtml(text = '') {
       .replace(/\*\*([\s\S]*?)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>')
       .replace(/==([\s\S]*?)==/g, '<mark class="bg-yellow-200 text-yellow-900 px-1 py-0.5 rounded">$1</mark>')
       .replace(/~~([\s\S]*?)~~/g, '<span class="line-through">$1</span>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="text-blue-600 underline underline-offset-4">$1</a>');
+      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="text-red-600 underline underline-offset-4">$1</a>');
   };
 
   const blocks = raw
@@ -1373,37 +1373,6 @@ function plainTextToPremiumEditorHtml(value = '') {
     .join('');
 }
 
-function normalizeFlashcardEditorHtml(value = '') {
-  const raw = String(value || '').trim();
-
-  if (!raw) return '<p><br/></p>';
-
-  if (!/<[a-z][\s\S]*>/i.test(raw)) {
-    return plainTextToPremiumEditorHtml(raw);
-  }
-
-  const container = document.createElement('div');
-  container.innerHTML = raw;
-
-  container
-    .querySelectorAll('p, li, blockquote, h1, h2, h3, h4, h5, h6')
-    .forEach((node) => {
-      const first = node.firstElementChild;
-
-      const onlyStrongWrapper =
-        node.children.length === 1 &&
-        first &&
-        ['STRONG', 'B'].includes(first.tagName) &&
-        node.textContent.trim() === first.textContent.trim();
-
-      if (onlyStrongWrapper) {
-        node.innerHTML = first.innerHTML;
-      }
-    });
-
-  return container.innerHTML || '<p><br/></p>';
-}
-
 function premiumEditorHtmlToText(html = '') {
   const container = document.createElement('div');
   container.innerHTML = html || '';
@@ -1454,100 +1423,41 @@ function cleanImagePromptConcept(value = '') {
     .slice(0, 1200);
 }
 
-function extractIllustrationSubject(value = '') {
-  let text = cleanImagePromptConcept(value);
-
-  if (!text) return '';
-
-  text = text
-    .replace(/\bde acordo com o texto\b/gi, '')
-    .replace(/\bde acordo com a definição apresentada\b/gi, '')
-    .replace(/\bsegundo o texto\b/gi, '')
-    .replace(/\bsegundo a definição apresentada\b/gi, '')
-    .replace(/\bcom base no texto\b/gi, '')
-    .replace(/\bapresentada\b/gi, '')
-    .replace(/\bo que é\b/gi, '')
-    .replace(/\bqual(?:is)?\s+(?:é|são)\b/gi, '')
-    .replace(/\bqual\s+a\s+definição\s+de\b/gi, '')
-    .replace(/\bqual\s+é\s+a\s+definição\s+de\b/gi, '')
-    .replace(/\bqual\s+o\s+conceito\s+de\b/gi, '')
-    .replace(/\bqual\s+é\s+o\s+conceito\s+de\b/gi, '')
-    .replace(/\bqual\s+é\s+a\s+função\s+de\b/gi, '')
-    .replace(/\bqual\s+a\s+função\s+de\b/gi, '')
-    .replace(/\bquais\s+são\b/gi, '')
-    .replace(/\?+/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .replace(/^[,.:;\-\s]+|[,.:;\-\s]+$/g, '');
-
-  return text.slice(0, 160);
-}
-
-function buildVisualSubjectFromConcept(value = '') {
-  const extracted = extractIllustrationSubject(value);
-  const cleaned = cleanImagePromptConcept(value);
-
-  return (
-    extracted ||
-    cleaned ||
-    'a single central medical illustration directly representing the concept'
-  );
-}
-
-function buildSubjectSpecificIllustrationHint(subject = '') {
-  return [
-    'Create one single central hero illustration only.',
-    'The illustration must represent the medical concept in one unified scene or one unified object.',
-    'Use one dominant primary subject.',
-    'If a secondary element is needed, it must be directly integrated into the same scene.',
-    'Do not scatter multiple unrelated medical objects across the image.',
-    'Do not create a collection, lineup, sheet, board, collage, or infographic panel of separate elements.',
-    'Do not create several isolated icons.',
-    'Avoid decorative extra objects.',
-    'Keep the image highly relevant to the concept and visually focused.',
-    `The central subject should represent: ${subject || 'the medical concept'}.`,
-  ].join(' ');
-}
-
 function buildKawaiiMedicalFlashcardImagePrompt({
   field = 'question',
   concept = '',
 }) {
-  const cleanConcept = cleanImagePromptConcept(concept);
-  const subject = buildVisualSubjectFromConcept(cleanConcept);
-  const subjectHint = buildSubjectSpecificIllustrationHint(subject);
+  const safeConcept =
+    cleanImagePromptConcept(concept) ||
+    'general medical flashcard learning concept';
+
+  if (field === 'answer') {
+    return [
+      'A cute, kawaii-style vector medical illustration for a flashcard answer.',
+      `The central medical concept to illustrate is: ${safeConcept}.`,
+      'Use the same visual style as this reference: a clean vector-style cartoon illustration, cute kawaii aesthetic, solid black background, vibrant flat colors, crisp bold outlines, friendly medical education style.',
+      'The main anatomical or clinical subject should be adapted to the concept. If the concept is cardiovascular, use a human anatomical heart in cross-section with chambers, vessels, and blood-flow arrows. If the concept is not cardiovascular, use the corresponding organ, anatomical structure, clinical mechanism, cell, pathogen, drug mechanism, exam finding, or disease process.',
+      'Add small cute smiling cartoon faces with black dot eyes on the main anatomical structures when appropriate.',
+      'Use vibrant colors, predominantly bright reds, blues, cyan, pink, gold, and high-contrast accents.',
+      'Use small glowing arrows to show flow, sequence, mechanism, or cause-and-effect when relevant.',
+      'Include short educational anatomical or clinical labels in white sans-serif font with thin white lines pointing to the relevant structures. Labels must be brief, readable, and directly related to the concept.',
+      'No large title text at the top or bottom. Do not add paragraphs. Do not add logos, watermarks, UI elements, or branding.',
+      'Clean bold outlines, flat colors, balanced composition, isolated illustration with labels, friendly medical education illustration style for flashcards.',
+      '--ar 3:4',
+    ].join(' ');
+  }
 
   return [
-    `Create a single clean isolated medical illustration for a flashcard ${field}.`,
-    `Primary visual subject: ${subject}.`,
-    'Use the source concept only to choose the illustration theme; never reproduce the source wording visually.',
-    subjectHint,
-    'Show only the biological, anatomical, pathological, laboratory, diagnostic, or therapeutic illustration itself.',
-    'ABSOLUTE RULE: the image must contain no text of any kind.',
-    'Do not write the question.',
-    'Do not write the answer.',
-    'Do not write any word.',
-    'Do not write labels.',
-    'Do not write captions.',
-    'Do not write titles.',
-    'Do not write legends.',
-    'Do not write letters.',
-    'Do not write numbers.',
-    'Do not write symbols that look like readable text.',
-    'Do not include menus, cards, panels, posters, slides, UI, frames, headers, footers, or decorative text boxes.',
-    'Do not create a flashcard layout.',
-    'Do not create a text banner.',
-    'Do not create a poster.',
-    'Do not create a grid of objects.',
-    'Do not create a collection of separate icons.',
-    'Do not create a collage of unrelated mini-illustrations.',
-    'Do not create multiple disconnected medical objects.',
-    'Use one main hero subject that occupies most of the image.',
-    'If more than one element is necessary, merge them into one connected scene.',
-    'Use a polished vector-style medical education illustration.',
-    'Prefer transparent background.',
-    'If transparency is not possible, use a uniform soft neutral solid background such as #F3E0C7 or #F8FBFD.',
-    'Output only the illustration asset, ready to be placed inside a flashcard.',
+    'A clean, vector-style cartoon medical illustration for a flashcard question, in a cute kawaii aesthetic, against a solid black background.',
+    `The central medical concept to represent as a visual question is: ${safeConcept}.`,
+    'Use the same visual style as this reference: vibrant flat colors, crisp outlines, rich saturated colors, balanced symmetrical composition, soft even lighting, friendly medical education illustration style.',
+    'The central subject should be the anatomical, physiological, pathological, pharmacological, or clinical concept from the flashcard. If the concept is cardiovascular, use a detailed stylized cross-section of a human heart with right-sided structures in blues and cyan, left-sided structures in reds and pinks, and red/blue arrows showing blood flow. If the concept is not cardiovascular, adapt this same visual language to the relevant organ, structure, cell, pathogen, exam, or disease mechanism.',
+    'Use expressive cute cartoon faces on the main structures when appropriate.',
+    'Add small question mark thought bubbles to show uncertainty, inquiry, or diagnostic reasoning.',
+    'Below or around the main subject, include small aligned kawaii icons that symbolize: time/course, mechanism/tool, key question, network/pathophysiology, and study/source. These icons should support the concept without clutter.',
+    'Do not add large title text. Do not add readable paragraphs. Do not add logos, watermarks, UI elements, or platform branding.',
+    'The image should feel like a visual question card: cute, inquisitive, educational, and memorable.',
+    '--ar 3:4',
   ].join(' ');
 }
 
@@ -1732,18 +1642,18 @@ function PremiumRichTextEditor({
           <span
             className={`text-xs font-medium flex items-center gap-1.5 transition-colors duration-300 ${
               autoSaveStatus === 'saving'
-                ? 'text-blue-500'
+                ? 'text-red-500'
                 : autoSaveStatus === 'error'
-                  ? 'text-blue-500'
+                  ? 'text-red-500'
                   : 'text-slate-400'
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full ${
                 autoSaveStatus === 'saving'
-                  ? 'bg-blue-400 animate-pulse'
+                  ? 'bg-red-400 animate-pulse'
                   : autoSaveStatus === 'error'
-                    ? 'bg-blue-400'
+                    ? 'bg-red-400'
                     : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
               }`}
             />
@@ -1756,7 +1666,7 @@ function PremiumRichTextEditor({
             className={`px-6 py-2.5 text-white text-sm font-medium rounded-full shadow-lg shadow-black/10 transition-all flex items-center gap-2 ${
               saveButtonStatus === 'saved'
                 ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-red-600 hover:bg-red-700'
             }`}
           >
             {saveButtonStatus === 'saving' ? (
@@ -1895,7 +1805,7 @@ function PremiumRichTextEditor({
             <button
               type="button"
               onMouseDown={(event) => handleToolbarMouseDown(event, insertLink)}
-              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-red-500 hover:text-red-600 hover:bg-red-50"
               title="Inserir link"
             >
               🔗
@@ -1904,7 +1814,7 @@ function PremiumRichTextEditor({
             <button
               type="button"
               onMouseDown={(event) => handleToolbarMouseDown(event, () => runCommand('removeFormat'))}
-              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-blue-400 hover:text-blue-500 hover:bg-blue-50"
+              className="premium-toolbar-btn w-8 h-8 flex items-center justify-center rounded-full text-red-400 hover:text-red-500 hover:bg-red-50"
               title="Limpar formatação"
             >
               ⌫
@@ -2028,7 +1938,7 @@ function FlashcardRichTextEditor({
         suppressContentEditableWarning
         onInput={syncEditor}
         onBlur={syncEditor}
-        className="px-4 py-4 text-[1.02rem] leading-[1.75] text-slate-800 outline-none focus:ring-2 focus:ring-blue-100"
+        className="px-4 py-3 text-sm leading-relaxed text-slate-700 outline-none focus:ring-2 focus:ring-red-100"
         style={{ minHeight }}
       />
     </div>
@@ -5029,21 +4939,12 @@ export default function AdvancedFlashcardPoC() {
       tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
       position: index + 1,
       aiProposition: card.aiProposition || card.cardInsights?.improvement || '',
-      questionHtml: normalizeFlashcardEditorHtml(
-        card.questionHtml ||
-          card.question_html ||
-          plainTextToPremiumEditorHtml(card.question || '')
-      ),
-      answerHtml: normalizeFlashcardEditorHtml(
-        card.answerHtml ||
-          card.answer_html ||
-          plainTextToPremiumEditorHtml(card.answer || '')
-      ),
-      preceptorNoteHtml: normalizeFlashcardEditorHtml(
+      questionHtml: card.questionHtml || card.question_html || plainTextToPremiumEditorHtml(card.question || ''),
+      answerHtml: card.answerHtml || card.answer_html || plainTextToPremiumEditorHtml(card.answer || ''),
+      preceptorNoteHtml:
         card.preceptorNoteHtml ||
-          card.preceptor_note_html ||
-          plainTextToPremiumEditorHtml(card.preceptorNote || card.preceptor_note || '')
-      ),
+        card.preceptor_note_html ||
+        plainTextToPremiumEditorHtml(card.preceptorNote || card.preceptor_note || ''),
     });
   };
 
@@ -5420,7 +5321,10 @@ export default function AdvancedFlashcardPoC() {
           body: JSON.stringify({
             origin: getCurrentFlashcardStorageOrigin(),
             field,
-            concept: promptBase,
+            prompt: buildKawaiiMedicalFlashcardImagePrompt({
+              field,
+              concept: promptBase,
+            }),
           }),
         }
       );
@@ -5609,7 +5513,10 @@ export default function AdvancedFlashcardPoC() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             field,
-            concept: promptBase,
+            prompt: buildKawaiiMedicalFlashcardImagePrompt({
+              field,
+              concept: promptBase,
+            }),
           }),
         }
       );
@@ -6077,20 +5984,12 @@ export default function AdvancedFlashcardPoC() {
 
       const card = flashcards[index] || {};
 
-      const conceptBase =
-        card.answer ||
-        card.resposta ||
-        card.question ||
-        card.pergunta ||
-        '';
-
       const response = await fetch(`${API_BASE}/api/history/${currentRunId}/flashcards/${index}/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           origin: getCurrentFlashcardStorageOrigin(),
-          field: 'answer',
-          concept: conceptBase,
+          prompt: card.imagePrompt || card.cardInsights?.image_prompt || '',
         }),
       });
 
@@ -6329,9 +6228,9 @@ export default function AdvancedFlashcardPoC() {
         grade,
         label: 'Errei',
         longLabel: 'Respondido como: Errei',
-        chipClass: 'border border-blue-200 bg-blue-50 text-blue-700',
-        panelClass: 'border-blue-200 bg-gradient-to-b from-blue-50/80 to-white',
-        accentClass: 'text-blue-600',
+        chipClass: 'border border-red-200 bg-red-50 text-red-700',
+        panelClass: 'border-red-200 bg-gradient-to-b from-red-50/80 to-white',
+        accentClass: 'text-red-600',
       };
     }
 
@@ -8962,7 +8861,7 @@ export default function AdvancedFlashcardPoC() {
             label: topic.name,
             description: 'Tema',
             icon: FolderOpen,
-            iconClass: 'bg-blue-50 text-blue-600 border-blue-100',
+            iconClass: 'bg-red-50 text-red-600 border-red-100',
             count: topic.cardCount || 0,
             onSelect: () => selectArchiveTopic(specialty.name, topic.name),
             onDelete: () =>
@@ -9508,7 +9407,7 @@ export default function AdvancedFlashcardPoC() {
         regex.test(part) ? (
           <span
             key={index}
-            className="bg-blue-100 text-blue-700 px-1 rounded"
+            className="bg-red-100 text-red-700 px-1 rounded"
           >
             {part}
           </span>
@@ -9846,8 +9745,8 @@ export default function AdvancedFlashcardPoC() {
                                       processingJobInfo.status === 'completed'
                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                         : processingJobInfo.status === 'error'
-                                          ? 'bg-blue-50 text-blue-700 border-blue-100'
-                                          : 'bg-blue-50 text-blue-700 border-blue-100'
+                                          ? 'bg-red-50 text-red-700 border-red-100'
+                                          : 'bg-red-50 text-red-700 border-red-100'
                                     }`}
                                   >
                                     {processingJobInfo.status === 'completed'
@@ -9882,14 +9781,14 @@ export default function AdvancedFlashcardPoC() {
                                     </span>
                                   </div>
 
-                                  <div className="h-2 overflow-hidden rounded-full border border-blue-100 bg-blue-50">
+                                  <div className="h-2 overflow-hidden rounded-full border border-red-100 bg-red-50">
                                     <div
                                       className={`h-full rounded-full transition-all duration-500 ${
                                         processingJobInfo.status === 'error'
-                                          ? 'bg-blue-500'
+                                          ? 'bg-red-500'
                                           : processingJobInfo.status === 'completed'
                                             ? 'bg-emerald-500'
-                                            : 'bg-blue-600'
+                                            : 'bg-red-600'
                                       }`}
                                       style={{
                                         width: `${Math.max(
@@ -9909,7 +9808,7 @@ export default function AdvancedFlashcardPoC() {
                                 </div>
 
                                 {processingJobInfo.error_message ? (
-                                  <p className="mt-2 text-xs font-medium text-blue-600">
+                                  <p className="mt-2 text-xs font-medium text-red-600">
                                     {processingJobInfo.error_message}
                                   </p>
                                 ) : null}
@@ -9950,7 +9849,7 @@ export default function AdvancedFlashcardPoC() {
                       <button
                         type="button"
                         onClick={() => videoInputRef.current?.click()}
-                        className="flex min-h-[64px] flex-1 items-center gap-3 rounded-2xl bg-slate-50 px-4 text-left transition-all hover:bg-blue-50"
+                        className="flex min-h-[64px] flex-1 items-center gap-3 rounded-2xl bg-slate-50 px-4 text-left transition-all hover:bg-red-50"
                       >
                         <Search className="h-5 w-5 shrink-0 text-slate-400" />
 
@@ -9985,7 +9884,7 @@ export default function AdvancedFlashcardPoC() {
                           processVideo();
                         }}
                         disabled={isProcessingUiActive}
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-100 transition-all hover:bg-blue-700 disabled:opacity-50"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-md shadow-red-100 transition-all hover:bg-red-700 disabled:opacity-50"
                         title={
                           processingStatus === 'completed'
                             ? 'Abrir flashcards'
@@ -10007,9 +9906,9 @@ export default function AdvancedFlashcardPoC() {
                     </div>
 
                     {videoFile ? (
-                      <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 md:flex-row md:items-center md:justify-between">
+                      <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
-                          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-500">
+                          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-red-500">
                             Arquivo pronto
                           </p>
 
@@ -10028,7 +9927,7 @@ export default function AdvancedFlashcardPoC() {
                             setVideoFile(null);
                             if (videoInputRef.current) videoInputRef.current.value = '';
                           }}
-                          className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50"
+                          className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50"
                         >
                           Trocar arquivo
                         </button>
@@ -10076,8 +9975,8 @@ export default function AdvancedFlashcardPoC() {
 
                   <section className="mb-7">
                     <div className="mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-blue-500" />
-                      <h2 className="text-sm font-black text-blue-500">
+                      <Sparkles className="h-4 w-4 text-red-500" />
+                      <h2 className="text-sm font-black text-red-500">
                         Acesso rápido
                       </h2>
                     </div>
@@ -10115,7 +10014,7 @@ export default function AdvancedFlashcardPoC() {
                             type="button"
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-3 text-left text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+                            className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-left text-sm font-bold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
                           >
                             <Icon className="h-4 w-4 shrink-0" />
                             <span className="truncate">{action.label}</span>
@@ -10194,7 +10093,7 @@ export default function AdvancedFlashcardPoC() {
                             className="group rounded-2xl border border-slate-200 bg-white shadow-sm"
                           >
                             <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl p-4 transition-colors hover:bg-slate-50">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500">
                                 <Icon size={17} />
                               </div>
 
@@ -10236,7 +10135,7 @@ export default function AdvancedFlashcardPoC() {
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-100 shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-red-100 shrink-0">
                     2
                   </div>
 
@@ -10256,7 +10155,7 @@ export default function AdvancedFlashcardPoC() {
                 </div>
 
                 <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200/60 flex items-center gap-3 text-sm">
-                  <div className="p-1.5 bg-blue-50 rounded-lg text-blue-500">
+                  <div className="p-1.5 bg-red-50 rounded-lg text-red-500">
                     <Video className="w-4 h-4" />
                   </div>
 
@@ -10273,10 +10172,10 @@ export default function AdvancedFlashcardPoC() {
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start lg:h-[700px]">
                 <div className="lg:col-span-4 lg:h-full min-h-0 overflow-y-auto pr-1 space-y-6 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-3xl p-1 shadow-lg shadow-blue-100">
+                  <div className="bg-gradient-to-br from-red-500 to-red-700 rounded-3xl p-1 shadow-lg shadow-red-100">
                     <div className="bg-white/95 backdrop-blur-xl rounded-[1.4rem] p-6 h-full">
                       <div className="flex items-center gap-2 mb-4">
-                        <Sparkles className="w-5 h-5 text-blue-500" />
+                        <Sparkles className="w-5 h-5 text-red-500" />
 
                         <h3 className="font-bold text-slate-800 text-sm tracking-wide">
                           Resumo da IA
@@ -10290,10 +10189,10 @@ export default function AdvancedFlashcardPoC() {
                   </div>
 
                   {(enrichmentSupportTranscript || enrichmentSupportVideoUrl) && (
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-blue-100 space-y-4 shrink-0">
+                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-red-100 space-y-4 shrink-0">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-1">
+                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">
                             Base complementar
                           </p>
 
@@ -10306,7 +10205,7 @@ export default function AdvancedFlashcardPoC() {
                           </p>
                         </div>
 
-                        <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                           <Video size={18} />
                         </div>
                       </div>
@@ -10337,7 +10236,7 @@ export default function AdvancedFlashcardPoC() {
                         <button
                           type="button"
                           onClick={() => window.open(enrichmentSupportVideoUrl, '_blank', 'noopener,noreferrer')}
-                          className="w-full px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-100"
+                          className="w-full px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100"
                         >
                           Ver vídeo complementar
                         </button>
@@ -10458,7 +10357,7 @@ export default function AdvancedFlashcardPoC() {
                         value={transcriptSearchTerm}
                         onChange={(e) => setTranscriptSearchTerm(e.target.value)}
                         placeholder="Pesquisar na transcrição..."
-                        className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                        className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all"
                       />
                     </div>
 
@@ -10517,7 +10416,7 @@ export default function AdvancedFlashcardPoC() {
               <div className="p-6 md:p-8 border-b border-slate-100">
                 <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
                   <div className="min-w-0 flex items-center gap-3">
-                    <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-blue-100 shrink-0">
+                    <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100 shrink-0">
                       3
                     </div>
 
@@ -10563,7 +10462,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => generateFlashcardsFromSavedRun(false)}
                     disabled={!currentRunId || isGeneratingSavedFlashcards}
-                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-black text-white shadow-sm shadow-blue-100 transition-colors hover:bg-blue-700 disabled:opacity-50"
+                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-3 text-xs font-black text-white shadow-sm shadow-red-100 transition-colors hover:bg-red-700 disabled:opacity-50"
                     title="Usar salvos / gerar se faltar"
                   >
                     {isGeneratingSavedFlashcards ? (
@@ -10621,7 +10520,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     type="button"
                     onClick={openCreateFlashcardModal}
-                    className="h-10 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 hover:bg-blue-100 transition-colors"
+                    className="h-10 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-red-700 hover:bg-red-100 transition-colors"
                   >
                     <Plus size={16} />
                     Novo card
@@ -10630,7 +10529,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => analyzeEvidenceFromCurrentRun()}
                     disabled={!currentRunId || isAnalyzingEvidence}
-                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 shadow-sm transition-colors hover:bg-blue-50 disabled:opacity-50"
+                    className="h-10 min-w-0 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 text-xs font-black text-red-700 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
                     title="Analisar evidência"
                   >
                     {isAnalyzingEvidence ? (
@@ -10673,13 +10572,13 @@ export default function AdvancedFlashcardPoC() {
                             className="mb-6 break-inside-avoid bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow flex flex-col"
                           >
                             <div className="flex justify-between items-center mb-4">
-                              <span className="text-blue-500 text-xs font-bold tracking-wider uppercase">
+                              <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
                                 Flashcard {String(index + 1).padStart(2, '0')}
                               </span>
                               <span
                                 className={`text-[10px] font-bold px-2 py-1 rounded-full ${
                                   card.difficulty === 'hard'
-                                    ? 'bg-blue-100 text-blue-700'
+                                    ? 'bg-red-100 text-red-700'
                                     : card.difficulty === 'easy'
                                       ? 'bg-green-100 text-green-700'
                                       : 'bg-amber-100 text-amber-700'
@@ -10712,7 +10611,7 @@ export default function AdvancedFlashcardPoC() {
                                 type="button"
                                 onClick={() => deleteFlashcardAtIndex(index)}
                                 disabled={isSavingFlashcardEdit && flashcardActionIndex === index}
-                                className="w-full px-3 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                className="w-full px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
                               >
                                 {isSavingFlashcardEdit && flashcardActionIndex === index
                                   ? 'Excluindo...'
@@ -10734,11 +10633,11 @@ export default function AdvancedFlashcardPoC() {
                             <RichFlashcardText
                               html={card.questionHtml || card.question_html}
                               fallback={card.question}
-                              className="text-[1.05rem] font-normal text-slate-800 mb-6 leading-[1.55] [&_p]:mb-2 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                              className="text-lg font-bold text-slate-900 mb-6 leading-snug [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
                             />
 
                             {card.questionImageUrl ? (
-                              <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+                              <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                 <button
                                   type="button"
                                   onClick={() => window.open(card.questionImageUrl, '_blank', 'noopener,noreferrer')}
@@ -10747,7 +10646,7 @@ export default function AdvancedFlashcardPoC() {
                                   <img
                                     src={card.questionImageUrl}
                                     alt={`Imagem da pergunta do flashcard ${index + 1}`}
-                                    className="block mx-auto w-full max-h-[280px] rounded-xl object-contain bg-white p-2"
+                                    className="w-full max-h-[280px] rounded-xl object-contain bg-black"
                                   />
                                 </button>
                               </div>
@@ -10762,11 +10661,11 @@ export default function AdvancedFlashcardPoC() {
                               <RichFlashcardText
                                 html={card.answerHtml || card.answer_html}
                                 fallback={card.answer}
-                                className="text-[0.98rem] font-normal text-slate-700 leading-[1.7] mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                                className="text-slate-600 text-sm leading-relaxed mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
                               />
 
                               {card.answerImageUrl || card.imageUrl ? (
-                                <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+                                <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <button
                                     type="button"
                                     onClick={() => window.open(card.answerImageUrl || card.imageUrl, '_blank', 'noopener,noreferrer')}
@@ -10775,7 +10674,7 @@ export default function AdvancedFlashcardPoC() {
                                     <img
                                       src={card.answerImageUrl || card.imageUrl}
                                       alt={`Imagem explicativa do flashcard ${index + 1}`}
-                                      className="block mx-auto w-full max-h-[360px] rounded-xl object-contain bg-white p-2"
+                                      className="w-full max-h-[360px] rounded-xl object-contain bg-black"
                                     />
                                   </button>
                                 </div>
@@ -10795,7 +10694,7 @@ export default function AdvancedFlashcardPoC() {
                               )}
 
                               {currentRunId && flashcardsOrigin !== 'library' ? (
-                                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50/60 p-4">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -10806,22 +10705,22 @@ export default function AdvancedFlashcardPoC() {
                                     }
                                     className="w-full flex items-center justify-between gap-3 text-left"
                                   >
-                                    <span className="text-blue-700 text-[10px] font-black tracking-widest uppercase">
+                                    <span className="text-red-700 text-[10px] font-black tracking-widest uppercase">
                                       Insights deste flashcard
                                     </span>
 
                                     <ChevronDown
                                       size={16}
-                                      className={`text-blue-500 transition-transform ${
+                                      className={`text-red-500 transition-transform ${
                                         expandedFlashcardInsights[index] !== false ? 'rotate-180' : ''
                                       }`}
                                     />
                                   </button>
 
                                   {expandedFlashcardInsights[index] !== false ? (
-                                    <div className="mt-4 space-y-3 text-sm text-blue-950/80 leading-relaxed">
+                                    <div className="mt-4 space-y-3 text-sm text-red-950/80 leading-relaxed">
                                       {!hasUsefulFlashcardInsights(card) ? (
-                                        <div className="rounded-xl border border-blue-100 bg-white p-3 text-xs font-bold text-blue-700 flex items-center gap-2">
+                                        <div className="rounded-xl border border-red-100 bg-white p-3 text-xs font-bold text-red-700 flex items-center gap-2">
                                           {isGeneratingFlashcardInsights && flashcardActionIndex === index ? (
                                             <Loader2 size={14} className="animate-spin" />
                                           ) : (
@@ -10838,7 +10737,7 @@ export default function AdvancedFlashcardPoC() {
 
                                       {card.cardInsights.gap ? (
                                         <div>
-                                          <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
                                             Lacuna
                                           </p>
                                           <p>{card.cardInsights.gap}</p>
@@ -10865,7 +10764,7 @@ export default function AdvancedFlashcardPoC() {
 
                                       {card.cardInsights.improvement ? (
                                         <div>
-                                          <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
                                             Melhoria sugerida
                                           </p>
                                           <p>{card.cardInsights.improvement}</p>
@@ -10874,12 +10773,12 @@ export default function AdvancedFlashcardPoC() {
 
                                       {card.cardInsights.corrected_answer ? (
                                         <div>
-                                          <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-red-500 mb-1">
                                             Resposta corrigida
                                           </p>
                                           <FormattedAiText
                                             text={card.cardInsights.corrected_answer}
-                                            className="[&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-blue-950"
+                                            className="[&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-red-950"
                                           />
                                         </div>
                                       ) : null}
@@ -10888,7 +10787,7 @@ export default function AdvancedFlashcardPoC() {
                                         type="button"
                                         onClick={() => applyFlashcardInsightSuggestion(index)}
                                         disabled={isSavingFlashcardEdit && flashcardActionIndex === index}
-                                        className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                                        className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white hover:bg-red-700 disabled:opacity-50"
                                       >
                                         {isSavingFlashcardEdit && flashcardActionIndex === index
                                           ? 'Aplicando...'
@@ -10909,7 +10808,7 @@ export default function AdvancedFlashcardPoC() {
                         <div className="w-full max-w-2xl mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                           <div className="flex items-center justify-between gap-4 mb-3">
                             <div>
-                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
+                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
                                 Estudo da pasta
                               </p>
 
@@ -10918,14 +10817,14 @@ export default function AdvancedFlashcardPoC() {
                               </p>
                             </div>
 
-                            <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                            <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-black text-red-700">
                               {Math.round(((currentStudyIndex + 1) / Math.max(1, flashcards.length)) * 100)}%
                             </span>
                           </div>
 
                           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                             <div
-                              className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                              className="h-full rounded-full bg-red-600 transition-all duration-500"
                               style={{
                                 width: `${Math.min(
                                   100,
@@ -10946,7 +10845,7 @@ export default function AdvancedFlashcardPoC() {
                             }`}
                           >
                             <div className="absolute inset-0 w-full h-full bg-white border border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center [backface-visibility:hidden]">
-                              <span className="absolute top-6 left-6 text-blue-500 text-xs font-bold tracking-wider uppercase">
+                              <span className="absolute top-6 left-6 text-red-500 text-xs font-bold tracking-wider uppercase">
                                 Flashcard {String(currentStudyIndex + 1).padStart(2, '0')}
                               </span>
                               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 text-blue-500">
@@ -10960,11 +10859,11 @@ export default function AdvancedFlashcardPoC() {
                               />
 
                               {currentStudyCard.questionImageUrl || currentStudyCard.question_image_url ? (
-                                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+                                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <img
                                     src={currentStudyCard.questionImageUrl || currentStudyCard.question_image_url}
                                     alt="Imagem da pergunta do flashcard atual"
-                                    className="block mx-auto max-h-[180px] w-full rounded-xl object-contain bg-white p-2"
+                                    className="max-h-[180px] w-full rounded-xl object-contain bg-black"
                                   />
                                 </div>
                               ) : null}
@@ -10995,7 +10894,7 @@ export default function AdvancedFlashcardPoC() {
                               currentStudyCard.answer_image_url ||
                               currentStudyCard.imageUrl ||
                               currentStudyCard.image_url ? (
-                                <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-4">
+                                <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <img
                                     src={
                                       currentStudyCard.answerImageUrl ||
@@ -11004,7 +10903,7 @@ export default function AdvancedFlashcardPoC() {
                                       currentStudyCard.image_url
                                     }
                                     alt="Imagem da resposta do flashcard atual"
-                                    className="block mx-auto w-full max-h-[320px] rounded-xl object-contain bg-white p-2"
+                                    className="w-full max-h-[320px] rounded-xl object-contain bg-black"
                                   />
                                 </div>
                               ) : null}
@@ -11041,7 +10940,7 @@ export default function AdvancedFlashcardPoC() {
                           <button
                             onClick={handleNextStudyCard}
                             disabled={currentStudyIndex === flashcards.length - 1}
-                            className="p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm shadow-blue-100"
+                            className="p-3 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm shadow-red-100"
                           >
                             <ChevronRight size={24} />
                           </button>
@@ -11050,7 +10949,7 @@ export default function AdvancedFlashcardPoC() {
                         <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                           <button
                             onClick={() => rateStudyCard(1)}
-                            className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 transition-colors"
+                            className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
                           >
                             Errei
                           </button>
@@ -11097,7 +10996,7 @@ export default function AdvancedFlashcardPoC() {
             >
               <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-blue-100">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
                     4
                   </div>
                   <h2 className="text-2xl font-bold text-slate-900">Análise de Evidência</h2>
@@ -11107,7 +11006,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => generateEnrichedTranscriptFromCurrentRun()}
                     disabled={!currentRunId || !evidenceAnalysis || isGeneratingEnrichedTranscript}
-                    className="flex items-center justify-center gap-2 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 text-red-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
                   >
                     {isGeneratingEnrichedTranscript ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -11120,7 +11019,7 @@ export default function AdvancedFlashcardPoC() {
                   <button
                     onClick={() => generateFlashcardsFromEnrichedRun()}
                     disabled={!currentRunId || !enrichedTranscript || isGeneratingEnrichedFlashcards}
-                    className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-blue-100 disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
                   >
                     {isGeneratingEnrichedFlashcards ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -11233,20 +11132,20 @@ export default function AdvancedFlashcardPoC() {
                         {referenceVideos.map((video, index) => (
                           <div
                             key={video.id || index}
-                            className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"
+                            className="rounded-2xl border border-red-100 bg-red-50/60 p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-bold text-slate-900">
                                   {video.title}
                                 </p>
-                                <p className="text-xs text-blue-700 font-semibold mt-1">
+                                <p className="text-xs text-red-700 font-semibold mt-1">
                                   {video.specialty || 'Sem especialidade'}
                                 </p>
                               </div>
 
                               {typeof video.score === 'number' && (
-                                <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white border border-blue-100 text-blue-700">
+                                <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white border border-red-100 text-red-700">
                                   score {video.score}
                                 </span>
                               )}
@@ -11372,17 +11271,17 @@ export default function AdvancedFlashcardPoC() {
                                 </div>
 
                                 {isExpanded ? (
-                                  <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                                    <p className="text-xs font-black uppercase tracking-wider text-blue-700 mb-2">
+                                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+                                    <p className="text-xs font-black uppercase tracking-wider text-red-700 mb-2">
                                       Como aplicar essa melhoria
                                     </p>
 
                                     <FormattedAiText
                                       text={suggestion.howToApply}
-                                      className="text-sm text-blue-950 leading-6"
+                                      className="text-sm text-red-950 leading-6"
                                     />
 
-                                    <div className="mt-4 rounded-xl bg-white border border-blue-100 p-5 text-center">
+                                    <div className="mt-4 rounded-xl bg-white border border-red-100 p-5 text-center">
                                       <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
                                         Texto que será adicionado
                                       </p>
@@ -11495,7 +11394,7 @@ export default function AdvancedFlashcardPoC() {
                                 [{index + 1}] {source.title}
                               </p>
                               <p className="text-xs text-slate-500 mt-1">{source.source_name}</p>
-                              <p className="text-xs text-blue-600 mt-2 break-all">{source.url}</p>
+                              <p className="text-xs text-red-600 mt-2 break-all">{source.url}</p>
                             </a>
                           ))}
                         </div>
@@ -11514,7 +11413,7 @@ export default function AdvancedFlashcardPoC() {
             >
               <div className="p-6 md:p-8 border-b border-slate-100 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-blue-100">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shadow-red-100">
                     5
                   </div>
                   <h2 className="text-2xl font-bold text-slate-900">Texto enriquecido</h2>
@@ -11568,7 +11467,7 @@ export default function AdvancedFlashcardPoC() {
                         enrichedAutoSaveStatus === 'saving'
                           ? 'bg-amber-50 text-amber-700 border-amber-200'
                           : enrichedAutoSaveStatus === 'error'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            ? 'bg-red-50 text-red-700 border-red-200'
                             : enrichedAutoSaveStatus === 'saved'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : 'bg-slate-50 text-slate-500 border-slate-200'
@@ -11601,9 +11500,9 @@ export default function AdvancedFlashcardPoC() {
                 ) : (
                   <div className="space-y-5">
                     {comparisonMode === 'original' && enrichedManualBlocks.length > 0 && (
-                      <div className="bg-white border border-blue-100 rounded-2xl p-5">
+                      <div className="bg-white border border-red-100 rounded-2xl p-5">
                         <div className="text-center space-y-1 mb-5">
-                          <h3 className="text-[15px] font-bold text-blue-800 uppercase tracking-widest">
+                          <h3 className="text-[15px] font-bold text-red-800 uppercase tracking-widest">
                             Adições aplicadas ao texto enriquecido
                           </h3>
                           <p className="text-sm text-slate-500">
@@ -11633,13 +11532,13 @@ export default function AdvancedFlashcardPoC() {
                               title: 'Sugestões Aplicadas',
                               count: enrichedManualBlocks.filter((block) => block.type === 'sugestao').length,
                               blocks: enrichedManualBlocks.filter((block) => block.type === 'sugestao'),
-                              border: 'border-blue-100',
-                              headerBg: 'bg-blue-50/70 hover:bg-blue-50',
-                              iconBg: 'bg-blue-100 text-blue-600',
-                              titleColor: 'text-blue-900',
-                              cardBg: 'bg-blue-50',
-                              cardBorder: 'border-blue-200',
-                              textBorder: 'border-blue-100',
+                              border: 'border-red-100',
+                              headerBg: 'bg-red-50/70 hover:bg-red-50',
+                              iconBg: 'bg-red-100 text-red-600',
+                              titleColor: 'text-red-900',
+                              cardBg: 'bg-red-50',
+                              cardBorder: 'border-red-200',
+                              textBorder: 'border-red-100',
                               label: 'Sugestão Aplicada',
                               Icon: Lightbulb,
                             },
@@ -11674,7 +11573,7 @@ export default function AdvancedFlashcardPoC() {
                                   <ChevronDown
                                     className={`w-5 h-5 transition-transform duration-300 ${
                                       isOpen ? 'rotate-180' : ''
-                                    } ${panel.id === 'lacuna' ? 'text-yellow-500' : 'text-blue-400'}`}
+                                    } ${panel.id === 'lacuna' ? 'text-yellow-500' : 'text-red-400'}`}
                                   />
                                 </button>
 
@@ -11716,14 +11615,14 @@ export default function AdvancedFlashcardPoC() {
                                                 <textarea
                                                   value={editingAppliedBlockContent}
                                                   onChange={(e) => setEditingAppliedBlockContent(e.target.value)}
-                                                  className="w-full h-[180px] rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 leading-7 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                                  className="w-full h-[180px] rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 leading-7 focus:outline-none focus:ring-2 focus:ring-red-100"
                                                 />
 
                                                 <div className="flex gap-2 pt-1">
                                                   <button
                                                     type="button"
                                                     onClick={() => saveEditingAppliedBlock(block.id)}
-                                                    className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition shadow-sm shadow-blue-100"
+                                                    className="px-4 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition shadow-sm shadow-red-100"
                                                   >
                                                     Salvar edição
                                                   </button>
@@ -11758,7 +11657,7 @@ export default function AdvancedFlashcardPoC() {
                                                         panelTone: panel.id,
                                                       })
                                                     }
-                                                    className="px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 text-xs font-bold rounded-lg transition shadow-sm shadow-blue-100"
+                                                    className="px-4 py-1.5 bg-red-600 text-white hover:bg-red-700 text-xs font-bold rounded-lg transition shadow-sm shadow-red-100"
                                                   >
                                                     Visualizar
                                                   </button>
@@ -11774,7 +11673,7 @@ export default function AdvancedFlashcardPoC() {
                                                   <button
                                                     type="button"
                                                     onClick={() => removeAppliedEnrichmentBlock(block.id)}
-                                                    className="px-4 py-1.5 bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 text-xs font-semibold rounded-lg transition"
+                                                    className="px-4 py-1.5 bg-white border border-slate-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition"
                                                   >
                                                     Remover
                                                   </button>
@@ -11804,7 +11703,7 @@ export default function AdvancedFlashcardPoC() {
                           {(enrichedSummary?.applied_topics || []).map((topic, index) => (
                             <span
                               key={index}
-                              className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm font-medium border border-blue-100"
+                              className="px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-sm font-medium border border-red-100"
                             >
                               {topic}
                             </span>
@@ -11873,9 +11772,9 @@ export default function AdvancedFlashcardPoC() {
                               <span
                                 className={`w-2 h-2 rounded-full ${
                                   enrichedAutoSaveStatus === 'saving'
-                                    ? 'bg-blue-400 animate-pulse'
+                                    ? 'bg-red-400 animate-pulse'
                                     : enrichedAutoSaveStatus === 'error'
-                                      ? 'bg-blue-400'
+                                      ? 'bg-red-400'
                                       : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
                                 }`}
                               />
@@ -11893,7 +11792,7 @@ export default function AdvancedFlashcardPoC() {
                               className={`px-6 py-2.5 text-white text-sm font-medium rounded-full shadow-lg shadow-black/10 transition-all flex items-center gap-2 disabled:opacity-50 ${
                                 editorSaveButtonStatus === 'saved'
                                   ? 'bg-emerald-600 hover:bg-emerald-700'
-                                  : 'bg-blue-600 hover:bg-blue-700'
+                                  : 'bg-red-600 hover:bg-red-700'
                               }`}
                             >
                               {editorSaveButtonStatus === 'saving' ? (
@@ -12087,7 +11986,7 @@ export default function AdvancedFlashcardPoC() {
                                     event.preventDefault();
                                     applyEditorRemoveFormat();
                                   }}
-                                  className="w-8 h-8 flex items-center justify-center rounded-full text-blue-400 hover:text-blue-500 hover:bg-blue-50"
+                                  className="w-8 h-8 flex items-center justify-center rounded-full text-red-400 hover:text-red-500 hover:bg-red-50"
                                   title="Limpar formatação"
                                 >
                                   <Eraser className="w-4 h-4" />
@@ -12117,7 +12016,7 @@ export default function AdvancedFlashcardPoC() {
                                 [&_li]:mb-2
                                 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-500 [&_blockquote]:mb-6
                                 [&_mark]:bg-yellow-200 [&_mark]:text-yellow-900 [&_mark]:px-1 [&_mark]:py-0.5 [&_mark]:rounded
-                                [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                                [&_a]:text-red-600 [&_a]:underline [&_a]:underline-offset-4"
                             />
                           </div>
                         </div>
@@ -12146,7 +12045,7 @@ export default function AdvancedFlashcardPoC() {
                         <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] ring-1 ring-slate-900/5 overflow-hidden flex flex-col">
                           <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 bg-white z-20 relative">
                             <div className="flex items-center gap-3">
-                              <div className="bg-blue-50 p-2 rounded-xl text-blue-600">
+                              <div className="bg-red-50 p-2 rounded-xl text-red-600">
                                 <Sparkles className="w-5 h-5" />
                               </div>
 
@@ -12309,8 +12208,8 @@ export default function AdvancedFlashcardPoC() {
                                 enrichmentApprovalStatus === 'saved'
                                   ? 'bg-emerald-600 shadow-emerald-200 scale-[1.02]'
                                   : enrichmentApprovalStatus === 'saving'
-                                    ? 'bg-blue-600 opacity-90'
-                                    : 'bg-blue-600 hover:bg-blue-700'
+                                    ? 'bg-red-600 opacity-90'
+                                    : 'bg-red-600 hover:bg-red-700'
                               }`}
                             >
                               {enrichmentApprovalStatus === 'saved' ? (
@@ -12609,7 +12508,7 @@ export default function AdvancedFlashcardPoC() {
             <button
               onClick={() => generateFlashcardsFromSavedRun(false)}
               disabled={!currentRunId || isGeneratingSavedFlashcards}
-              className="px-4 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-100 disabled:opacity-50"
+              className="px-4 py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100 disabled:opacity-50"
             >
               Usar salvos / gerar se faltar
             </button>
@@ -12626,7 +12525,7 @@ export default function AdvancedFlashcardPoC() {
                 isGeneratingEnrichedFlashcards ||
                 !(approvedEnrichedTranscript || enrichedTranscript)
               }
-              className="px-4 py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               {isGeneratingEnrichedFlashcards ? 'Gerando...' : 'Regenerar pelo texto enriquecido'}
             </button>
@@ -12634,7 +12533,7 @@ export default function AdvancedFlashcardPoC() {
             <button
               onClick={() => analyzeEvidenceFromCurrentRun()}
               disabled={!currentRunId || isAnalyzingEvidence}
-              className="px-4 py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               Analisar evidência
             </button>
@@ -12659,7 +12558,7 @@ export default function AdvancedFlashcardPoC() {
 
             <button
               onClick={() => deleteHistoryItem(currentRunId)}
-              className="px-4 py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-600 text-sm font-semibold hover:bg-blue-100 transition-colors"
+              className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100 transition-colors"
             >
               Excluir item
             </button>
@@ -12914,7 +12813,7 @@ export default function AdvancedFlashcardPoC() {
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-500 mb-2">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2">
                   Acervo
                 </p>
                 <h2 className="text-2xl font-black text-slate-900">Suas pastas de flashcards</h2>
@@ -12927,7 +12826,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={saveCurrentFlashcardsToLibrary}
                   disabled={!flashcards.length || !selectedDeckId || isSavingCardsToLibrary}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
                 >
                   {isSavingCardsToLibrary ? 'Salvando...' : 'Salvar flashcards atuais'}
                 </button>
@@ -12949,7 +12848,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="p-6 md:p-8 bg-slate-50/30 space-y-6">
               <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500 mb-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-2">
                     Organização
                   </p>
 
@@ -12975,7 +12874,7 @@ export default function AdvancedFlashcardPoC() {
                       value={newDeckSpecialty}
                       onChange={(event) => setNewDeckSpecialty(event.target.value)}
                       placeholder="Ex: Reumatologia, Cardiologia, Neurologia..."
-                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
 
                     <datalist id="library-specialty-suggestions">
@@ -12999,7 +12898,7 @@ export default function AdvancedFlashcardPoC() {
                       value={newDeckSubSpecialty}
                       onChange={(event) => setNewDeckSubSpecialty(event.target.value)}
                       placeholder="Ex: Vasculites, SAF, Parkinson, DOACs..."
-                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-0 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
 
                     <p className="mt-1 text-[11px] text-slate-400">
@@ -13011,7 +12910,7 @@ export default function AdvancedFlashcardPoC() {
                     <button
                       type="button"
                       onClick={createLibraryDeck}
-                      className="w-full h-[46px] rounded-2xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 shadow-sm shadow-blue-100"
+                      className="w-full h-[46px] rounded-2xl bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700 shadow-sm shadow-red-100"
                     >
                       Criar pasta
                     </button>
@@ -13033,7 +12932,7 @@ export default function AdvancedFlashcardPoC() {
                 <div className="h-full min-h-0 bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
                   <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500 mb-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-1">
                         Pasta selecionada
                       </p>
 
@@ -13093,7 +12992,7 @@ export default function AdvancedFlashcardPoC() {
                             specialtyName: selectedArchiveSpecialty,
                           })
                         }
-                        className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold hover:bg-blue-100"
+                        className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100"
                       >
                         Nova pasta
                       </button>
@@ -13106,7 +13005,7 @@ export default function AdvancedFlashcardPoC() {
                         type="button"
                         onClick={() => startStudyFromArchiveCards(selectedArchiveCards)}
                         disabled={!selectedArchiveCards.length}
-                        className="rounded-2xl bg-blue-600 px-4 py-4 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-100"
+                        className="rounded-2xl bg-red-600 px-4 py-4 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-red-100"
                       >
                         Estudar esta pasta
                       </button>
@@ -13229,7 +13128,7 @@ export default function AdvancedFlashcardPoC() {
                                 cards: selectedArchiveCards,
                               })
                             }
-                            className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100"
+                            className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100"
                           >
                             Excluir
                           </button>
@@ -13254,7 +13153,7 @@ export default function AdvancedFlashcardPoC() {
                             {selectedArchiveVisibleCards.map((card) => (
                               <div
                                 key={card.id}
-                                className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-blue-200 hover:bg-blue-50/40 transition-colors"
+                                className="rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-red-200 hover:bg-red-50/40 transition-colors"
                               >
                                 <button
                                   type="button"
@@ -13278,7 +13177,7 @@ export default function AdvancedFlashcardPoC() {
                                   <button
                                     type="button"
                                     onClick={() => deleteLibraryCard(card)}
-                                    className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-[11px] font-black text-blue-700 hover:bg-blue-100"
+                                    className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-[11px] font-black text-red-700 hover:bg-red-100"
                                   >
                                     Excluir
                                   </button>
@@ -13386,7 +13285,7 @@ export default function AdvancedFlashcardPoC() {
                           </div>
                         </div>
 
-                        {selected ? <Check className="w-5 h-5 text-blue-600" /> : null}
+                        {selected ? <Check className="w-5 h-5 text-red-600" /> : null}
                       </button>
                     );
                   })}
@@ -13408,7 +13307,7 @@ export default function AdvancedFlashcardPoC() {
                   type="button"
                   onClick={confirmMoveFolder}
                   disabled={!moveFolderTargetSpecialty}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
                 >
                   Mover para pasta
                 </button>
@@ -13422,7 +13321,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="w-full max-w-3xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500">
                     Prévia do flashcard
                   </p>
                   <RichFlashcardText
@@ -13445,7 +13344,7 @@ export default function AdvancedFlashcardPoC() {
                   <img
                     src={previewLibraryCard.question_image_url || previewLibraryCard.questionImageUrl}
                     alt="Imagem da pergunta"
-                    className="w-full max-h-[260px] rounded-xl object-contain bg-white"
+                    className="w-full max-h-[260px] rounded-xl object-contain bg-black"
                   />
                 </div>
               ) : null}
@@ -13475,7 +13374,7 @@ export default function AdvancedFlashcardPoC() {
                         previewLibraryCard.imageUrl
                       }
                       alt="Imagem da resposta"
-                      className="w-full max-h-[300px] rounded-xl object-contain bg-white"
+                      className="w-full max-h-[300px] rounded-xl object-contain bg-black"
                     />
                   </div>
                 ) : null}
@@ -13493,13 +13392,13 @@ export default function AdvancedFlashcardPoC() {
 
                 <div className="flex flex-wrap gap-2">
                   {previewLibraryCard.specialty ? (
-                    <span className="px-3 py-1 rounded-full bg-blue-50 text-xs font-bold text-blue-700">
+                    <span className="px-3 py-1 rounded-full bg-red-50 text-xs font-bold text-red-700">
                       {previewLibraryCard.specialty}
                     </span>
                   ) : null}
 
                   {previewLibraryCard.sub_specialty ? (
-                    <span className="px-3 py-1 rounded-full bg-blue-50 text-xs font-bold text-blue-700">
+                    <span className="px-3 py-1 rounded-full bg-red-50 text-xs font-bold text-red-700">
                       {previewLibraryCard.sub_specialty}
                     </span>
                   ) : null}
@@ -13523,7 +13422,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   type="button"
                   onClick={() => deleteLibraryCard(previewLibraryCard)}
-                  className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-sm font-bold text-blue-700 hover:bg-blue-100"
+                  className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-bold text-red-700 hover:bg-red-100"
                 >
                   Excluir
                 </button>
@@ -13533,7 +13432,7 @@ export default function AdvancedFlashcardPoC() {
                     startEditingLibraryCard(previewLibraryCard);
                     setPreviewLibraryCard(null);
                   }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Editar flashcard
                 </button>
@@ -13547,7 +13446,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white border border-slate-200 shadow-2xl">
               <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-5 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
                     Biblioteca
                   </p>
                   <h3 className="text-xl font-black text-slate-900">
@@ -13672,7 +13571,7 @@ export default function AdvancedFlashcardPoC() {
                           difficulty: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     >
                       <option value="easy">Fácil</option>
                       <option value="medium">Médio</option>
@@ -13693,7 +13592,7 @@ export default function AdvancedFlashcardPoC() {
                           deck_id: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     >
                       <option value="">Sem deck</option>
                       {libraryDecks.map((deck) => (
@@ -13718,7 +13617,7 @@ export default function AdvancedFlashcardPoC() {
                     type="button"
                     onClick={saveLibraryCardEdit}
                     disabled={isSavingLibraryCardEdit}
-                    className="px-5 py-3 rounded-2xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                    className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
                   >
                     {isSavingLibraryCardEdit ? 'Salvando...' : 'Salvar alterações'}
                   </button>
@@ -13758,7 +13657,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={() => buildLibraryStudyQueue('deck')}
                   disabled={!selectedDeckId}
-                  className="px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold hover:bg-blue-100 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100 disabled:opacity-50"
                 >
                   Estudar deck selecionado
                 </button>
@@ -13858,7 +13757,7 @@ export default function AdvancedFlashcardPoC() {
 
                 <button
                   onClick={buildStudyQueue}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100"
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Iniciar estudo
                 </button>
@@ -13931,7 +13830,7 @@ export default function AdvancedFlashcardPoC() {
                     </div>
 
                     <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4">
-                      <p className="text-xs font-bold uppercase tracking-wider text-blue-500">
+                      <p className="text-xs font-bold uppercase tracking-wider text-red-500">
                         Enriquecidos
                       </p>
                       <p className="text-2xl font-black text-violet-700 mt-1">
@@ -14221,7 +14120,7 @@ export default function AdvancedFlashcardPoC() {
                         }`}
                       >
                         <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-3">
-                          <span className="text-blue-500 text-xs font-bold tracking-wider uppercase">
+                          <span className="text-red-500 text-xs font-bold tracking-wider uppercase">
                             Biblioteca
                           </span>
 
@@ -14242,7 +14141,7 @@ export default function AdvancedFlashcardPoC() {
                             <img
                               src={currentLibraryStudyCard.question_image_url || currentLibraryStudyCard.questionImageUrl}
                               alt="Imagem da pergunta do flashcard da biblioteca"
-                              className="max-h-[180px] w-full rounded-xl object-contain bg-white"
+                              className="max-h-[180px] w-full rounded-xl object-contain bg-black"
                             />
                           </div>
                         ) : null}
@@ -14287,7 +14186,7 @@ export default function AdvancedFlashcardPoC() {
                                     currentLibraryStudyCard.imageUrl
                                   }
                                   alt="Imagem da resposta do flashcard da biblioteca"
-                                  className="w-full max-h-[260px] rounded-xl object-contain bg-white"
+                                  className="w-full max-h-[260px] rounded-xl object-contain bg-black"
                                 />
                               </div>
                             ) : null}
@@ -14311,7 +14210,7 @@ export default function AdvancedFlashcardPoC() {
                     <button
                       onClick={() => rateLibraryStudyCard(1)}
                       disabled={isSavingLibraryReview}
-                      className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Errei
                     </button>
@@ -14356,7 +14255,7 @@ export default function AdvancedFlashcardPoC() {
           >
             <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-500 mb-2">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500 mb-2">
                   Revisão espaçada
                 </p>
                 <h2 className="text-2xl font-bold text-slate-900">Revisão Inteligente</h2>
@@ -14369,7 +14268,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   onClick={() => buildSpacedReviewQueue('today')}
                   disabled={isBuildingSpacedReview}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
                 >
                   Revisar hoje
                 </button>
@@ -14429,7 +14328,7 @@ export default function AdvancedFlashcardPoC() {
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 h-[94px] flex flex-col items-center justify-center text-center">
                   <p className="text-[11px] text-slate-400 uppercase font-bold tracking-wider">Errei</p>
-                  <p className="text-2xl font-black text-blue-600 mt-1">{spacedReviewStats.againCount}</p>
+                  <p className="text-2xl font-black text-red-600 mt-1">{spacedReviewStats.againCount}</p>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 h-[94px] flex flex-col items-center justify-center text-center">
@@ -14525,7 +14424,7 @@ export default function AdvancedFlashcardPoC() {
                           onClick={() => setSelectedReviewDate(dateKey)}
                           className={`min-h-[88px] rounded-2xl border p-2 text-left transition-all ${
                             isSelected
-                              ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
+                              ? 'border-red-500 bg-red-50 ring-2 ring-red-100'
                               : isToday
                                 ? 'border-emerald-300 bg-emerald-50'
                                 : 'border-slate-200 bg-white hover:bg-slate-50'
@@ -14545,7 +14444,7 @@ export default function AdvancedFlashcardPoC() {
 
                           <div className="mt-2 space-y-1">
                             {localCount > 0 ? (
-                              <div className="h-1.5 rounded-full bg-blue-500" />
+                              <div className="h-1.5 rounded-full bg-red-500" />
                             ) : null}
 
                             {googleCount > 0 ? (
@@ -14589,7 +14488,7 @@ export default function AdvancedFlashcardPoC() {
                       <button
                         type="button"
                         onClick={connectGoogleCalendar}
-                        className="w-full px-4 py-3 rounded-2xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100"
+                        className="w-full px-4 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                       >
                         Conectar Google Calendar
                       </button>
@@ -14617,7 +14516,7 @@ export default function AdvancedFlashcardPoC() {
                         <button
                           type="button"
                           onClick={disconnectGoogleCalendar}
-                          className="w-full px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-blue-600 text-sm font-bold hover:bg-blue-100"
+                          className="w-full px-4 py-3 rounded-2xl border border-red-200 bg-red-50 text-red-600 text-sm font-bold hover:bg-red-100"
                         >
                           Desconectar
                         </button>
@@ -14646,9 +14545,9 @@ export default function AdvancedFlashcardPoC() {
                       {selectedReviewDateCards.map((card) => (
                         <div
                           key={`local-${card.id}`}
-                          className="rounded-xl border border-blue-100 bg-blue-50 p-3"
+                          className="rounded-xl border border-red-100 bg-red-50 p-3"
                         >
-                          <p className="text-[11px] font-black uppercase tracking-wider text-blue-500">
+                          <p className="text-[11px] font-black uppercase tracking-wider text-red-500">
                             Local
                           </p>
                           <p className="text-sm font-semibold text-slate-900 mt-1 line-clamp-2">
@@ -14770,7 +14669,7 @@ export default function AdvancedFlashcardPoC() {
                             <img
                               src={currentSpacedReviewCard.imageUrl || currentSpacedReviewCard.image_url}
                               alt="Imagem explicativa do flashcard em revisão"
-                              className="w-full max-h-[320px] rounded-xl object-contain bg-white"
+                              className="w-full max-h-[320px] rounded-xl object-contain bg-black"
                             />
                           </div>
                         ) : null}
@@ -14790,7 +14689,7 @@ export default function AdvancedFlashcardPoC() {
                     <button
                       onClick={() => rateSpacedReviewCard(1)}
                       disabled={isSavingSpacedReview}
-                      className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold hover:bg-blue-100 disabled:opacity-50"
+                      className="px-4 py-3 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100 disabled:opacity-50"
                     >
                       Errei
                       <span className="block text-xs font-medium mt-1">20 min</span>
@@ -14859,7 +14758,7 @@ export default function AdvancedFlashcardPoC() {
                 <div className="p-5 border-b border-slate-100">
                   <div className="flex items-center justify-between gap-3 mb-5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm shadow-blue-100 shrink-0">
+                      <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-sm shadow-red-100 shrink-0">
                         <LayoutTemplate size={22} />
                       </div>
 
@@ -14882,7 +14781,7 @@ export default function AdvancedFlashcardPoC() {
                     </button>
                   </div>
 
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500 mb-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500 mb-2">
                     Navegação
                   </p>
 
@@ -14905,13 +14804,13 @@ export default function AdvancedFlashcardPoC() {
                       value={historySearchInput}
                       onChange={(event) => setHistorySearchInput(event.target.value)}
                       placeholder="Buscar aula..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="p-4 flex justify-center border-b border-slate-100">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm shadow-blue-100">
+                  <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-sm shadow-red-100">
                     <LayoutTemplate size={18} />
                   </div>
                 </div>
@@ -14933,7 +14832,7 @@ export default function AdvancedFlashcardPoC() {
                       }}
                       className={`w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
                         isActive
-                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-100'
+                          ? 'bg-red-600 text-white shadow-sm shadow-red-100'
                           : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-100'
                       }`}
                       title={folder.name}
@@ -15011,7 +14910,7 @@ export default function AdvancedFlashcardPoC() {
             <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-slate-50">
               <div className="lg:hidden p-4 bg-white border-b border-slate-200 flex items-center justify-between z-10">
                 <div className="flex items-center gap-3">
-                  <div className="bg-blue-600 text-white w-8 h-8 rounded-xl flex items-center justify-center font-bold shadow-sm shadow-blue-100">
+                  <div className="bg-red-600 text-white w-8 h-8 rounded-xl flex items-center justify-center font-bold shadow-sm shadow-red-100">
                     <LayoutTemplate size={18} />
                   </div>
                 </div>
@@ -15053,7 +14952,7 @@ export default function AdvancedFlashcardPoC() {
                         <input
                           type="text"
                           placeholder="Procurar por tema, título ou conteúdo"
-                          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all bg-slate-50 hover:bg-white text-sm"
+                          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all bg-slate-50 hover:bg-white text-sm"
                           value={historySearchInput}
                           onChange={(e) => setHistorySearchInput(e.target.value)}
                         />
@@ -15062,7 +14961,7 @@ export default function AdvancedFlashcardPoC() {
                       <div className="flex gap-2">
                         <button
                           type="submit"
-                          className="px-5 py-3 rounded-2xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-100"
+                          className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-sm shadow-red-100"
                         >
                           Buscar
                         </button>
@@ -15178,7 +15077,7 @@ export default function AdvancedFlashcardPoC() {
                               setHistoryTopicFilter('');
                               setHistoryPage(1);
                             }}
-                            className="px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 text-sm font-semibold hover:bg-blue-100"
+                            className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100"
                           >
                             Limpar filtros avançados
                           </button>
@@ -15234,7 +15133,7 @@ export default function AdvancedFlashcardPoC() {
                               <div
                                 key={item.id}
                                 onDoubleClick={() => setQuickPreviewHistoryItem(item)}
-                                className="bg-white border border-slate-200 rounded-[28px] p-5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:border-blue-200 transition-all flex flex-col h-full group min-w-0 cursor-default"
+                                className="bg-white border border-slate-200 rounded-[28px] p-5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:border-red-200 transition-all flex flex-col h-full group min-w-0 cursor-default"
                               >
                                 <div className="flex items-start justify-between gap-4 mb-4 min-w-0">
                                   <div className="min-w-0 flex-1 pr-2">
@@ -15313,7 +15212,7 @@ export default function AdvancedFlashcardPoC() {
                                     ) : null}
 
                                     {item.hasEnrichmentSupport ? (
-                                      <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-blue-100">
+                                      <span className="bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">
                                         Vídeo complementar
                                       </span>
                                     ) : null}
@@ -15348,7 +15247,7 @@ export default function AdvancedFlashcardPoC() {
 
                                       <button
                                         onClick={() => deleteHistoryItem(item.id)}
-                                        className="px-4 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold"
+                                        className="px-4 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold"
                                       >
                                         Excluir
                                       </button>
@@ -15362,7 +15261,7 @@ export default function AdvancedFlashcardPoC() {
 
                                       <button
                                         onClick={() => openHistoryDetails(item.id)}
-                                        className="px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-bold shadow-sm shadow-blue-100"
+                                        className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 text-xs font-bold shadow-sm shadow-red-100"
                                       >
                                         Abrir item
                                       </button>
@@ -15463,7 +15362,7 @@ export default function AdvancedFlashcardPoC() {
                                     {item.videoUrl ? (
                                       <button
                                         onClick={() => window.open(item.videoUrl, '_blank', 'noopener,noreferrer')}
-                                        className="text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors"
+                                        className="text-red-600 text-sm font-semibold hover:text-red-700 transition-colors"
                                       >
                                         Ver vídeo
                                       </button>
@@ -15481,7 +15380,7 @@ export default function AdvancedFlashcardPoC() {
 
                                   <button
                                     onClick={() => deleteHistoryItem(item.id)}
-                                    className="text-blue-500 text-sm font-semibold hover:text-blue-600 transition-colors"
+                                    className="text-red-500 text-sm font-semibold hover:text-red-600 transition-colors"
                                   >
                                     Deletar
                                   </button>
@@ -15495,7 +15394,7 @@ export default function AdvancedFlashcardPoC() {
 
                                   <button
                                     onClick={() => openHistoryDetails(item.id)}
-                                    className="bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 px-4 py-1.5 rounded-lg text-sm font-bold transition-colors"
+                                    className="bg-white border border-red-200 hover:bg-red-50 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold transition-colors"
                                   >
                                     Abrir
                                   </button>
@@ -15551,7 +15450,7 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() => setHistoryPage(pageNum)}
                             className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
                               historyPage === pageNum
-                                ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
+                                ? 'bg-red-600 text-white shadow-md shadow-red-100'
                                 : 'text-slate-600 hover:bg-slate-100'
                             }`}
                           >
@@ -15639,7 +15538,7 @@ export default function AdvancedFlashcardPoC() {
                     setPreviewAppliedBlock(null);
                     removeAppliedEnrichmentBlock(id);
                   }}
-                  className="px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-600 text-sm font-semibold hover:bg-blue-100"
+                  className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100"
                 >
                   Remover
                 </button>
@@ -15647,7 +15546,7 @@ export default function AdvancedFlashcardPoC() {
                 <button
                   type="button"
                   onClick={() => setPreviewAppliedBlock(null)}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Fechar
                 </button>
@@ -15704,7 +15603,7 @@ export default function AdvancedFlashcardPoC() {
                 )}
 
                 {quickPreviewHistoryItem.hasFlashcards ? (
-                  <span className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                  <span className="px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-xs font-semibold">
                     {quickPreviewHistoryItem.flashcardsCount} flashcards
                   </span>
                 ) : (
@@ -15736,11 +15635,11 @@ export default function AdvancedFlashcardPoC() {
               </div>
 
               {quickPreviewHistoryItem.enrichedTranscript ? (
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
-                  <h4 className="text-sm font-bold uppercase tracking-wider text-blue-500 mb-3">
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-3">
                     Texto enriquecido disponível
                   </h4>
-                  <p className="text-sm text-blue-900 leading-relaxed">
+                  <p className="text-sm text-red-900 leading-relaxed">
                     Este item possui texto enriquecido salvo. Abra o item completo para comparar com a transcrição original.
                   </p>
                 </div>
@@ -15783,7 +15682,7 @@ export default function AdvancedFlashcardPoC() {
                     setQuickPreviewHistoryItem(null);
                     openHistoryDetails(id);
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm shadow-blue-100"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 shadow-sm shadow-red-100"
                 >
                   Abrir item completo
                 </button>
@@ -15798,7 +15697,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto no-visible-scrollbar rounded-3xl bg-white border border-slate-200 shadow-2xl">
               <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-5 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
                     Novo flashcard
                   </p>
                   <h3 className="text-xl font-black text-slate-900">
@@ -15900,7 +15799,7 @@ export default function AdvancedFlashcardPoC() {
                           difficulty: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     >
                       <option value="easy">Fácil</option>
                       <option value="medium">Médio</option>
@@ -15924,7 +15823,7 @@ export default function AdvancedFlashcardPoC() {
                           position: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
 
@@ -15941,7 +15840,7 @@ export default function AdvancedFlashcardPoC() {
                           tags: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
                 </div>
@@ -15959,7 +15858,7 @@ export default function AdvancedFlashcardPoC() {
                     type="button"
                     onClick={createFlashcardFromScratch}
                     disabled={isSavingFlashcardList}
-                    className="px-5 py-3 rounded-2xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                    className="px-5 py-3 rounded-2xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
                   >
                     {isSavingFlashcardList ? 'Criando...' : 'Criar flashcard'}
                   </button>
@@ -15996,7 +15895,7 @@ export default function AdvancedFlashcardPoC() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
                         Preview da pergunta
                       </span>
 
@@ -16009,7 +15908,7 @@ export default function AdvancedFlashcardPoC() {
                       <RichFlashcardText
                         html={editingFlashcardForm.questionHtml}
                         fallback={editingFlashcardForm.question}
-                        className="text-[1.9rem] font-medium text-slate-900 leading-[1.35] text-center [&_p]:mb-2 [&_strong]:font-semibold"
+                        className="text-xl font-semibold text-slate-900 leading-snug text-center [&_p]:mb-2"
                       />
 
                       {flashcards[editingFlashcardIndex]?.questionImageUrl ||
@@ -16043,7 +15942,7 @@ export default function AdvancedFlashcardPoC() {
                       <RichFlashcardText
                         html={editingFlashcardForm.answerHtml}
                         fallback={editingFlashcardForm.answer}
-                        className="text-[1.9rem] font-medium text-slate-900 leading-[1.35] text-center [&_p]:mb-2 [&_strong]:font-semibold"
+                        className="text-xl font-semibold text-slate-900 leading-snug text-center [&_p]:mb-2"
                       />
 
                       {flashcards[editingFlashcardIndex]?.answerImageUrl ||
@@ -16153,7 +16052,7 @@ export default function AdvancedFlashcardPoC() {
                           difficulty: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     >
                       <option value="easy">Fácil</option>
                       <option value="medium">Médio</option>
@@ -16174,24 +16073,24 @@ export default function AdvancedFlashcardPoC() {
                           tags: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     />
                   </label>
                 </div>
 
                 {flashcards[editingFlashcardIndex]?.cardInsights &&
                 Object.keys(flashcards[editingFlashcardIndex]?.cardInsights || {}).length > 0 ? (
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 space-y-3">
-                    <h4 className="text-sm font-black text-blue-900">
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-5 space-y-3">
+                    <h4 className="text-sm font-black text-red-900">
                       Lacunas e melhorias deste card
                     </h4>
 
-                    <p className="text-sm text-blue-900/80 leading-relaxed">
+                    <p className="text-sm text-red-900/80 leading-relaxed">
                       <strong>Lacuna:</strong>{' '}
                       {flashcards[editingFlashcardIndex].cardInsights.gap || 'Não informado'}
                     </p>
 
-                    <p className="text-sm text-blue-900/80 leading-relaxed">
+                    <p className="text-sm text-red-900/80 leading-relaxed">
                       <strong>Melhoria:</strong>{' '}
                       {flashcards[editingFlashcardIndex].cardInsights.improvement || 'Não informado'}
                     </p>
@@ -16203,7 +16102,7 @@ export default function AdvancedFlashcardPoC() {
                     type="button"
                     onClick={saveFlashcardEdit}
                     disabled={isSavingFlashcardEdit}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 shadow-sm shadow-blue-100 disabled:opacity-50"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white hover:bg-red-700 shadow-sm shadow-red-100 disabled:opacity-50"
                   >
                     {isSavingFlashcardEdit ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -16252,7 +16151,7 @@ export default function AdvancedFlashcardPoC() {
             <div className="relative overflow-hidden rounded-[14px] border border-slate-100 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-5">
 
               <div className="flex items-start gap-4">
-                <div className="relative flex shrink-0 items-center justify-center w-[42px] h-[42px] rounded-full bg-blue-50 shadow-[0_0_12px_rgba(220,38,38,0.12)]">
+                <div className="relative flex shrink-0 items-center justify-center w-[42px] h-[42px] rounded-full bg-red-50 shadow-[0_0_12px_rgba(220,38,38,0.12)]">
                   <AlertCircle size={22} className="text-[#dc2626]" strokeWidth={2.5} />
                 </div>
 
@@ -16268,7 +16167,7 @@ export default function AdvancedFlashcardPoC() {
                   <div className="mt-4 flex items-center gap-4">
                     <button
                       onClick={fecharNotificacao}
-                      className="px-4 py-2 bg-[#dc2626] hover:bg-blue-700 text-white text-[13px] font-medium rounded-lg"
+                      className="px-4 py-2 bg-[#dc2626] hover:bg-red-700 text-white text-[13px] font-medium rounded-lg"
                     >
                       Entendi
                     </button>
