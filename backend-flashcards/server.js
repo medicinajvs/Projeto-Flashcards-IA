@@ -101,6 +101,10 @@ const GEMINI_IMAGE_MODELS = uniqueList([
 const FLASHCARD_IMAGE_WIDTH = Number(process.env.FLASHCARD_IMAGE_WIDTH || 1080);
 const FLASHCARD_IMAGE_HEIGHT = Number(process.env.FLASHCARD_IMAGE_HEIGHT || 1920);
 
+const EXPORT_SVG_FONT_FAMILY =
+  process.env.EXPORT_SVG_FONT_FAMILY ||
+  'Noto Sans, DejaVu Sans, Arial, Helvetica, sans-serif';
+
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
@@ -2548,17 +2552,17 @@ async function composeFlashcardPosterImage({ illustrationBuffer, card = {}, keyw
       <rect x="54" y="54" width="${FLASHCARD_IMAGE_WIDTH - 108}" height="${
         FLASHCARD_IMAGE_HEIGHT - 108
       }" rx="44" fill="none" stroke="#1e293b" stroke-width="3"/>
-      <text x="70" y="118" fill="#facc15" font-size="28" font-family="Arial, Helvetica, sans-serif" font-weight="800" letter-spacing="4">FLASHCARD MÉDICO</text>
-      <text x="70" y="205" fill="#f8fafc" font-size="48" font-family="Arial, Helvetica, sans-serif" font-weight="800">${titleTspans}</text>
+      <text x="70" y="118" fill="#facc15" font-size="28" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="800" letter-spacing="4">FLASHCARD MÉDICO</text>
+      <text x="70" y="205" fill="#f8fafc" font-size="48" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="800">${titleTspans}</text>
       <rect x="70" y="500" width="${FLASHCARD_IMAGE_WIDTH - 140}" height="56" rx="28" fill="#facc15"/>
-      <text x="100" y="538" fill="#111827" font-size="24" font-family="Arial, Helvetica, sans-serif" font-weight="900" letter-spacing="2">${escapeSvgText(keywordText)}</text>
+      <text x="100" y="538" fill="#111827" font-size="24" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" letter-spacing="2">${escapeSvgText(keywordText)}</text>
       <linearGradient id="fade" x1="0" x2="0" y1="0" y2="1">
         <stop offset="0%" stop-color="#020617" stop-opacity="0"/>
         <stop offset="100%" stop-color="#020617" stop-opacity="0.94"/>
       </linearGradient>
       <rect x="0" y="1330" width="${FLASHCARD_IMAGE_WIDTH}" height="430" fill="url(#fade)"/>
-      <text x="70" y="1740" fill="#94a3b8" font-size="25" font-family="Arial, Helvetica, sans-serif" font-weight="700">Gerado para revisão ativa</text>
-      <text x="70" y="1790" fill="#64748b" font-size="22" font-family="Arial, Helvetica, sans-serif">Use junto da pergunta e resposta do card.</text>
+      <text x="70" y="1740" fill="#94a3b8" font-size="25" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700">Gerado para revisão ativa</text>
+      <text x="70" y="1790" fill="#64748b" font-size="22" font-family="${EXPORT_SVG_FONT_FAMILY}">Use junto da pergunta e resposta do card.</text>
     </svg>
   `);
 
@@ -5178,7 +5182,7 @@ function buildCardLabelSvg({
   if (isQuestion) {
     return `
       <rect x="32" y="34" width="760" height="106" rx="53" fill="none" stroke="#8D8D8D" stroke-width="4"/>
-      <text x="118" y="106" font-size="68" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#213A5B">Pergunta</text>
+      <text x="118" y="106" font-size="68" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="#213A5B">Pergunta</text>
       <circle cx="718" cy="84" r="28" fill="none" stroke="#8D8D8D" stroke-width="5"/>
       <line x1="698" y1="104" x2="662" y2="140" stroke="#8D8D8D" stroke-width="7" stroke-linecap="round"/>
     `;
@@ -5189,7 +5193,7 @@ function buildCardLabelSvg({
 
   return `
     <rect x="${labelX}" y="34" width="${labelWidth}" height="92" rx="46" fill="none" stroke="#8D8D8D" stroke-width="4"/>
-    <text x="${labelX + 128}" y="97" font-size="58" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#213A5B">Resposta</text>
+    <text x="${labelX + 128}" y="97" font-size="58" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="#213A5B">Resposta</text>
     <circle cx="${labelX + labelWidth - 78}" cy="80" r="25" fill="none" stroke="${accent}" stroke-width="5"/>
     <path d="M${labelX + labelWidth - 92} 80 l12 13 l28 -35" fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   `;
@@ -5209,8 +5213,8 @@ function buildFlashcardHeaderBrandSvg({
         background: '#2563EB',
         foreground: '#FFFFFF',
       })}
-      <text x="96" y="54" font-size="54" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="${accent}">Flashcard</text>
-      <text x="98" y="102" font-size="20" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="#94A3B8">CARD ${cardNumber} / ${totalCards}</text>
+      <text x="96" y="54" font-size="54" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="${accent}">Flashcard</text>
+      <text x="98" y="102" font-size="20" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="#94A3B8">CARD ${cardNumber} / ${totalCards}</text>
     </g>
   `;
 }
@@ -5314,7 +5318,7 @@ async function buildFlashcardFaceSvg({
       const y = (isQuestion ? questionTextY : answerTextY) + index * lineHeight;
       const anchor = isQuestion ? 'start' : imageDataUrl ? 'start' : 'middle';
 
-      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="Arial, Helvetica, sans-serif" font-weight="700" fill="#213A5B">${escapeSvg(
+      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700" fill="#213A5B">${escapeSvg(
         line
       )}</text>`;
     })
@@ -5415,7 +5419,7 @@ async function buildFlashcardFaceSvg({
           accent,
           muted: '#BFC7CE',
         })}
-        <text x="140" y="295" font-size="34" font-family="Arial, Helvetica, sans-serif" font-weight="800" fill="#8E8E8E">${escapeSvg(
+        <text x="140" y="295" font-size="34" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="800" fill="#8E8E8E">${escapeSvg(
           subSpecialtyLabel
         )}</text>
       `
@@ -5429,7 +5433,7 @@ async function buildFlashcardFaceSvg({
     isQuestion
       ? `
         <line x1="48" y1="${questionDividerY}" x2="190" y2="${questionDividerY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>
-        <text x="1660" y="1060" text-anchor="end" font-size="86" font-family="Arial, Helvetica, sans-serif" font-weight="900" fill="${accent}">${escapeSvg(
+        <text x="1660" y="1060" text-anchor="end" font-size="86" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="${accent}">${escapeSvg(
           specialtyLabel
         )}</text>
         <rect x="1668" y="1016" width="110" height="18" rx="9" fill="${accent}" opacity="0.85"/>
@@ -5621,6 +5625,7 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
 app.get('/health', (_, res) => {
   res.json({
     ok: true,
+    exportFontFamily: EXPORT_SVG_FONT_FAMILY,
     transcription: 'deepgram',
     textModels: GEMINI_TEXT_MODELS,
     metadataModels: GEMINI_METADATA_MODELS,
