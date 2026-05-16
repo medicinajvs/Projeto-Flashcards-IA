@@ -13,9 +13,9 @@ const {
   TextRun,
   AlignmentType,
   HeadingLevel,
-  PageBreak,
   ImageRun,
   UnderlineType,
+  PageOrientation,
 } = require('docx');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
@@ -5526,7 +5526,55 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
 }
 
 async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
-  const children = [];
+  const CARD_WIDTH_PX = 1772;
+  const CARD_HEIGHT_PX = 1185;
+
+  const DOCX_PAGE_WIDTH_TWIPS = 16838;
+  const DOCX_PAGE_HEIGHT_TWIPS = Math.round(
+    DOCX_PAGE_WIDTH_TWIPS * (CARD_HEIGHT_PX / CARD_WIDTH_PX)
+  );
+
+  const DOCX_IMAGE_WIDTH_PX = 1080;
+  const DOCX_IMAGE_HEIGHT_PX = 722;
+
+  const buildImageSection = (imageBuffer) => ({
+    properties: {
+      page: {
+        size: {
+          orientation: PageOrientation.LANDSCAPE,
+          width: DOCX_PAGE_WIDTH_TWIPS,
+          height: DOCX_PAGE_HEIGHT_TWIPS,
+        },
+        margin: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        },
+      },
+    },
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: {
+          before: 0,
+          after: 0,
+          line: 0,
+        },
+        children: [
+          new ImageRun({
+            data: imageBuffer,
+            transformation: {
+              width: DOCX_IMAGE_WIDTH_PX,
+              height: DOCX_IMAGE_HEIGHT_PX,
+            },
+          }),
+        ],
+      }),
+    ],
+  });
+
+  const sections = [];
 
   for (let index = 0; index < cards.length; index += 1) {
     const card = cards[index];
@@ -5559,67 +5607,12 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
       imageAsset: answerImageAsset,
     });
 
-    children.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 0 },
-        children: [
-          new ImageRun({
-            data: questionPng,
-            transformation: {
-              width: 1123,
-              height: 751,
-            },
-          }),
-        ],
-      }),
-      new Paragraph({
-        children: [new PageBreak()],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 0 },
-        children: [
-          new ImageRun({
-            data: answerPng,
-            transformation: {
-              width: 1123,
-              height: 751,
-            },
-          }),
-        ],
-      })
-    );
-
-    if (index < cards.length - 1) {
-      children.push(
-        new Paragraph({
-          children: [new PageBreak()],
-        })
-      );
-    }
+    sections.push(buildImageSection(questionPng));
+    sections.push(buildImageSection(answerPng));
   }
 
   const document = new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            size: {
-              width: 16838,
-              height: 11906,
-            },
-            margin: {
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-            },
-          },
-        },
-        children,
-      },
-    ],
+    sections,
   });
 
   return await Packer.toBuffer(document);

@@ -59,6 +59,7 @@ import {
   Droplets,
   Syringe,
   Plus,
+  Pencil,
   Trash2,
 } from 'lucide-react';
 
@@ -671,7 +672,11 @@ function FolderTreeNode({
   const isSelected = selectedId === node.id;
   const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const Icon = node.icon || Folder;
+
   const canDelete = typeof node.onDelete === 'function' && node.deletable !== false;
+  const canRename = typeof node.onRename === 'function' && node.renamable !== false;
+  const hasActions = canRename || canDelete;
+  const hasCount = node.count !== undefined && node.count !== null;
 
   const handleClick = () => {
     if (hasChildren) {
@@ -697,10 +702,19 @@ function FolderTreeNode({
     node.onDelete(node);
   };
 
+  const handleRename = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!canRename || node.disabled) return;
+
+    node.onRename(node);
+  };
+
   return (
     <div>
       <div
-        className={`group flex items-start gap-1 rounded-xl transition-all ${
+        className={`group relative rounded-xl transition-all ${
           isSelected
             ? 'bg-blue-600 text-white shadow-sm shadow-blue-100'
             : 'text-slate-700 hover:bg-slate-100'
@@ -710,7 +724,11 @@ function FolderTreeNode({
           type="button"
           onClick={handleClick}
           disabled={node.disabled}
-          className="flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`flex min-w-0 w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            hasCount || hasActions
+              ? 'pr-[132px] sm:pr-14 sm:group-hover:pr-[132px] sm:group-focus-within:pr-[132px]'
+              : ''
+          }`}
           style={{ paddingLeft: `${10 + level * 16}px` }}
           title={node.label}
         >
@@ -757,33 +775,66 @@ function FolderTreeNode({
               </span>
             ) : null}
           </span>
-
-          {node.count !== undefined && node.count !== null ? (
-            <span
-              className={`text-[11px] font-black rounded-full px-2 py-0.5 shrink-0 ${
-                isSelected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
-              }`}
-            >
-              {node.count}
-            </span>
-          ) : null}
         </button>
 
-        {canDelete ? (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={node.disabled}
-            title={`Excluir ${node.label}`}
-            aria-label={`Excluir pasta ${node.label}`}
-            className={`mt-2 mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 disabled:opacity-30 ${
+        {hasCount ? (
+          <span
+            className={`absolute top-1/2 z-10 -translate-y-1/2 text-[11px] font-black rounded-full px-2 py-0.5 transition-all duration-200 ${
+              hasActions
+                ? 'right-[86px] sm:right-2 sm:group-hover:right-[86px] sm:group-focus-within:right-[86px]'
+                : 'right-2'
+            } ${
               isSelected
-                ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
-                : 'border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                ? 'bg-white/15 text-white'
+                : 'bg-slate-100 text-slate-500'
             }`}
           >
-            <Trash2 size={15} />
-          </button>
+            {node.count}
+          </span>
+        ) : null}
+
+        {hasActions ? (
+          <div
+            className={`absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1 rounded-xl p-1 shadow-sm ring-1 backdrop-blur transition-all duration-200 opacity-100 pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:translate-x-1 sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:group-hover:translate-x-0 sm:group-focus-within:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:translate-x-0 ${
+              isSelected
+                ? 'bg-blue-700/95 ring-white/15'
+                : 'bg-white/95 ring-slate-200'
+            }`}
+          >
+            {canRename ? (
+              <button
+                type="button"
+                onClick={handleRename}
+                disabled={node.disabled}
+                title={`Renomear ${node.label}`}
+                aria-label={`Renomear pasta ${node.label}`}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-colors disabled:opacity-30 ${
+                  isSelected
+                    ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Pencil size={14} />
+              </button>
+            ) : null}
+
+            {canDelete ? (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={node.disabled}
+                title={`Excluir ${node.label}`}
+                aria-label={`Excluir pasta ${node.label}`}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-colors disabled:opacity-30 ${
+                  isSelected
+                    ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+                    : 'border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                }`}
+              >
+                <Trash2 size={14} />
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -1927,6 +1978,25 @@ function PremiumRichTextEditor({
   );
 }
 
+const FLASHCARD_TEXT_COLOR_OPTIONS = [
+  { label: 'Preto', value: '#111827' },
+  { label: 'Cinza', value: '#475569' },
+  { label: 'Vermelho', value: '#dc2626' },
+  { label: 'Laranja', value: '#ea580c' },
+  { label: 'Verde', value: '#16a34a' },
+  { label: 'Azul', value: '#2563eb' },
+  { label: 'Roxo', value: '#7c3aed' },
+];
+
+const FLASHCARD_HIGHLIGHT_COLOR_OPTIONS = [
+  { label: 'Amarelo', value: '#fef08a' },
+  { label: 'Âmbar', value: '#fde68a' },
+  { label: 'Verde claro', value: '#bbf7d0' },
+  { label: 'Azul claro', value: '#bfdbfe' },
+  { label: 'Vermelho claro', value: '#fecaca' },
+  { label: 'Roxo claro', value: '#e9d5ff' },
+];
+
 function FlashcardRichTextEditor({
   value = '',
   onChange,
@@ -1934,6 +2004,7 @@ function FlashcardRichTextEditor({
 }) {
   const editorRef = useRef(null);
   const lastValueRef = useRef('');
+  const [openColorPalette, setOpenColorPalette] = useState(null);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -1963,27 +2034,47 @@ function FlashcardRichTextEditor({
     setTimeout(syncEditor, 0);
   };
 
-  const askColor = () => {
-    const color = window.prompt('Cor do texto em HEX. Exemplo: #dc2626', '#dc2626');
-
+  const applyPaletteColor = (command, color) => {
     if (!color) return;
 
-    runCommand('foreColor', color);
+    runCommand(command, color);
+    setOpenColorPalette(null);
   };
 
-  const askHighlight = () => {
-    const color = window.prompt('Cor do destaque em HEX. Exemplo: #fef08a', '#fef08a');
+  const renderColorPalette = ({ type, options, command }) => {
+    if (openColorPalette !== type) return null;
 
-    if (!color) return;
+    return (
+      <div className="absolute left-1/2 top-11 z-[100] w-[252px] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200">
+        <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+          Escolha uma cor
+        </p>
 
-    runCommand('hiliteColor', color);
+        <div className="grid grid-cols-7 gap-2">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.label}
+              aria-label={option.label}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                applyPaletteColor(command, option.value);
+              }}
+              className="h-7 w-7 rounded-lg border border-slate-200 shadow-sm transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              style={{ backgroundColor: option.value }}
+            />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const buttonClass =
     'h-9 w-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900';
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+    <div className="relative rounded-2xl border border-slate-200 bg-white overflow-visible">
       <div className="flex flex-wrap items-center justify-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-3 text-center">
         <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('bold'); }}>
           <Bold size={15} />
@@ -2001,13 +2092,45 @@ function FlashcardRichTextEditor({
           <Strikethrough size={15} />
         </button>
 
-        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); askColor(); }}>
-          <span className="text-xs font-black">A</span>
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            className={buttonClass}
+            title="Cor do texto"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              setOpenColorPalette((current) => (current === 'text' ? null : 'text'));
+            }}
+          >
+            <span className="text-xs font-black">A</span>
+          </button>
 
-        <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); askHighlight(); }}>
-          <Highlighter size={15} />
-        </button>
+          {renderColorPalette({
+            type: 'text',
+            options: FLASHCARD_TEXT_COLOR_OPTIONS,
+            command: 'foreColor',
+          })}
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            className={buttonClass}
+            title="Cor do destaque"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              setOpenColorPalette((current) => (current === 'highlight' ? null : 'highlight'));
+            }}
+          >
+            <Highlighter size={15} />
+          </button>
+
+          {renderColorPalette({
+            type: 'highlight',
+            options: FLASHCARD_HIGHLIGHT_COLOR_OPTIONS,
+            command: 'hiliteColor',
+          })}
+        </div>
 
         <button type="button" className={buttonClass} onMouseDown={(event) => { event.preventDefault(); runCommand('insertUnorderedList'); }}>
           <ListIcon size={15} />
@@ -2183,10 +2306,23 @@ export default function AdvancedFlashcardPoC() {
   const [flashcardImageFieldAction, setFlashcardImageFieldAction] = useState('');
   const [newFlashcardImageFieldAction, setNewFlashcardImageFieldAction] = useState('');
   const [isGeneratingFlashcardImage, setIsGeneratingFlashcardImage] = useState(false);
+
   const [isGeneratingFlashcardInsights, setIsGeneratingFlashcardInsights] = useState(false);
   const [expandedFlashcardInsights, setExpandedFlashcardInsights] = useState({});
   const [flashcardActionIndex, setFlashcardActionIndex] = useState(null);
+
+  const [quickEditingFlashcardIndex, setQuickEditingFlashcardIndex] = useState(null);
+  const [quickEditingFlashcardForm, setQuickEditingFlashcardForm] = useState({
+    position: 1,
+    preceptorNote: '',
+    gap: '',
+    improvement: '',
+    correctedAnswer: '',
+  });
+  const [isSavingQuickFlashcardEdit, setIsSavingQuickFlashcardEdit] = useState(false);
+
   const [autoInsightsPausedReason, setAutoInsightsPausedReason] = useState('');
+
   const [isCreatingFlashcard, setIsCreatingFlashcard] = useState(false);
   const [newFlashcardForm, setNewFlashcardForm] = useState({
     question: '',
@@ -5024,7 +5160,7 @@ export default function AdvancedFlashcardPoC() {
     setEditingFlashcardForm({
       question: card.question || '',
       answer: card.answer || '',
-      preceptorNote: card.preceptorNote || '',
+      preceptorNote: card.preceptorNote || card.preceptor_note || '',
       difficulty: card.difficulty || 'medium',
       tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
       position: index + 1,
@@ -5075,70 +5211,25 @@ export default function AdvancedFlashcardPoC() {
         .map((tag) => tag.trim())
         .filter(Boolean);
 
-      const safePosition = Math.max(
-        1,
-        Math.min(
-          flashcards.length,
-          Number(editingFlashcardForm.position || editingFlashcardIndex + 1)
-        )
-      );
+      await updateFlashcardViaServer({
+        index: editingFlashcardIndex,
+        updates: {
+          question: editingFlashcardForm.question,
+          answer: editingFlashcardForm.answer,
 
-      const currentCard = flashcards[editingFlashcardIndex];
+          difficulty: editingFlashcardForm.difficulty,
+          tags,
 
-      if (!currentCard) {
-        throw new Error('Flashcard não encontrado.');
-      }
+          aiProposition: editingFlashcardForm.aiProposition,
+          ai_proposition: editingFlashcardForm.aiProposition,
 
-      const updatedCard = {
-        ...currentCard,
-        question: editingFlashcardForm.question,
-        answer: editingFlashcardForm.answer,
-        preceptorNote: editingFlashcardForm.preceptorNote,
-        preceptor_note: editingFlashcardForm.preceptorNote,
-        difficulty: editingFlashcardForm.difficulty,
-        tags,
-        position: safePosition,
-        aiProposition: editingFlashcardForm.aiProposition,
-        ai_proposition: editingFlashcardForm.aiProposition,
-        questionHtml: editingFlashcardForm.questionHtml,
-        question_html: editingFlashcardForm.questionHtml,
-        answerHtml: editingFlashcardForm.answerHtml,
-        answer_html: editingFlashcardForm.answerHtml,
-        preceptorNoteHtml: editingFlashcardForm.preceptorNoteHtml,
-        preceptor_note_html: editingFlashcardForm.preceptorNoteHtml,
-      };
+          questionHtml: editingFlashcardForm.questionHtml,
+          question_html: editingFlashcardForm.questionHtml,
 
-      if (safePosition !== editingFlashcardIndex + 1) {
-        const nextFlashcards = [...flashcards];
-
-        nextFlashcards.splice(editingFlashcardIndex, 1);
-        nextFlashcards.splice(safePosition - 1, 0, updatedCard);
-
-        await updateFlashcardListViaServer({
-          nextFlashcards,
-        });
-      } else {
-        await updateFlashcardViaServer({
-          index: editingFlashcardIndex,
-          updates: {
-            question: editingFlashcardForm.question,
-            answer: editingFlashcardForm.answer,
-            preceptorNote: editingFlashcardForm.preceptorNote,
-            preceptor_note: editingFlashcardForm.preceptorNote,
-            difficulty: editingFlashcardForm.difficulty,
-            tags,
-            position: safePosition,
-            aiProposition: editingFlashcardForm.aiProposition,
-            ai_proposition: editingFlashcardForm.aiProposition,
-            questionHtml: editingFlashcardForm.questionHtml,
-            question_html: editingFlashcardForm.questionHtml,
-            answerHtml: editingFlashcardForm.answerHtml,
-            answer_html: editingFlashcardForm.answerHtml,
-            preceptorNoteHtml: editingFlashcardForm.preceptorNoteHtml,
-            preceptor_note_html: editingFlashcardForm.preceptorNoteHtml,
-          },
-        });
-      }
+          answerHtml: editingFlashcardForm.answerHtml,
+          answer_html: editingFlashcardForm.answerHtml,
+        },
+      });
 
       closeFlashcardEditor();
     } catch (err) {
@@ -5173,6 +5264,127 @@ export default function AdvancedFlashcardPoC() {
       setError(`Falha ao renumerar flashcard: ${err.message}`);
     } finally {
       setIsSavingFlashcardList(false);
+      setFlashcardActionIndex(null);
+    }
+  };
+
+  const openQuickFlashcardEditor = (index) => {
+    const card = flashcards[index];
+
+    if (!card) return;
+
+    const insights = card.cardInsights || card.card_insights || {};
+
+    setQuickEditingFlashcardIndex(index);
+    setQuickEditingFlashcardForm({
+      position: index + 1,
+      preceptorNote: card.preceptorNote || card.preceptor_note || '',
+      gap: insights.gap || '',
+      improvement: insights.improvement || '',
+      correctedAnswer: insights.corrected_answer || '',
+    });
+  };
+
+  const closeQuickFlashcardEditor = () => {
+    setQuickEditingFlashcardIndex(null);
+    setQuickEditingFlashcardForm({
+      position: 1,
+      preceptorNote: '',
+      gap: '',
+      improvement: '',
+      correctedAnswer: '',
+    });
+  };
+
+  const saveQuickFlashcardEdit = async (index) => {
+    const card = flashcards[index];
+
+    if (!card) return;
+
+    try {
+      setIsSavingQuickFlashcardEdit(true);
+      setFlashcardActionIndex(index);
+      setError(null);
+
+      const safePosition = Math.max(
+        1,
+        Math.min(
+          flashcards.length,
+          Number(quickEditingFlashcardForm.position || index + 1)
+        )
+      );
+
+      const cleanPreceptorNote = String(
+        quickEditingFlashcardForm.preceptorNote || ''
+      ).trim();
+
+      const currentInsights = card.cardInsights || card.card_insights || {};
+
+      const updatedInsights = {
+        ...currentInsights,
+        gap: quickEditingFlashcardForm.gap || '',
+        improvement: quickEditingFlashcardForm.improvement || '',
+        corrected_answer: quickEditingFlashcardForm.correctedAnswer || '',
+      };
+
+      const updatedCard = {
+        ...card,
+        position: safePosition,
+
+        preceptorNote: cleanPreceptorNote,
+        preceptor_note: cleanPreceptorNote,
+        preceptorNoteHtml: cleanPreceptorNote
+          ? plainTextToPremiumEditorHtml(cleanPreceptorNote)
+          : '',
+        preceptor_note_html: cleanPreceptorNote
+          ? plainTextToPremiumEditorHtml(cleanPreceptorNote)
+          : '',
+
+        cardInsights: updatedInsights,
+        card_insights: updatedInsights,
+        cardInsightsGeneratedAt:
+          card.cardInsightsGeneratedAt ||
+          card.card_insights_generated_at ||
+          new Date().toISOString(),
+        card_insights_generated_at:
+          card.card_insights_generated_at ||
+          card.cardInsightsGeneratedAt ||
+          new Date().toISOString(),
+      };
+
+      if (safePosition !== index + 1) {
+        const nextFlashcards = [...flashcards];
+
+        nextFlashcards.splice(index, 1);
+        nextFlashcards.splice(safePosition - 1, 0, updatedCard);
+
+        await updateFlashcardListViaServer({
+          nextFlashcards,
+        });
+      } else {
+        await updateFlashcardViaServer({
+          index,
+          updates: {
+            position: safePosition,
+
+            preceptorNote: cleanPreceptorNote,
+            preceptor_note: cleanPreceptorNote,
+            preceptorNoteHtml: updatedCard.preceptorNoteHtml,
+            preceptor_note_html: updatedCard.preceptor_note_html,
+
+            cardInsights: updatedInsights,
+            card_insights: updatedInsights,
+            cardInsightsGeneratedAt: updatedCard.cardInsightsGeneratedAt,
+            card_insights_generated_at: updatedCard.card_insights_generated_at,
+          },
+        });
+      }
+
+      closeQuickFlashcardEditor();
+    } catch (err) {
+      setError(`Falha ao salvar ajustes rápidos: ${err.message}`);
+    } finally {
+      setIsSavingQuickFlashcardEdit(false);
       setFlashcardActionIndex(null);
     }
   };
@@ -6117,7 +6329,7 @@ export default function AdvancedFlashcardPoC() {
 
   const applyFlashcardInsightSuggestion = async (index) => {
     const card = flashcards[index];
-    const insights = card?.cardInsights || {};
+    const insights = card?.cardInsights || card?.card_insights || {};
 
     if (!card || !insights.corrected_answer) {
       setError('Este flashcard ainda não possui uma resposta corrigida nos insights.');
@@ -6163,12 +6375,21 @@ export default function AdvancedFlashcardPoC() {
         ])
       );
 
+      const finalAnswerHtml = plainTextToPremiumEditorHtml(insights.corrected_answer);
+      const finalPreceptorNoteHtml = plainTextToPremiumEditorHtml(finalPreceptorNote);
+
       await updateFlashcardViaServer({
         index,
         updates: {
           answer: insights.corrected_answer,
+          answerHtml: finalAnswerHtml,
+          answer_html: finalAnswerHtml,
+
           preceptorNote: finalPreceptorNote,
           preceptor_note: finalPreceptorNote,
+          preceptorNoteHtml: finalPreceptorNoteHtml,
+          preceptor_note_html: finalPreceptorNoteHtml,
+
           tags: finalTags,
         },
       });
@@ -7697,80 +7918,215 @@ export default function AdvancedFlashcardPoC() {
 
     const cleanName = nextName.trim();
 
+    if (cleanName === currentName) return;
+
+    const cardIds = new Set(
+      Array.isArray(cards)
+        ? cards.map((card) => card?.id).filter(Boolean)
+        : []
+    );
+
+    const updateDeckRequest = async (deckId, payload, fallbackMessage) => {
+      const response = await fetch(`${API_BASE}/api/flashcard-decks/${deckId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || fallbackMessage);
+      }
+
+      return data;
+    };
+
+    const renameDeckTreeNodesLocally = (nodes = []) => {
+      return nodes.map((deck) => {
+        const nextDeck = {
+          ...deck,
+          children: renameDeckTreeNodesLocally(deck.children || []),
+        };
+
+        if (type === 'deck' && id && String(deck.id) === String(id)) {
+          nextDeck.name = cleanName;
+        }
+
+        if (
+          type === 'topic' &&
+          (deck.specialty || 'Sem especialidade') === specialtyName &&
+          (deck.sub_specialty || '') === currentName
+        ) {
+          nextDeck.sub_specialty = cleanName;
+
+          if (deck.deck_type === 'sub-specialty') {
+            nextDeck.name = cleanName;
+          }
+        }
+
+        if (
+          type === 'specialty' &&
+          (deck.specialty || 'Sem especialidade') === currentName
+        ) {
+          nextDeck.specialty = cleanName === 'Sem especialidade' ? null : cleanName;
+
+          if (deck.deck_type === 'specialty-root') {
+            nextDeck.name = cleanName;
+          }
+        }
+
+        return nextDeck;
+      });
+    };
+
     try {
       setError(null);
 
-      if (type === 'deck' && id && id !== 'sem-deck') {
-        const response = await fetch(`${API_BASE}/api/flashcard-decks/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: cleanName }),
-        });
+      setLibraryCards((prev) =>
+        prev.map((card) => {
+          const isTargetCard = cardIds.has(card.id);
 
-        const data = await parseResponseSafely(response);
-        if (!response.ok) throw new Error(data.error || 'Erro ao renomear deck.');
+          if (type === 'topic' && isTargetCard) {
+            return {
+              ...card,
+              sub_specialty: cleanName,
+              subSpecialty: cleanName,
+            };
+          }
+
+          if (type === 'specialty' && isTargetCard) {
+            return {
+              ...card,
+              specialty: cleanName === 'Sem especialidade' ? '' : cleanName,
+            };
+          }
+
+          return card;
+        })
+      );
+
+      setLibraryDecks((prev) =>
+        prev.map((deck) => {
+          if (type === 'deck' && id && String(deck.id) === String(id)) {
+            return {
+              ...deck,
+              name: cleanName,
+            };
+          }
+
+          if (
+            type === 'topic' &&
+            (deck.specialty || 'Sem especialidade') === specialtyName &&
+            (deck.sub_specialty || '') === currentName
+          ) {
+            return {
+              ...deck,
+              sub_specialty: cleanName,
+              name: deck.deck_type === 'sub-specialty' ? cleanName : deck.name,
+            };
+          }
+
+          if (
+            type === 'specialty' &&
+            (deck.specialty || 'Sem especialidade') === currentName
+          ) {
+            return {
+              ...deck,
+              specialty: cleanName === 'Sem especialidade' ? null : cleanName,
+              name: deck.deck_type === 'specialty-root' ? cleanName : deck.name,
+            };
+          }
+
+          return deck;
+        })
+      );
+
+      setDeckTree((prev) => renameDeckTreeNodesLocally(prev));
+
+      if (type === 'specialty' && selectedArchiveSpecialty === currentName) {
+        setSelectedArchiveSpecialty(cleanName);
+      }
+
+      if (
+        type === 'topic' &&
+        selectedArchiveSpecialty === specialtyName &&
+        selectedArchiveTopic === currentName
+      ) {
+        setSelectedArchiveTopic(cleanName);
+      }
+
+      const requests = [];
+
+      if (type === 'deck' && id && id !== 'sem-deck') {
+        requests.push(
+          updateDeckRequest(
+            id,
+            { name: cleanName },
+            'Erro ao renomear deck.'
+          )
+        );
       }
 
       if (type === 'topic') {
         if (cards.length) {
-          await patchLibraryCardsBulk(cards, () => ({
-            sub_specialty: cleanName,
-          }));
+          requests.push(
+            patchLibraryCardsBulk(cards, () => ({
+              sub_specialty: cleanName,
+            }))
+          );
         }
 
-        await Promise.all(
-          libraryDecks
-            .filter(
-              (deck) =>
-                (deck.specialty || 'Sem especialidade') === specialtyName &&
-                (deck.sub_specialty || '') === currentName
-            )
-            .map((deck) =>
-              fetch(`${API_BASE}/api/flashcard-decks/${deck.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+        libraryDecks
+          .filter(
+            (deck) =>
+              (deck.specialty || 'Sem especialidade') === specialtyName &&
+              (deck.sub_specialty || '') === currentName
+          )
+          .forEach((deck) => {
+            requests.push(
+              updateDeckRequest(
+                deck.id,
+                {
                   sub_specialty: cleanName,
                   name: deck.deck_type === 'sub-specialty' ? cleanName : deck.name,
-                }),
-              }).then(async (response) => {
-                const data = await parseResponseSafely(response);
-                if (!response.ok) throw new Error(data.error || 'Erro ao renomear subpasta.');
-                return data;
-              })
-            )
-        );
+                },
+                'Erro ao renomear subpasta.'
+              )
+            );
+          });
       }
 
       if (type === 'specialty') {
         if (cards.length) {
-          await patchLibraryCardsBulk(cards, () => ({
-            specialty: cleanName,
-          }));
+          requests.push(
+            patchLibraryCardsBulk(cards, () => ({
+              specialty: cleanName === 'Sem especialidade' ? null : cleanName,
+            }))
+          );
         }
 
-        await Promise.all(
-          libraryDecks
-            .filter((deck) => (deck.specialty || 'Sem especialidade') === currentName)
-            .map((deck) =>
-              fetch(`${API_BASE}/api/flashcard-decks/${deck.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+        libraryDecks
+          .filter((deck) => (deck.specialty || 'Sem especialidade') === currentName)
+          .forEach((deck) => {
+            requests.push(
+              updateDeckRequest(
+                deck.id,
+                {
                   specialty: cleanName === 'Sem especialidade' ? null : cleanName,
                   name: deck.deck_type === 'specialty-root' ? cleanName : deck.name,
-                }),
-              }).then(async (response) => {
-                const data = await parseResponseSafely(response);
-                if (!response.ok) throw new Error(data.error || 'Erro ao renomear pasta.');
-                return data;
-              })
-            )
-        );
+                },
+                'Erro ao renomear pasta.'
+              )
+            );
+          });
       }
+
+      await Promise.all(requests);
 
       await refreshLibraryData();
     } catch (err) {
+      await refreshLibraryData();
       setError(`Falha ao renomear pasta: ${err.message}`);
     }
   };
@@ -8945,6 +9301,13 @@ export default function AdvancedFlashcardPoC() {
         iconClass: visual.iconClass,
         count: specialty.cardCount || 0,
         onSelect: () => selectArchiveSpecialty(specialty.name),
+        onRename: () =>
+          renameArchiveFolder({
+            type: 'specialty',
+            currentName: specialty.name,
+            specialtyName: specialty.name,
+            cards: specialtyCards,
+          }),
         onDelete: () =>
           deleteArchiveFolder({
             type: 'specialty',
@@ -8965,6 +9328,13 @@ export default function AdvancedFlashcardPoC() {
             iconClass: 'bg-blue-50 text-blue-600 border-blue-100',
             count: topic.cardCount || 0,
             onSelect: () => selectArchiveTopic(specialty.name, topic.name),
+            onRename: () =>
+              renameArchiveFolder({
+                type: 'topic',
+                currentName: topic.name,
+                specialtyName: specialty.name,
+                cards: topicCards,
+              }),
             onDelete: () =>
               deleteArchiveFolder({
                 type: 'topic',
@@ -8985,6 +9355,14 @@ export default function AdvancedFlashcardPoC() {
                 iconClass: 'bg-slate-100 text-slate-600 border-slate-200',
                 count: Array.isArray(deck.cards) ? deck.cards.length : 0,
                 onSelect: () => selectArchiveDeck(specialty.name, topic.name, deck.id),
+                onRename: () =>
+                  renameArchiveFolder({
+                    type: 'deck',
+                    id: deck.id,
+                    currentName: deck.name,
+                    specialtyName: specialty.name,
+                    cards: deckCards,
+                  }),
                 onDelete: () =>
                   deleteArchiveFolder({
                     type: 'deck',
@@ -10699,13 +11077,25 @@ export default function AdvancedFlashcardPoC() {
                               )}
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4">
                               <button
                                 type="button"
                                 onClick={() => openFlashcardEditor(index)}
                                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
                               >
                                 Editar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  quickEditingFlashcardIndex === index
+                                    ? closeQuickFlashcardEditor()
+                                    : openQuickFlashcardEditor(index)
+                                }
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors"
+                              >
+                                {quickEditingFlashcardIndex === index ? 'Fechar ajustes' : 'Ajustes rápidos'}
                               </button>
 
                               <button
@@ -10730,6 +11120,139 @@ export default function AdvancedFlashcardPoC() {
                                   : 'Reanalisar card'}
                               </button>
                             </div>
+
+                            {quickEditingFlashcardIndex === index ? (
+                              <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                                  <label className="w-full sm:w-32">
+                                    <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                      Posição
+                                    </span>
+
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={flashcards.length}
+                                      value={quickEditingFlashcardForm.position}
+                                      onChange={(event) =>
+                                        setQuickEditingFlashcardForm((prev) => ({
+                                          ...prev,
+                                          position: event.target.value,
+                                        }))
+                                      }
+                                      className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    />
+                                  </label>
+
+                                  <div className="flex-1">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                      Edição rápida
+                                    </p>
+
+                                    <p className="text-xs text-slate-500 leading-relaxed">
+                                      Ajuste ordem, nota do preceptor, lacuna e melhoria sem abrir o editor avançado.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-amber-600 mb-2">
+                                    Nota do preceptor
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.preceptorNote}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        preceptorNote: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-amber-100 bg-white px-3 py-2 text-sm text-amber-950 outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                                    placeholder="Digite ou ajuste a nota do preceptor..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Lacuna
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.gap}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        gap: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="Edite a lacuna deste flashcard..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Melhoria sugerida
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.improvement}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        improvement: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="Edite a melhoria sugerida..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Resposta corrigida
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.correctedAnswer}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        correctedAnswer: event.target.value,
+                                      }))
+                                    }
+                                    rows={4}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="Edite a resposta corrigida que será aplicada ao card..."
+                                  />
+                                </label>
+
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => saveQuickFlashcardEdit(index)}
+                                    disabled={isSavingQuickFlashcardEdit && flashcardActionIndex === index}
+                                    className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {isSavingQuickFlashcardEdit && flashcardActionIndex === index
+                                      ? 'Salvando...'
+                                      : 'Salvar ajustes rápidos'}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={closeQuickFlashcardEditor}
+                                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
 
                             <RichFlashcardText
                               html={card.questionHtml || card.question_html}
@@ -10781,18 +11304,24 @@ export default function AdvancedFlashcardPoC() {
                                 </div>
                               ) : null}
 
-                              {card.preceptorNote && (
+                              {card.preceptorNote ||
+                              card.preceptor_note ||
+                              card.preceptorNoteHtml ||
+                              card.preceptor_note_html ? (
                                 <div className="mt-4 bg-amber-50/80 border border-amber-100 rounded-xl p-4 relative overflow-hidden">
                                   <div className="absolute top-0 left-0 w-1 h-full bg-amber-400" />
+
                                   <span className="block text-amber-600 text-[10px] font-bold tracking-widest mb-1.5 uppercase">
                                     Nota do Preceptor
                                   </span>
-                                  <FormattedAiText
-                                    text={card.preceptorNote}
-                                    className="text-amber-900/80 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950"
+
+                                  <RichFlashcardText
+                                    html={card.preceptorNoteHtml || card.preceptor_note_html}
+                                    fallback={card.preceptorNote || card.preceptor_note}
+                                    className="text-amber-900/80 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950 [&_em]:italic [&_u]:underline"
                                   />
                                 </div>
-                              )}
+                              ) : null}
 
                               {currentRunId && flashcardsOrigin !== 'library' ? (
                                 <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
@@ -11009,7 +11538,10 @@ export default function AdvancedFlashcardPoC() {
                                 </div>
                               ) : null}
 
-                              {currentStudyCard.preceptorNote && (
+                              {currentStudyCard.preceptorNote ||
+                              currentStudyCard.preceptor_note ||
+                              currentStudyCard.preceptorNoteHtml ||
+                              currentStudyCard.preceptor_note_html ? (
                                 <div className="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-5 relative">
                                   <div className="flex items-center gap-2 mb-2">
                                     <Sparkles size={16} className="text-amber-500" />
@@ -11017,12 +11549,14 @@ export default function AdvancedFlashcardPoC() {
                                       Nota do Preceptor
                                     </span>
                                   </div>
-                                  <FormattedAiText
-                                    text={currentStudyCard.preceptorNote}
-                                    className="text-amber-900 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950"
+
+                                  <RichFlashcardText
+                                    html={currentStudyCard.preceptorNoteHtml || currentStudyCard.preceptor_note_html}
+                                    fallback={currentStudyCard.preceptorNote || currentStudyCard.preceptor_note}
+                                    className="text-amber-900 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950 [&_em]:italic [&_u]:underline"
                                   />
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -13480,14 +14014,17 @@ export default function AdvancedFlashcardPoC() {
                   </div>
                 ) : null}
 
-                {previewLibraryCard.preceptor_note ? (
+                {previewLibraryCard.preceptor_note || previewLibraryCard.preceptor_note_html ? (
                   <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
                     <p className="text-xs font-black uppercase text-amber-600 mb-2">
                       Nota do preceptor
                     </p>
-                    <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">
-                      {previewLibraryCard.preceptor_note}
-                    </p>
+
+                    <RichFlashcardText
+                      html={previewLibraryCard.preceptor_note_html || previewLibraryCard.preceptorNoteHtml}
+                      fallback={previewLibraryCard.preceptor_note}
+                      className="text-sm text-amber-900 leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                    />
                   </div>
                 ) : null}
 
@@ -15993,75 +16530,65 @@ export default function AdvancedFlashcardPoC() {
               </div>
 
               <div className="p-6 space-y-5">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
-                        Preview da pergunta
-                      </span>
-
-                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                        Card {String(editingFlashcardIndex + 1).padStart(2, '0')}
+                <div className="mx-auto w-full max-w-2xl space-y-5">
+                  <div className="relative min-h-[360px] rounded-3xl border border-slate-200 bg-white p-8 md:p-10 shadow-sm flex flex-col items-center justify-center text-center overflow-hidden">
+                    <div className="absolute left-6 top-6 flex items-center gap-2">
+                      <BookOpen size={18} className="text-blue-500" />
+                      <span className="text-slate-900 font-bold tracking-widest uppercase text-xs">
+                        Pergunta
                       </span>
                     </div>
 
-                    <div className="p-6 min-h-[260px] flex flex-col justify-center">
-                      <RichFlashcardText
-                        html={editingFlashcardForm.questionHtml}
-                        fallback={editingFlashcardForm.question}
-                        className="text-[1.9rem] font-medium text-slate-900 leading-[1.35] text-center [&_p]:mb-2 [&_strong]:font-semibold"
-                      />
+                    <RichFlashcardText
+                      html={editingFlashcardForm.questionHtml}
+                      fallback={editingFlashcardForm.question}
+                      className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                    />
 
-                      {flashcards[editingFlashcardIndex]?.questionImageUrl ||
-                      flashcards[editingFlashcardIndex]?.question_image_url ? (
-                        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3">
-                          <img
-                            src={
-                              flashcards[editingFlashcardIndex]?.questionImageUrl ||
-                              flashcards[editingFlashcardIndex]?.question_image_url
-                            }
-                            alt="Preview da imagem da pergunta"
-                            className="mx-auto max-h-[220px] w-full object-contain rounded-xl"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
+                    {flashcards[editingFlashcardIndex]?.questionImageUrl ||
+                    flashcards[editingFlashcardIndex]?.question_image_url ? (
+                      <div className="mt-6 w-full rounded-2xl border border-slate-200 bg-white p-4">
+                        <img
+                          src={
+                            flashcards[editingFlashcardIndex]?.questionImageUrl ||
+                            flashcards[editingFlashcardIndex]?.question_image_url
+                          }
+                          alt="Imagem da pergunta do flashcard"
+                          className="block mx-auto max-h-[180px] w-full rounded-xl object-contain bg-white p-2"
+                        />
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">
-                        Preview da resposta
-                      </span>
-
-                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                        Resultado final
+                  <div className="relative min-h-[360px] rounded-3xl border border-slate-200 bg-white p-8 md:p-10 shadow-sm flex flex-col overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-6">
+                      <CheckCircle2 size={20} className="text-green-500" />
+                      <span className="text-slate-900 font-bold tracking-widest uppercase text-xs">
+                        Resposta
                       </span>
                     </div>
 
-                    <div className="p-6 min-h-[260px] flex flex-col justify-center">
-                      <RichFlashcardText
-                        html={editingFlashcardForm.answerHtml}
-                        fallback={editingFlashcardForm.answer}
-                        className="text-[1.9rem] font-medium text-slate-900 leading-[1.35] text-center [&_p]:mb-2 [&_strong]:font-semibold"
-                      />
+                    <RichFlashcardText
+                      html={editingFlashcardForm.answerHtml}
+                      fallback={editingFlashcardForm.answer}
+                      className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                    />
 
-                      {flashcards[editingFlashcardIndex]?.answerImageUrl ||
-                      flashcards[editingFlashcardIndex]?.answer_image_url ||
-                      flashcards[editingFlashcardIndex]?.imageUrl ? (
-                        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3">
-                          <img
-                            src={
-                              flashcards[editingFlashcardIndex]?.answerImageUrl ||
-                              flashcards[editingFlashcardIndex]?.answer_image_url ||
-                              flashcards[editingFlashcardIndex]?.imageUrl
-                            }
-                            alt="Preview da imagem da resposta"
-                            className="mx-auto max-h-[220px] w-full object-contain rounded-xl"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
+                    {flashcards[editingFlashcardIndex]?.answerImageUrl ||
+                    flashcards[editingFlashcardIndex]?.answer_image_url ||
+                    flashcards[editingFlashcardIndex]?.imageUrl ? (
+                      <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-4">
+                        <img
+                          src={
+                            flashcards[editingFlashcardIndex]?.answerImageUrl ||
+                            flashcards[editingFlashcardIndex]?.answer_image_url ||
+                            flashcards[editingFlashcardIndex]?.imageUrl
+                          }
+                          alt="Imagem da resposta do flashcard"
+                          className="block mx-auto w-full max-h-[320px] rounded-xl object-contain bg-white p-2"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -16120,26 +16647,6 @@ export default function AdvancedFlashcardPoC() {
                     />
                   </div>
 
-                  <label className="md:col-span-2">
-                    <div className="mb-3 flex items-center justify-center">
-                      <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Nota do preceptor
-                      </span>
-                    </div>
-
-                    <FlashcardRichTextEditor
-                      value={editingFlashcardForm.preceptorNoteHtml || plainTextToPremiumEditorHtml(editingFlashcardForm.preceptorNote)}
-                      minHeight={140}
-                      onChange={(html) =>
-                        setEditingFlashcardForm((prev) => ({
-                          ...prev,
-                          preceptorNoteHtml: html,
-                          preceptorNote: premiumEditorHtmlToText(html),
-                        }))
-                      }
-                    />
-                  </label>
-
                   <label>
                     <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
                       Dificuldade
@@ -16178,25 +16685,6 @@ export default function AdvancedFlashcardPoC() {
                     />
                   </label>
                 </div>
-
-                {flashcards[editingFlashcardIndex]?.cardInsights &&
-                Object.keys(flashcards[editingFlashcardIndex]?.cardInsights || {}).length > 0 ? (
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 space-y-3">
-                    <h4 className="text-sm font-black text-blue-900">
-                      Lacunas e melhorias deste card
-                    </h4>
-
-                    <p className="text-sm text-blue-900/80 leading-relaxed">
-                      <strong>Lacuna:</strong>{' '}
-                      {flashcards[editingFlashcardIndex].cardInsights.gap || 'Não informado'}
-                    </p>
-
-                    <p className="text-sm text-blue-900/80 leading-relaxed">
-                      <strong>Melhoria:</strong>{' '}
-                      {flashcards[editingFlashcardIndex].cardInsights.improvement || 'Não informado'}
-                    </p>
-                  </div>
-                ) : null}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-5">
                   <button
