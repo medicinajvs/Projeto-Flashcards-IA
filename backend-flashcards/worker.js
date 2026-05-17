@@ -150,6 +150,42 @@ function buildTranscriptPreview(text, maxLength = 180) {
   return `${cleaned.slice(0, maxLength).trim()}...`;
 }
 
+function escapeHtml(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function textToSimpleParagraphsHtml(value = '', className = '') {
+  const paragraphs = String(value || '')
+    .split(/\n{2,}|\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) return '';
+
+  const classAttr = className ? ` class="${className}"` : '';
+
+  return paragraphs
+    .map((paragraph) => `<p${classAttr}>${escapeHtml(paragraph)}</p>`)
+    .join('');
+}
+
+function buildBilingualFieldHtml({
+  pt = '',
+  en = '',
+  ptClass = '',
+  enClass = 'text-blue-600',
+}) {
+  const ptHtml = textToSimpleParagraphsHtml(pt, ptClass);
+  const enHtml = textToSimpleParagraphsHtml(en, enClass);
+
+  return [ptHtml, enHtml].filter(Boolean).join('');
+}
+
 function stripMarkdownJsonFence(text) {
   return String(text || '')
     .trim()
@@ -1209,17 +1245,65 @@ function normalizeGeneratedFlashcards(rawFlashcards = []) {
           ''
       ).trim();
 
+      const preceptorNote = String(
+        card.nota_preceptor ||
+          card.preceptor_note ||
+          card.preceptorNote ||
+          ''
+      ).trim();
+
+      const questionEn = String(card.question_en || card.questionEn || '').trim();
+      const answerEn = String(card.answer_en || card.answerEn || '').trim();
+      const preceptorNoteEn = String(
+        card.preceptor_note_en ||
+          card.preceptorNoteEn ||
+          card.nota_preceptor_en ||
+          ''
+      ).trim();
+
       if (!question || !answer) return null;
+
+      const questionHtml = buildBilingualFieldHtml({
+        pt: question,
+        en: questionEn,
+      });
+
+      const answerHtml = buildBilingualFieldHtml({
+        pt: answer,
+        en: answerEn,
+      });
+
+      const preceptorNoteHtml = buildBilingualFieldHtml({
+        pt: preceptorNote,
+        en: preceptorNoteEn,
+      });
 
       return {
         id: card.id || `generated-${Date.now()}-${index}`,
+
         question,
+        pergunta: question,
         answer,
-        nota_preceptor:
-          card.nota_preceptor ||
-          card.preceptor_note ||
-          card.preceptorNote ||
-          null,
+        resposta: answer,
+
+        question_en: questionEn,
+        questionEn,
+        answer_en: answerEn,
+        answerEn,
+
+        nota_preceptor: preceptorNote,
+        preceptor_note: preceptorNote,
+        preceptorNote,
+        preceptor_note_en: preceptorNoteEn,
+        preceptorNoteEn,
+
+        questionHtml,
+        question_html: questionHtml,
+        answerHtml,
+        answer_html: answerHtml,
+        preceptorNoteHtml,
+        preceptor_note_html: preceptorNoteHtml,
+
         difficulty: card.difficulty || 'medium',
         tags: Array.isArray(card.tags)
           ? card.tags.map((tag) => String(tag).trim()).filter(Boolean)
@@ -1293,11 +1377,14 @@ Formato obrigatório:
 {
   "flashcards": [
     {
-      "question": "Pergunta objetiva e testável",
-      "answer": "Resposta completa, didática e clinicamente útil",
+      "question": "Pergunta objetiva e testável em português",
+      "question_en": "Natural medical English version of the question",
+      "answer": "Resposta completa, didática e clinicamente útil em português",
+      "answer_en": "Natural medical English version of the answer",
       "difficulty": "easy | medium | hard",
       "tags": ["tema", "subtema"],
-      "nota_preceptor": "Comentário curto explicando a relevância clínica ou pegadinha de prova"
+      "nota_preceptor": "Comentário curto em português explicando relevância clínica, pegadinha de prova ou raciocínio.",
+      "preceptor_note_en": "Natural medical English version of the preceptor note."
     }
   ]
 }
@@ -1312,6 +1399,9 @@ Regras obrigatórias:
 - Evite repetir perguntas dentro do mesmo bloco.
 - Não invente informações fora da transcrição.
 - Use português do Brasil.
+- Além do português, gere também a versão em inglês médico natural nos campos question_en, answer_en e preceptor_note_en.
+- O inglês deve ser fiel ao conteúdo em português e não deve acrescentar informação nova.
+- O português continua sendo o texto principal do flashcard.
 - Respostas devem ser completas, mas não excessivamente longas.
 - Se houver listas, organize de forma clara.
 - Cada flashcard deve cobrar uma ideia central útil.
@@ -1477,11 +1567,14 @@ Formato obrigatório:
 {
   "flashcards": [
     {
-      "question": "Pergunta objetiva e testável",
-      "answer": "Resposta completa, didática e clinicamente útil",
+      "question": "Pergunta objetiva e testável em português",
+      "question_en": "Natural medical English version of the question",
+      "answer": "Resposta completa, didática e clinicamente útil em português",
+      "answer_en": "Natural medical English version of the answer",
       "difficulty": "easy | medium | hard",
       "tags": ["tema", "subtema"],
-      "nota_preceptor": "Comentário curto explicando relevância clínica, pegadinha de prova ou raciocínio."
+      "nota_preceptor": "Comentário curto em português explicando relevância clínica, pegadinha de prova ou raciocínio.",
+      "preceptor_note_en": "Natural medical English version of the preceptor note."
     }
   ]
 }
@@ -1497,6 +1590,9 @@ Regras obrigatórias:
 - Não crie flashcards genéricos.
 - Não invente informação fora do bloco.
 - Use português do Brasil.
+- Além do português, gere também a versão em inglês médico natural nos campos question_en, answer_en e preceptor_note_en.
+- O inglês deve ser fiel ao conteúdo em português e não deve acrescentar informação nova.
+- O português continua sendo o texto principal do flashcard.
 - Use obrigatoriamente os campos "question" e "answer".
 - Não use "pergunta" e "resposta"; use "question" e "answer".
 

@@ -441,6 +441,229 @@ function buildTranscriptPreview(text, maxLength = 180) {
   return `${cleaned.slice(0, maxLength).trim()}...`;
 }
 
+function escapeHtml(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function textToSimpleParagraphsHtml(value = '', className = '') {
+  const paragraphs = String(value || '')
+    .split(/\n{2,}|\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) return '';
+
+  const classAttr = className ? ` class="${className}"` : '';
+
+  return paragraphs
+    .map((paragraph) => `<p${classAttr}>${escapeHtml(paragraph)}</p>`)
+    .join('');
+}
+
+function buildBilingualFieldHtml({
+  pt = '',
+  en = '',
+  ptClass = '',
+  enClass = 'text-blue-600',
+}) {
+  const ptHtml = textToSimpleParagraphsHtml(pt, ptClass);
+  const enHtml = textToSimpleParagraphsHtml(en, enClass);
+
+  return [ptHtml, enHtml].filter(Boolean).join('');
+}
+
+function normalizeGeneratedBilingualFlashcards(cards = []) {
+  if (!Array.isArray(cards)) return [];
+
+  return cards
+    .map((card, index) => {
+      const question = String(card.question || card.pergunta || '').trim();
+      const answer = String(card.answer || card.resposta || '').trim();
+      const preceptorNote = String(
+        card.preceptorNote ||
+          card.preceptor_note ||
+          card.nota_preceptor ||
+          ''
+      ).trim();
+
+      const questionEn = String(card.question_en || card.questionEn || '').trim();
+      const answerEn = String(card.answer_en || card.answerEn || '').trim();
+      const preceptorNoteEn = String(
+        card.preceptor_note_en ||
+          card.preceptorNoteEn ||
+          card.nota_preceptor_en ||
+          ''
+      ).trim();
+
+      if (!question || !answer) return null;
+
+      return {
+        ...card,
+        id: card.id || `generated-${Date.now()}-${index}`,
+
+        question,
+        pergunta: question,
+        answer,
+        resposta: answer,
+        preceptorNote,
+        preceptor_note: preceptorNote,
+        nota_preceptor: preceptorNote,
+
+        question_en: questionEn,
+        questionEn,
+        answer_en: answerEn,
+        answerEn,
+        preceptor_note_en: preceptorNoteEn,
+        preceptorNoteEn,
+
+        questionHtml:
+          card.questionHtml ||
+          card.question_html ||
+          buildBilingualFieldHtml({
+            pt: question,
+            en: questionEn,
+          }),
+        question_html:
+          card.question_html ||
+          card.questionHtml ||
+          buildBilingualFieldHtml({
+            pt: question,
+            en: questionEn,
+          }),
+
+        answerHtml:
+          card.answerHtml ||
+          card.answer_html ||
+          buildBilingualFieldHtml({
+            pt: answer,
+            en: answerEn,
+          }),
+        answer_html:
+          card.answer_html ||
+          card.answerHtml ||
+          buildBilingualFieldHtml({
+            pt: answer,
+            en: answerEn,
+          }),
+
+        preceptorNoteHtml:
+          card.preceptorNoteHtml ||
+          card.preceptor_note_html ||
+          buildBilingualFieldHtml({
+            pt: preceptorNote,
+            en: preceptorNoteEn,
+          }),
+        preceptor_note_html:
+          card.preceptor_note_html ||
+          card.preceptorNoteHtml ||
+          buildBilingualFieldHtml({
+            pt: preceptorNote,
+            en: preceptorNoteEn,
+          }),
+
+        difficulty: card.difficulty || 'medium',
+        tags: Array.isArray(card.tags) ? card.tags : [],
+        reviewed: true,
+      };
+    })
+    .filter(Boolean);
+}
+
+function extractEnglishFromBilingualHtml(html = '') {
+  const source = String(html || '');
+
+  if (!source.trim()) return '';
+
+  const matches = Array.from(
+    source.matchAll(/<p[^>]*class=["'][^"']*text-blue-600[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi)
+  );
+
+  if (!matches.length) return '';
+
+  return matches
+    .map((match) => stripHtmlToPlainText(match[1]))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function removeEnglishParagraphsFromBilingualHtml(html = '') {
+  return String(html || '').replace(
+    /<p[^>]*class=["'][^"']*text-blue-600[^"']*["'][^>]*>[\s\S]*?<\/p>/gi,
+    ''
+  );
+}
+
+function getBilingualPortugueseText(card = {}, field = 'question') {
+  if (field === 'answer') {
+    return (
+      stripHtmlToPlainText(
+        removeEnglishParagraphsFromBilingualHtml(card.answerHtml || card.answer_html)
+      ) ||
+      card.answer ||
+      card.resposta ||
+      ''
+    );
+  }
+
+  if (field === 'preceptor') {
+    return (
+      stripHtmlToPlainText(
+        removeEnglishParagraphsFromBilingualHtml(
+          card.preceptorNoteHtml || card.preceptor_note_html
+        )
+      ) ||
+      card.preceptorNote ||
+      card.preceptor_note ||
+      card.nota_preceptor ||
+      ''
+    );
+  }
+
+  return (
+    stripHtmlToPlainText(
+      removeEnglishParagraphsFromBilingualHtml(card.questionHtml || card.question_html)
+    ) ||
+    card.question ||
+    card.pergunta ||
+    ''
+  );
+}
+
+function getBilingualEnglishText(card = {}, field = 'question') {
+  if (field === 'answer') {
+    return (
+      extractEnglishFromBilingualHtml(card.answerHtml || card.answer_html) ||
+      card.answer_en ||
+      card.answerEn ||
+      ''
+    );
+  }
+
+  if (field === 'preceptor') {
+    return (
+      extractEnglishFromBilingualHtml(
+        card.preceptorNoteHtml || card.preceptor_note_html
+      ) ||
+      card.preceptor_note_en ||
+      card.preceptorNoteEn ||
+      ''
+    );
+  }
+
+  return (
+    extractEnglishFromBilingualHtml(card.questionHtml || card.question_html) ||
+    card.question_en ||
+    card.questionEn ||
+    ''
+  );
+}
+
 function normalizeLibraryFlashcard(card = {}, index = 0) {
   return {
     question: card.question ?? card.pergunta ?? '',
@@ -1291,6 +1514,16 @@ Para textos longos, não compacte demais. Cubra todos os blocos temáticos relev
 - Cada card deve cobrar uma ideia central, objetiva e útil.
 - A pergunta deve ser clara, específica e com cara de revisão de residência.
 - A resposta deve ser curta, correta e de alta retenção.
+- Para cada pergunta, resposta e nota do preceptor, gere também uma versão em inglês médico natural.
+- O conteúdo em português deve ser o principal.
+- O conteúdo em inglês deve ser uma tradução fiel, clara e natural, sem acrescentar informações novas.
+- Use os campos:
+  - pergunta: português
+  - resposta: português
+  - nota_preceptor: português
+  - question_en: inglês
+  - answer_en: inglês
+  - preceptor_note_en: inglês
 - Quando houver nuance importante, use "nota_preceptor" para destacar pegadinha, exceção, correlação clínica ou dica de prova.
 - Se a transcrição tiver poucos conteúdos clínicos, gere menos cards, mas mantenha qualidade.
 - Não inclua texto fora do JSON.
@@ -1325,8 +1558,19 @@ Retorne apenas JSON válido no schema solicitado.`,
                 resposta: { type: 'string' },
                 difficulty: { type: 'string' },
                 nota_preceptor: { type: 'string' },
+                question_en: { type: 'string' },
+                answer_en: { type: 'string' },
+                preceptor_note_en: { type: 'string' },
               },
-              required: ['pergunta', 'resposta', 'nota_preceptor', 'difficulty'],
+              required: [
+                'pergunta',
+                'resposta',
+                'nota_preceptor',
+                'question_en',
+                'answer_en',
+                'preceptor_note_en',
+                'difficulty',
+              ],
             },
           },
         },
@@ -1353,7 +1597,7 @@ Retorne apenas JSON válido no schema solicitado.`,
         }
 
         return {
-          flashcards: parsed.flashcards,
+          flashcards: normalizeGeneratedBilingualFlashcards(parsed.flashcards),
           modelUsed: modelName,
         };
       } catch (error) {
@@ -2607,9 +2851,16 @@ async function generateFlashcardInsights({ run = {}, card = {}, cardIndex = 0 })
     type: 'object',
     properties: {
       gap: { type: 'string' },
+      gap_en: { type: 'string' },
+
       improvement: { type: 'string' },
+      improvement_en: { type: 'string' },
+
       corrected_answer: { type: 'string' },
+      corrected_answer_en: { type: 'string' },
+
       preceptor_note_suggestion: { type: 'string' },
+      preceptor_note_suggestion_en: { type: 'string' },
       image_keyword: { type: 'string' },
       image_prompt: { type: 'string' },
       mnemonic_detected: { type: 'boolean' },
@@ -2631,6 +2882,10 @@ async function generateFlashcardInsights({ run = {}, card = {}, cardIndex = 0 })
       'mnemonic_detected',
       'mnemonic_value',
       'mnemonic_application',
+      'gap_en',
+      'improvement_en',
+      'corrected_answer_en',
+      'preceptor_note_suggestion_en',
     ],
   };
 
@@ -2670,21 +2925,33 @@ Tarefa:
    - mnemonic_value com o mnemônico;
    - mnemonic_application explicando exatamente como o aluno deve usar esse mnemônico neste card.
 4. Se não houver mnemônico útil, retorne mnemonic_detected = false e strings vazias nos campos de mnemônico.
-5. Sugira melhoria objetiva. Se houver mnemônico útil, a melhoria deve incorporar o mnemônico de forma ponderada, sem transformar todo card em mnemônico.
-6. Escreva uma resposta corrigida, mais completa e didática, mas sem ficar prolixa. Se o mnemônico for útil, inclua uma frase curta ensinando como aplicá-lo.
-7. Sugira nota de preceptor. Se houver mnemônico útil, inclua uma orientação específica de uso.
-8. Sugira uma palavra-chave visual para imagem.
-9. Sugira apenas uma palavra-chave visual curta para imagem. Não gere prompt final de imagem.
-10. Sugira tags curtas.
+5. Sugira melhoria objetiva em português. Se houver mnemônico útil, a melhoria deve incorporar o mnemônico de forma ponderada, sem transformar todo card em mnemônico.
+6. Escreva uma resposta corrigida em português, mais completa e didática, mas sem ficar prolixa. Se o mnemônico for útil, inclua uma frase curta ensinando como aplicá-lo.
+7. Sugira nota de preceptor em português. Se houver mnemônico útil, inclua uma orientação específica de uso.
+8. Gere também versões em inglês médico natural para:
+   - gap_en;
+   - improvement_en;
+   - corrected_answer_en;
+   - preceptor_note_suggestion_en.
+9. O inglês deve ser tradução fiel do português, sem acrescentar fatos novos.
+10. Sugira uma palavra-chave visual curta para imagem.
+11. Sugira tags curtas.
 `,
     responseSchema,
   });
 
   return {
     gap: result.gap || '',
+    gap_en: result.gap_en || '',
+
     improvement: result.improvement || '',
+    improvement_en: result.improvement_en || '',
+
     corrected_answer: result.corrected_answer || '',
+    corrected_answer_en: result.corrected_answer_en || '',
+
     preceptor_note_suggestion: result.preceptor_note_suggestion || '',
+    preceptor_note_suggestion_en: result.preceptor_note_suggestion_en || '',
     image_keyword: result.image_keyword || '',
     image_prompt: result.image_prompt || '',
     suggested_tags: Array.isArray(result.suggested_tags) ? result.suggested_tags : [],
@@ -5235,6 +5502,7 @@ function buildDecorativeSideBarsSvg({
 async function buildFlashcardFaceSvg({
   type = 'Pergunta',
   text = '',
+  englishText = '',
   specialty = '',
   topic = '',
   cardNumber = 1,
@@ -5252,6 +5520,10 @@ async function buildFlashcardFaceSvg({
   const subSpecialtyLabel = String(topic || specialty || 'Flashcard').trim();
 
   const plainText = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const plainEnglishText = String(englishText || '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -5273,7 +5545,19 @@ async function buildFlashcardFaceSvg({
     ? 6
     : 7;
 
-  const textLines = wrapSvgText(plainText, maxChars, maxLines);
+  const textLines = wrapSvgText(
+    plainText,
+    plainEnglishText ? Math.max(18, maxChars - 4) : maxChars,
+    plainEnglishText ? Math.max(3, Math.ceil(maxLines * 0.55)) : maxLines
+  );
+
+  const englishTextLines = plainEnglishText
+    ? wrapSvgText(
+        plainEnglishText,
+        Math.max(18, maxChars - 3),
+        Math.max(2, Math.floor(maxLines * 0.45))
+      )
+    : [];
 
   const fontSize = (() => {
     if (imageDataUrl) {
@@ -5297,7 +5581,12 @@ async function buildFlashcardFaceSvg({
   })();
 
   const lineHeight = Math.round(fontSize * 1.22);
-  const textBlockHeight = textLines.length * lineHeight;
+  const englishFontSize = Math.max(34, Math.round(fontSize * 0.62));
+  const englishLineHeight = Math.round(englishFontSize * 1.26);
+
+  const textBlockHeight =
+    textLines.length * lineHeight +
+    (englishTextLines.length ? 38 + englishTextLines.length * englishLineHeight : 0);
 
   const questionTextX = 115;
   const questionTextY = imageDataUrl ? 345 : 375;
@@ -5312,17 +5601,36 @@ async function buildFlashcardFaceSvg({
     ? 390
     : Math.max(430, Math.round((height - textBlockHeight) / 2) + 20);
 
-  const textSvg = textLines
+  const portugueseTextSvg = textLines
     .map((line, index) => {
       const x = isQuestion ? questionTextX : answerTextX;
       const y = (isQuestion ? questionTextY : answerTextY) + index * lineHeight;
       const anchor = isQuestion ? 'start' : imageDataUrl ? 'start' : 'middle';
 
-      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700" fill="#213A5B">${escapeSvg(
+      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700" fill="#111827">${escapeSvgText(
         line
       )}</text>`;
     })
     .join('\n');
+
+  const englishStartY =
+    (isQuestion ? questionTextY : answerTextY) +
+    textLines.length * lineHeight +
+    42;
+
+  const englishTextSvg = englishTextLines
+    .map((line, index) => {
+      const x = isQuestion ? questionTextX : answerTextX;
+      const y = englishStartY + index * englishLineHeight;
+      const anchor = isQuestion ? 'start' : imageDataUrl ? 'start' : 'middle';
+
+      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${englishFontSize}" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700" fill="#2563EB">${escapeSvgText(
+        line
+      )}</text>`;
+    })
+    .join('\n');
+
+  const textSvg = [portugueseTextSvg, englishTextSvg].filter(Boolean).join('\n');
 
   const repeatedWatermarks = '';
 
@@ -5493,7 +5801,8 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
 
     const questionPng = await buildFlashcardFacePngBuffer({
       type: 'Pergunta',
-      text: stripHtmlToPlainText(card.questionHtml) || card.question,
+      text: getBilingualPortugueseText(card, 'question'),
+      englishText: getBilingualEnglishText(card, 'question'),
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,
@@ -5503,7 +5812,8 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
 
     const answerPng = await buildFlashcardFacePngBuffer({
       type: 'Resposta',
-      text: stripHtmlToPlainText(card.answerHtml) || card.answer,
+      text: getBilingualPortugueseText(card, 'answer'),
+      englishText: getBilingualEnglishText(card, 'answer'),
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,
@@ -5593,7 +5903,8 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
 
     const questionPng = await buildFlashcardFacePngBuffer({
       type: 'Pergunta',
-      text: stripHtmlToPlainText(card.questionHtml) || card.question,
+      text: getBilingualPortugueseText(card, 'question'),
+      englishText: getBilingualEnglishText(card, 'question'),
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,
@@ -5603,7 +5914,8 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
 
     const answerPng = await buildFlashcardFacePngBuffer({
       type: 'Resposta',
-      text: stripHtmlToPlainText(card.answerHtml) || card.answer,
+      text: getBilingualPortugueseText(card, 'answer'),
+      englishText: getBilingualEnglishText(card, 'answer'),
       specialty: card.specialty,
       topic: card.topic,
       cardNumber: index + 1,

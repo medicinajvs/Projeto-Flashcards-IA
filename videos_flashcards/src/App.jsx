@@ -115,6 +115,24 @@ function normalizeFlashcards(rawFlashcards) {
       id: card.id ?? `card-${index}`,
       question: card.question ?? card.pergunta ?? '',
       answer: card.answer ?? card.resposta ?? '',
+
+      questionEn: card.questionEn || card.question_en || '',
+      question_en: card.question_en || card.questionEn || '',
+
+      answerEn: card.answerEn || card.answer_en || '',
+      answer_en: card.answer_en || card.answerEn || '',
+
+      preceptorNoteEn:
+        card.preceptorNoteEn ||
+        card.preceptor_note_en ||
+        card.nota_preceptor_en ||
+        '',
+      preceptor_note_en:
+        card.preceptor_note_en ||
+        card.preceptorNoteEn ||
+        card.nota_preceptor_en ||
+        '',
+
       questionHtml: card.questionHtml || card.question_html || '',
       question_html: card.question_html || card.questionHtml || '',
       answerHtml: card.answerHtml || card.answer_html || '',
@@ -1301,6 +1319,74 @@ function RichFlashcardText({
   );
 }
 
+function BilingualFlashcardText({
+  html = '',
+  fallback = '',
+  english = '',
+  className = '',
+  englishClassName = 'mt-3 text-blue-600',
+}) {
+  const safeHtml = sanitizeFlashcardHtml(html);
+  const hasEnglishInsideHtml = /text-blue-600|data-lang=["']en["']/i.test(safeHtml);
+  const hasEnglishFallback = String(english || '').trim();
+
+  if (safeHtml.trim()) {
+    return (
+      <div className={className}>
+        <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
+
+        {!hasEnglishInsideHtml && hasEnglishFallback ? (
+          <FormattedAiText
+            text={english}
+            className={`${englishClassName} [&_p]:mb-2 [&_p:last-child]:mb-0`}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <FormattedAiText
+        text={fallback}
+        className="[&_p]:mb-2 [&_p:last-child]:mb-0"
+      />
+
+      {hasEnglishFallback ? (
+        <FormattedAiText
+          text={english}
+          className={`${englishClassName} [&_p]:mb-2 [&_p:last-child]:mb-0`}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function BilingualPlainText({
+  pt = '',
+  en = '',
+  className = '',
+  enClassName = 'mt-2 text-blue-600',
+}) {
+  return (
+    <div className={className}>
+      {pt ? (
+        <FormattedAiText
+          text={pt}
+          className="[&_p]:mb-2 [&_p:last-child]:mb-0"
+        />
+      ) : null}
+
+      {en ? (
+        <FormattedAiText
+          text={en}
+          className={`${enClassName} [&_p]:mb-2 [&_p:last-child]:mb-0`}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ReadableTranscriptText({ text }) {
   const paragraphs = useMemo(() => {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
@@ -1422,6 +1508,50 @@ function plainTextToPremiumEditorHtml(value = '') {
       return `<p>${escapedBlock.replace(/\n/g, '<br/>')}</p>`;
     })
     .join('');
+}
+
+function buildBilingualEditorHtml({ pt = '', en = '' }) {
+  const ptHtml = String(pt || '').trim()
+    ? plainTextToPremiumEditorHtml(pt)
+    : '';
+
+  const enHtml = String(en || '').trim()
+    ? plainTextToPremiumEditorHtml(en).replace(/<p>/g, '<p class="text-blue-600">')
+    : '';
+
+  return [ptHtml, enHtml].filter(Boolean).join('');
+}
+
+function removeEnglishParagraphsFromEditorHtml(html = '') {
+  return String(html || '').replace(
+    /<p[^>]*(?:class=["'][^"']*\btext-blue-600\b[^"']*["']|data-lang=["']en["'])[^>]*>[\s\S]*?<\/p>/gi,
+    ''
+  );
+}
+
+function extractEnglishTextFromEditorHtml(html = '') {
+  const source = String(html || '');
+
+  if (!source.trim()) return '';
+
+  const matches = Array.from(
+    source.matchAll(
+      /<p[^>]*(?:class=["'][^"']*\btext-blue-600\b[^"']*["']|data-lang=["']en["'])[^>]*>([\s\S]*?)<\/p>/gi
+    )
+  );
+
+  if (!matches.length) return '';
+
+  return matches
+    .map((match) => premiumEditorHtmlToText(match[1]))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function extractPortugueseTextFromEditorHtml(html = '') {
+  const htmlWithoutEnglish = removeEnglishParagraphsFromEditorHtml(html);
+  return premiumEditorHtmlToText(htmlWithoutEnglish).trim();
 }
 
 function normalizeFlashcardEditorHtml(value = '') {
@@ -2315,9 +2445,13 @@ export default function AdvancedFlashcardPoC() {
   const [quickEditingFlashcardForm, setQuickEditingFlashcardForm] = useState({
     position: 1,
     preceptorNote: '',
+    preceptorNoteEn: '',
     gap: '',
+    gapEn: '',
     improvement: '',
+    improvementEn: '',
     correctedAnswer: '',
+    correctedAnswerEn: '',
   });
   const [isSavingQuickFlashcardEdit, setIsSavingQuickFlashcardEdit] = useState(false);
 
@@ -5001,8 +5135,16 @@ export default function AdvancedFlashcardPoC() {
             position: Number(card.position || card.sort_order || index + 1),
 
             question: card.question,
+            question_en: card.question_en || card.questionEn || '',
+            questionEn: card.questionEn || card.question_en || '',
+
             answer: card.answer,
+            answer_en: card.answer_en || card.answerEn || '',
+            answerEn: card.answerEn || card.answer_en || '',
+
             preceptorNote: card.preceptorNote || card.preceptor_note || '',
+            preceptor_note_en: card.preceptor_note_en || card.preceptorNoteEn || '',
+            preceptorNoteEn: card.preceptorNoteEn || card.preceptor_note_en || '',
 
             questionHtml: card.questionHtml || card.question_html || '',
             question_html: card.question_html || card.questionHtml || '',
@@ -5211,11 +5353,56 @@ export default function AdvancedFlashcardPoC() {
         .map((tag) => tag.trim())
         .filter(Boolean);
 
+      const currentCard = flashcards[editingFlashcardIndex];
+
+      if (!currentCard) {
+        throw new Error('Flashcard não encontrado.');
+      }
+
+      const normalizedQuestionHtml = normalizeFlashcardEditorHtml(
+        editingFlashcardForm.questionHtml
+      );
+
+      const normalizedAnswerHtml = normalizeFlashcardEditorHtml(
+        editingFlashcardForm.answerHtml
+      );
+
+      const questionPt =
+        extractPortugueseTextFromEditorHtml(normalizedQuestionHtml) ||
+        editingFlashcardForm.question ||
+        '';
+
+      const questionEn =
+        extractEnglishTextFromEditorHtml(normalizedQuestionHtml) ||
+        currentCard.questionEn ||
+        currentCard.question_en ||
+        '';
+
+      const answerPt =
+        extractPortugueseTextFromEditorHtml(normalizedAnswerHtml) ||
+        editingFlashcardForm.answer ||
+        '';
+
+      const answerEn =
+        extractEnglishTextFromEditorHtml(normalizedAnswerHtml) ||
+        currentCard.answerEn ||
+        currentCard.answer_en ||
+        '';
+
       await updateFlashcardViaServer({
         index: editingFlashcardIndex,
         updates: {
-          question: editingFlashcardForm.question,
-          answer: editingFlashcardForm.answer,
+          question: questionPt,
+          pergunta: questionPt,
+
+          questionEn,
+          question_en: questionEn,
+
+          answer: answerPt,
+          resposta: answerPt,
+
+          answerEn,
+          answer_en: answerEn,
 
           difficulty: editingFlashcardForm.difficulty,
           tags,
@@ -5223,11 +5410,11 @@ export default function AdvancedFlashcardPoC() {
           aiProposition: editingFlashcardForm.aiProposition,
           ai_proposition: editingFlashcardForm.aiProposition,
 
-          questionHtml: editingFlashcardForm.questionHtml,
-          question_html: editingFlashcardForm.questionHtml,
+          questionHtml: normalizedQuestionHtml,
+          question_html: normalizedQuestionHtml,
 
-          answerHtml: editingFlashcardForm.answerHtml,
-          answer_html: editingFlashcardForm.answerHtml,
+          answerHtml: normalizedAnswerHtml,
+          answer_html: normalizedAnswerHtml,
         },
       });
 
@@ -5279,9 +5466,16 @@ export default function AdvancedFlashcardPoC() {
     setQuickEditingFlashcardForm({
       position: index + 1,
       preceptorNote: card.preceptorNote || card.preceptor_note || '',
+      preceptorNoteEn: card.preceptorNoteEn || card.preceptor_note_en || '',
+
       gap: insights.gap || '',
+      gapEn: insights.gap_en || '',
+
       improvement: insights.improvement || '',
+      improvementEn: insights.improvement_en || '',
+
       correctedAnswer: insights.corrected_answer || '',
+      correctedAnswerEn: insights.corrected_answer_en || '',
     });
   };
 
@@ -5290,9 +5484,13 @@ export default function AdvancedFlashcardPoC() {
     setQuickEditingFlashcardForm({
       position: 1,
       preceptorNote: '',
+      preceptorNoteEn: '',
       gap: '',
+      gapEn: '',
       improvement: '',
+      improvementEn: '',
       correctedAnswer: '',
+      correctedAnswerEn: '',
     });
   };
 
@@ -5318,13 +5516,27 @@ export default function AdvancedFlashcardPoC() {
         quickEditingFlashcardForm.preceptorNote || ''
       ).trim();
 
+      const cleanPreceptorNoteEn = String(
+        quickEditingFlashcardForm.preceptorNoteEn || ''
+      ).trim();
+
+      const nextPreceptorNoteHtml = buildBilingualEditorHtml({
+        pt: cleanPreceptorNote,
+        en: cleanPreceptorNoteEn,
+      });
+
       const currentInsights = card.cardInsights || card.card_insights || {};
 
       const updatedInsights = {
         ...currentInsights,
         gap: quickEditingFlashcardForm.gap || '',
+        gap_en: quickEditingFlashcardForm.gapEn || '',
+
         improvement: quickEditingFlashcardForm.improvement || '',
+        improvement_en: quickEditingFlashcardForm.improvementEn || '',
+
         corrected_answer: quickEditingFlashcardForm.correctedAnswer || '',
+        corrected_answer_en: quickEditingFlashcardForm.correctedAnswerEn || '',
       };
 
       const updatedCard = {
@@ -5333,12 +5545,10 @@ export default function AdvancedFlashcardPoC() {
 
         preceptorNote: cleanPreceptorNote,
         preceptor_note: cleanPreceptorNote,
-        preceptorNoteHtml: cleanPreceptorNote
-          ? plainTextToPremiumEditorHtml(cleanPreceptorNote)
-          : '',
-        preceptor_note_html: cleanPreceptorNote
-          ? plainTextToPremiumEditorHtml(cleanPreceptorNote)
-          : '',
+        preceptorNoteEn: cleanPreceptorNoteEn,
+        preceptor_note_en: cleanPreceptorNoteEn,
+        preceptorNoteHtml: nextPreceptorNoteHtml,
+        preceptor_note_html: nextPreceptorNoteHtml,
 
         cardInsights: updatedInsights,
         card_insights: updatedInsights,
@@ -5369,8 +5579,10 @@ export default function AdvancedFlashcardPoC() {
 
             preceptorNote: cleanPreceptorNote,
             preceptor_note: cleanPreceptorNote,
-            preceptorNoteHtml: updatedCard.preceptorNoteHtml,
-            preceptor_note_html: updatedCard.preceptor_note_html,
+            preceptorNoteEn: cleanPreceptorNoteEn,
+            preceptor_note_en: cleanPreceptorNoteEn,
+            preceptorNoteHtml: nextPreceptorNoteHtml,
+            preceptor_note_html: nextPreceptorNoteHtml,
 
             cardInsights: updatedInsights,
             card_insights: updatedInsights,
@@ -6375,18 +6587,38 @@ export default function AdvancedFlashcardPoC() {
         ])
       );
 
-      const finalAnswerHtml = plainTextToPremiumEditorHtml(insights.corrected_answer);
-      const finalPreceptorNoteHtml = plainTextToPremiumEditorHtml(finalPreceptorNote);
+      const finalAnswerEn = insights.corrected_answer_en || '';
+
+      const finalPreceptorNoteEn = [
+        insights.preceptor_note_suggestion_en || '',
+        card.preceptorNoteEn || card.preceptor_note_en || '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const finalAnswerHtml = buildBilingualEditorHtml({
+        pt: insights.corrected_answer,
+        en: finalAnswerEn,
+      });
+
+      const finalPreceptorNoteHtml = buildBilingualEditorHtml({
+        pt: finalPreceptorNote,
+        en: finalPreceptorNoteEn,
+      });
 
       await updateFlashcardViaServer({
         index,
         updates: {
           answer: insights.corrected_answer,
+          answerEn: finalAnswerEn,
+          answer_en: finalAnswerEn,
           answerHtml: finalAnswerHtml,
           answer_html: finalAnswerHtml,
 
           preceptorNote: finalPreceptorNote,
           preceptor_note: finalPreceptorNote,
+          preceptorNoteEn: finalPreceptorNoteEn,
+          preceptor_note_en: finalPreceptorNoteEn,
           preceptorNoteHtml: finalPreceptorNoteHtml,
           preceptor_note_html: finalPreceptorNoteHtml,
 
@@ -11176,6 +11408,25 @@ export default function AdvancedFlashcardPoC() {
 
                                 <label className="block">
                                   <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Nota do preceptor em inglês
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.preceptorNoteEn}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        preceptorNoteEn: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-blue-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="English version of the preceptor note..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
                                     Lacuna
                                   </span>
 
@@ -11190,6 +11441,25 @@ export default function AdvancedFlashcardPoC() {
                                     rows={3}
                                     className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                                     placeholder="Edite a lacuna deste flashcard..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Lacuna em inglês
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.gapEn}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        gapEn: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-blue-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="English version of the gap..."
                                   />
                                 </label>
 
@@ -11214,6 +11484,25 @@ export default function AdvancedFlashcardPoC() {
 
                                 <label className="block">
                                   <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Melhoria sugerida em inglês
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.improvementEn}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        improvementEn: event.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-blue-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="English version of the suggested improvement..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
                                     Resposta corrigida
                                   </span>
 
@@ -11228,6 +11517,25 @@ export default function AdvancedFlashcardPoC() {
                                     rows={4}
                                     className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                                     placeholder="Edite a resposta corrigida que será aplicada ao card..."
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-500 mb-2">
+                                    Resposta corrigida em inglês
+                                  </span>
+
+                                  <textarea
+                                    value={quickEditingFlashcardForm.correctedAnswerEn}
+                                    onChange={(event) =>
+                                      setQuickEditingFlashcardForm((prev) => ({
+                                        ...prev,
+                                        correctedAnswerEn: event.target.value,
+                                      }))
+                                    }
+                                    rows={4}
+                                    className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-blue-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    placeholder="English version of the corrected answer..."
                                   />
                                 </label>
 
@@ -11254,10 +11562,12 @@ export default function AdvancedFlashcardPoC() {
                               </div>
                             ) : null}
 
-                            <RichFlashcardText
+                            <BilingualFlashcardText
                               html={card.questionHtml || card.question_html}
                               fallback={card.question}
+                              english={card.questionEn || card.question_en}
                               className="text-[1.05rem] font-normal text-slate-800 mb-6 leading-[1.55] [&_p]:mb-2 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                              englishClassName="mt-3 text-blue-600"
                             />
 
                             {card.questionImageUrl ? (
@@ -11282,10 +11592,12 @@ export default function AdvancedFlashcardPoC() {
                               <span className="text-slate-400 text-xs font-bold tracking-widest mb-2 uppercase">
                                 Resposta
                               </span>
-                              <RichFlashcardText
+                              <BilingualFlashcardText
                                 html={card.answerHtml || card.answer_html}
                                 fallback={card.answer}
+                                english={card.answerEn || card.answer_en}
                                 className="text-[0.98rem] font-normal text-slate-700 leading-[1.7] mb-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                                englishClassName="mt-3 text-blue-600"
                               />
 
                               {card.answerImageUrl || card.imageUrl ? (
@@ -11315,10 +11627,12 @@ export default function AdvancedFlashcardPoC() {
                                     Nota do Preceptor
                                   </span>
 
-                                  <RichFlashcardText
+                                  <BilingualFlashcardText
                                     html={card.preceptorNoteHtml || card.preceptor_note_html}
                                     fallback={card.preceptorNote || card.preceptor_note}
+                                    english={card.preceptorNoteEn || card.preceptor_note_en}
                                     className="text-amber-900/80 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950 [&_em]:italic [&_u]:underline"
+                                    englishClassName="mt-3 text-blue-600"
                                   />
                                 </div>
                               ) : null}
@@ -11365,12 +11679,16 @@ export default function AdvancedFlashcardPoC() {
                                         </div>
                                       ) : null}
 
-                                      {card.cardInsights.gap ? (
+                                      {card.cardInsights.gap || card.cardInsights.gap_en ? (
                                         <div>
                                           <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
                                             Lacuna
                                           </p>
-                                          <p>{card.cardInsights.gap}</p>
+
+                                          <BilingualPlainText
+                                            pt={card.cardInsights.gap}
+                                            en={card.cardInsights.gap_en}
+                                          />
                                         </div>
                                       ) : null}
 
@@ -11392,23 +11710,29 @@ export default function AdvancedFlashcardPoC() {
                                         </div>
                                       ) : null}
 
-                                      {card.cardInsights.improvement ? (
+                                      {card.cardInsights.improvement || card.cardInsights.improvement_en ? (
                                         <div>
                                           <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
                                             Melhoria sugerida
                                           </p>
-                                          <p>{card.cardInsights.improvement}</p>
+
+                                          <BilingualPlainText
+                                            pt={card.cardInsights.improvement}
+                                            en={card.cardInsights.improvement_en}
+                                          />
                                         </div>
                                       ) : null}
 
-                                      {card.cardInsights.corrected_answer ? (
+                                      {card.cardInsights.corrected_answer || card.cardInsights.corrected_answer_en ? (
                                         <div>
                                           <p className="text-[10px] font-black uppercase tracking-wider text-blue-500 mb-1">
                                             Resposta corrigida
                                           </p>
-                                          <FormattedAiText
-                                            text={card.cardInsights.corrected_answer}
-                                            className="[&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-blue-950"
+
+                                          <BilingualPlainText
+                                            pt={card.cardInsights.corrected_answer}
+                                            en={card.cardInsights.corrected_answer_en}
+                                            className="[&_strong]:font-semibold [&_strong]:text-blue-950"
                                           />
                                         </div>
                                       ) : null}
@@ -11482,10 +11806,12 @@ export default function AdvancedFlashcardPoC() {
                                 <Lightbulb size={32} />
                               </div>
               
-                              <RichFlashcardText
+                              <BilingualFlashcardText
                                 html={currentStudyCard.questionHtml || currentStudyCard.question_html}
                                 fallback={currentStudyCard.question}
+                                english={currentStudyCard.questionEn || currentStudyCard.question_en}
                                 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                                englishClassName="mt-3 text-blue-600"
                               />
 
                               {currentStudyCard.questionImageUrl || currentStudyCard.question_image_url ? (
@@ -11514,10 +11840,12 @@ export default function AdvancedFlashcardPoC() {
                                 </span>
                               </div>
 
-                              <RichFlashcardText
+                              <BilingualFlashcardText
                                 html={currentStudyCard.answerHtml || currentStudyCard.answer_html}
                                 fallback={currentStudyCard.answer}
+                                english={currentStudyCard.answerEn || currentStudyCard.answer_en}
                                 className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                                englishClassName="mt-3 text-blue-600"
                               />
 
                               {currentStudyCard.answerImageUrl ||
@@ -11550,10 +11878,12 @@ export default function AdvancedFlashcardPoC() {
                                     </span>
                                   </div>
 
-                                  <RichFlashcardText
+                                  <BilingualFlashcardText
                                     html={currentStudyCard.preceptorNoteHtml || currentStudyCard.preceptor_note_html}
                                     fallback={currentStudyCard.preceptorNote || currentStudyCard.preceptor_note}
+                                    english={currentStudyCard.preceptorNoteEn || currentStudyCard.preceptor_note_en}
                                     className="text-amber-900 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-amber-950 [&_em]:italic [&_u]:underline"
+                                    englishClassName="mt-3 text-blue-600"
                                   />
                                 </div>
                               ) : null}
@@ -13959,10 +14289,12 @@ export default function AdvancedFlashcardPoC() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
                     Prévia do flashcard
                   </p>
-                  <RichFlashcardText
+                  <BilingualFlashcardText
                     html={previewLibraryCard.question_html || previewLibraryCard.questionHtml}
                     fallback={previewLibraryCard.question}
+                    english={previewLibraryCard.question_en || previewLibraryCard.questionEn}
                     className="text-xl font-black text-slate-900 mt-1 [&_strong]:font-black [&_em]:italic [&_u]:underline"
+                    englishClassName="mt-3 text-blue-600"
                   />
                 </div>
 
@@ -13989,10 +14321,12 @@ export default function AdvancedFlashcardPoC() {
                   <p className="text-xs font-black uppercase text-slate-400 mb-2">
                     Resposta
                   </p>
-                  <RichFlashcardText
+                  <BilingualFlashcardText
                     html={previewLibraryCard.answer_html || previewLibraryCard.answerHtml}
                     fallback={previewLibraryCard.answer}
+                    english={previewLibraryCard.answer_en || previewLibraryCard.answerEn}
                     className="text-sm text-slate-700 leading-relaxed [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                    englishClassName="mt-3 text-blue-600"
                   />
                 </div>
 
@@ -14020,10 +14354,12 @@ export default function AdvancedFlashcardPoC() {
                       Nota do preceptor
                     </p>
 
-                    <RichFlashcardText
+                    <BilingualFlashcardText
                       html={previewLibraryCard.preceptor_note_html || previewLibraryCard.preceptorNoteHtml}
-                      fallback={previewLibraryCard.preceptor_note}
+                      fallback={previewLibraryCard.preceptor_note || previewLibraryCard.preceptorNote}
+                      english={previewLibraryCard.preceptor_note_en || previewLibraryCard.preceptorNoteEn}
                       className="text-sm text-amber-900 leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                      englishClassName="mt-3 text-blue-600"
                     />
                   </div>
                 ) : null}
@@ -14768,10 +15104,12 @@ export default function AdvancedFlashcardPoC() {
                             {currentLibraryStudyResponseMeta.label}
                           </span>
                         </div>
-                        <RichFlashcardText
+                        <BilingualFlashcardText
                           html={currentLibraryStudyCard.question_html || currentLibraryStudyCard.questionHtml}
                           fallback={currentLibraryStudyCard.question}
+                          english={currentLibraryStudyCard.question_en || currentLibraryStudyCard.questionEn}
                           className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                          englishClassName="mt-3 text-blue-600"
                         />
 
                         {currentLibraryStudyCard.question_image_url || currentLibraryStudyCard.questionImageUrl ? (
@@ -14805,10 +15143,12 @@ export default function AdvancedFlashcardPoC() {
 
                         <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center">
                           <div className="w-full max-w-xl mx-auto text-center">
-                            <RichFlashcardText
+                            <BilingualFlashcardText
                               html={currentLibraryStudyCard.answer_html || currentLibraryStudyCard.answerHtml}
                               fallback={currentLibraryStudyCard.answer}
+                              english={currentLibraryStudyCard.answer_en || currentLibraryStudyCard.answerEn}
                               className="text-slate-700 text-lg leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline [&_ul]:text-left [&_ol]:text-left"
+                              englishClassName="mt-3 text-blue-600"
                             />
 
                             {currentLibraryStudyCard.answer_image_url ||
@@ -14831,10 +15171,12 @@ export default function AdvancedFlashcardPoC() {
 
                             {currentLibraryStudyCard.preceptor_note || currentLibraryStudyCard.preceptor_note_html ? (
                               <div className="mt-8 bg-amber-50 border border-amber-100 rounded-2xl p-5 text-left">
-                                <RichFlashcardText
+                                <BilingualFlashcardText
                                   html={currentLibraryStudyCard.preceptor_note_html || currentLibraryStudyCard.preceptorNoteHtml}
-                                  fallback={currentLibraryStudyCard.preceptor_note}
+                                  fallback={currentLibraryStudyCard.preceptor_note || currentLibraryStudyCard.preceptorNote}
+                                  english={currentLibraryStudyCard.preceptor_note_en || currentLibraryStudyCard.preceptorNoteEn}
                                   className="text-amber-900 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                                  englishClassName="mt-3 text-blue-600"
                                 />
                               </div>
                             ) : null}
@@ -16539,10 +16881,12 @@ export default function AdvancedFlashcardPoC() {
                       </span>
                     </div>
 
-                    <RichFlashcardText
+                    <BilingualFlashcardText
                       html={editingFlashcardForm.questionHtml}
                       fallback={editingFlashcardForm.question}
+                      english={flashcards[editingFlashcardIndex]?.questionEn || flashcards[editingFlashcardIndex]?.question_en}
                       className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight [&_p]:mb-2 [&_strong]:font-bold [&_em]:italic [&_u]:underline"
+                      englishClassName="mt-3 text-blue-600"
                     />
 
                     {flashcards[editingFlashcardIndex]?.questionImageUrl ||
@@ -16568,10 +16912,12 @@ export default function AdvancedFlashcardPoC() {
                       </span>
                     </div>
 
-                    <RichFlashcardText
+                    <BilingualFlashcardText
                       html={editingFlashcardForm.answerHtml}
                       fallback={editingFlashcardForm.answer}
+                      english={flashcards[editingFlashcardIndex]?.answerEn || flashcards[editingFlashcardIndex]?.answer_en}
                       className="text-slate-700 text-lg leading-relaxed mb-8 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_em]:italic [&_u]:underline"
+                      englishClassName="mt-3 text-blue-600"
                     />
 
                     {flashcards[editingFlashcardIndex]?.answerImageUrl ||
