@@ -366,6 +366,18 @@ function normalizeFolderText(value = '') {
     .trim();
 }
 
+function normalizeArchiveFolderKey(value = '') {
+  return normalizeFolderText(value)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, ' ')
+    .trim();
+}
+
+function sameArchiveFolderText(a = '', b = '') {
+  return normalizeArchiveFolderKey(a) === normalizeArchiveFolderKey(b);
+}
+
 function getMedicalAreaForLabel(label = '') {
   const text = normalizeFolderText(label);
 
@@ -2389,6 +2401,7 @@ export default function AdvancedFlashcardPoC() {
   const [quickPreviewHistoryItem, setQuickPreviewHistoryItem] = useState(null);
   const [libraryDecks, setLibraryDecks] = useState([]);
   const [libraryCards, setLibraryCards] = useState([]);
+  const [archiveCards, setArchiveCards] = useState([]);
   const [libraryViewMode, setLibraryViewMode] = useState('tree');
   const [selectedDeckId, setSelectedDeckId] = useState('');
   const [expandedArchiveSpecialties, setExpandedArchiveSpecialties] = useState({});
@@ -2782,6 +2795,7 @@ export default function AdvancedFlashcardPoC() {
   useEffect(() => {
     loadLibraryDecks();
     loadDeckTree();
+    loadArchiveCards();
     loadLibraryAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -4917,6 +4931,24 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
+  const loadArchiveCards = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '5000');
+
+      const response = await fetch(`${API_BASE}/api/flashcards-library?${params.toString()}`);
+      const data = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao carregar acervo completo.');
+      }
+
+      setArchiveCards(Array.isArray(data.cards) ? data.cards : []);
+    } catch (err) {
+      setError(`Falha ao carregar árvore do acervo: ${err.message}`);
+    }
+  };
+
   const createLibraryDeck = async () => {
     const createdSpecialty = String(newDeckSpecialty || '').trim() || 'Sem especialidade';
     const createdTopic = String(newDeckSubSpecialty || '').trim() || String(newDeckName || '').trim();
@@ -5070,6 +5102,7 @@ export default function AdvancedFlashcardPoC() {
       }
 
       await loadLibraryCards({ deckId: selectedDeckId });
+      await loadArchiveCards();
       await loadLibraryDecks();
       await loadDeckTree();
       await loadLibraryAnalytics();
@@ -7734,112 +7767,132 @@ export default function AdvancedFlashcardPoC() {
   }, [libraryCards, activeSmartDeck]);
 
   const archiveTree = useMemo(() => {
+    const deckMap = new Map();
+
+    libraryDecks.forEach((deck) => {
+      if (deck?.id) {
+        deckMap.set(String(deck.id), deck);
+      }
+    });
+
     const specialtyMap = new Map();
 
     const ensureSpecialty = (specialtyName) => {
-      const safeSpecialty = specialtyName || 'Sem especialidade';
+      const safeSpecialty =
+        String(specialtyName || '').replace(/\s+/g, ' ').trim() ||
+        'Sem especialidade';
 
-      if (!specialtyMap.has(safeSpecialty)) {
-        specialtyMap.set(safeSpecialty, {
-          id: `specialty:${safeSpecialty}`,
+      const specialtyKey = normalizeArchiveFolderKey(safeSpecialty);
+
+      if (!specialtyMap.has(specialtyKey)) {
+        specialtyMap.set(specialtyKey, {
+          id: `specialty:${specialtyKey}`,
+          normalizedId: specialtyKey,
           name: safeSpecialty,
           cardCount: 0,
           topics: new Map(),
         });
       }
 
-      return specialtyMap.get(safeSpecialty);
+      return specialtyMap.get(specialtyKey);
     };
 
     const ensureTopic = (specialty, specialtyName, topicName) => {
-      const safeTopic = topicName || '';
+      const safeTopic =
+        String(topicName || '').replace(/\s+/g, ' ').trim() ||
+        'Geral';
 
-      if (!safeTopic) return null;
+      const topicKey = normalizeArchiveFolderKey(safeTopic);
 
-      if (!specialty.topics.has(safeTopic)) {
-        specialty.topics.set(safeTopic, {
-          id: `topic:${specialtyName}:${safeTopic}`,
+      if (!specialty.topics.has(topicKey)) {
+        specialty.topics.set(topicKey, {
+          id: `topic:${normalizeArchiveFolderKey(specialtyName)}:${topicKey}`,
+          normalizedId: topicKey,
           name: safeTopic,
           cardCount: 0,
           decks: new Map(),
         });
       }
 
-      return specialty.topics.get(safeTopic);
+      return specialty.topics.get(topicKey);
     };
 
     const ensureDeck = (topic, deckId, deckName) => {
       if (!topic) return null;
 
-      const safeDeckId = deckId || 'sem-deck';
+      const safeDeckName = formatDeckDisplayName(deckName || 'Sem deck');
+      const deckKey = normalizeArchiveFolderKey(safeDeckName || deckId || 'sem-deck');
 
-      if (!topic.decks.has(safeDeckId)) {
-        topic.decks.set(safeDeckId, {
-          id: safeDeckId,
-          name: formatDeckDisplayName(deckName || 'Sem deck'),
+      if (!topic.decks.has(deckKey)) {
+        topic.decks.set(deckKey, {
+          id: deckId || deckKey || 'sem-deck',
+          normalizedId: deckKey,
+          name: safeDeckName,
           cards: [],
+          deckIds: [],
         });
       }
 
-      return topic.decks.get(safeDeckId);
+      const deckNode = topic.decks.get(deckKey);
+
+      if (deckId && deckId !== 'sem-deck' && !deckNode.deckIds.includes(deckId)) {
+        deckNode.deckIds.push(deckId);
+      }
+
+      return deckNode;
     };
 
-    libraryDecks.forEach((deck) => {
-      const specialtyName = deck.specialty || 'Sem especialidade';
-      const specialty = ensureSpecialty(specialtyName);
+    archiveCards.forEach((card) => {
+      const deck = deckMap.get(String(card.deck_id || ''));
 
-      if (deck.deck_type === 'specialty-root') return;
-      if (deck.deck_type === 'leaf-deck' && isAutoDeckPrincipalName(deck.name)) return;
+      const specialtyName =
+        card.specialty ||
+        deck?.specialty ||
+        'Sem especialidade';
 
-      const topicName = deck.sub_specialty || deck.name || 'Geral';
+      const topicName =
+        card.sub_specialty ||
+        card.theme ||
+        deck?.sub_specialty ||
+        'Geral';
 
-      const topic = ensureTopic(specialty, specialtyName, topicName);
-
-      if (deck.deck_type === 'sub-specialty' || deck.deck_type === 'theme') return;
-
-      ensureDeck(topic, deck.id, deck.name);
-    });
-
-    const deckMap = new Map();
-    libraryDecks.forEach((deck) => {
-      deckMap.set(deck.id, deck);
-    });
-
-    libraryCards.forEach((card) => {
-      const deck = deckMap.get(card.deck_id);
-      const specialtyName = card.specialty || deck?.specialty || 'Sem especialidade';
-      const topicName = card.sub_specialty || deck?.sub_specialty || deck?.name || 'Sem tema';
+      const deckName = formatDeckDisplayName(deck?.name || 'Sem deck');
 
       const specialty = ensureSpecialty(specialtyName);
       specialty.cardCount += 1;
 
-      const topic = ensureTopic(specialty, specialtyName, topicName || 'Sem tema');
-      if (!topic) return;
-
+      const topic = ensureTopic(specialty, specialtyName, topicName);
       topic.cardCount += 1;
 
-      const deckNode = ensureDeck(topic, card.deck_id || 'sem-deck', deck?.name || 'Sem deck');
-      if (deckNode) deckNode.cards.push(card);
+      if (!sameArchiveFolderText(deckName, topic.name)) {
+        const deckNode = ensureDeck(
+          topic,
+          card.deck_id || 'sem-deck',
+          deckName
+        );
+
+        if (deckNode) {
+          deckNode.cards.push(card);
+        }
+      }
     });
 
     return Array.from(specialtyMap.values())
-      .filter((specialty) => {
-        if (specialty.name !== 'Sem especialidade') return true;
-        return specialty.cardCount > 0 || specialty.topics.size > 0;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
       .map((specialty) => ({
         ...specialty,
         topics: Array.from(specialty.topics.values())
-          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
           .map((topic) => ({
             ...topic,
-            decks: Array.from(topic.decks.values()).sort((a, b) =>
-              a.name.localeCompare(b.name, 'pt-BR')
-            ),
-          })),
-      }));
-  }, [libraryDecks, libraryCards]);
+            decks: Array.from(topic.decks.values())
+              .filter((deck) => Array.isArray(deck.cards) && deck.cards.length > 0)
+              .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+          }))
+          .filter((topic) => topic.cardCount > 0)
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      }))
+      .filter((specialty) => specialty.cardCount > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [libraryDecks, archiveCards]);
 
   const openLibraryCardPreview = (card) => {
     if (!card) return;
@@ -8011,6 +8064,7 @@ export default function AdvancedFlashcardPoC() {
   const refreshLibraryData = async () => {
     await loadLibraryDecks();
     await loadDeckTree();
+    await loadArchiveCards();
     await loadLibraryCards({
       deckId: selectedDeckId,
       specialty: librarySpecialtyFilter,
@@ -8140,6 +8194,7 @@ export default function AdvancedFlashcardPoC() {
   const renameArchiveFolder = async ({
     type,
     id,
+    deckIds = [],
     currentName,
     specialtyName = '',
     cards = [],
@@ -8156,6 +8211,20 @@ export default function AdvancedFlashcardPoC() {
       Array.isArray(cards)
         ? cards.map((card) => card?.id).filter(Boolean)
         : []
+    );
+
+    const targetDeckIds = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(deckIds) ? deckIds : []),
+          id,
+          ...(type === 'deck'
+            ? cards.map((card) => card?.deck_id).filter(Boolean)
+            : []),
+        ]
+          .map((deckId) => String(deckId || '').trim())
+          .filter((deckId) => deckId && deckId !== 'sem-deck')
+      )
     );
 
     const updateDeckRequest = async (deckId, payload, fallbackMessage) => {
@@ -8181,14 +8250,17 @@ export default function AdvancedFlashcardPoC() {
           children: renameDeckTreeNodesLocally(deck.children || []),
         };
 
-        if (type === 'deck' && id && String(deck.id) === String(id)) {
+        if (
+          type === 'deck' &&
+          targetDeckIds.includes(String(deck.id))
+        ) {
           nextDeck.name = cleanName;
         }
 
         if (
           type === 'topic' &&
-          (deck.specialty || 'Sem especialidade') === specialtyName &&
-          (deck.sub_specialty || '') === currentName
+          sameArchiveFolderText(deck.specialty || 'Sem especialidade', specialtyName) &&
+          sameArchiveFolderText(deck.sub_specialty || '', currentName)
         ) {
           nextDeck.sub_specialty = cleanName;
 
@@ -8199,7 +8271,7 @@ export default function AdvancedFlashcardPoC() {
 
         if (
           type === 'specialty' &&
-          (deck.specialty || 'Sem especialidade') === currentName
+          sameArchiveFolderText(deck.specialty || 'Sem especialidade', currentName)
         ) {
           nextDeck.specialty = cleanName === 'Sem especialidade' ? null : cleanName;
 
@@ -8240,7 +8312,10 @@ export default function AdvancedFlashcardPoC() {
 
       setLibraryDecks((prev) =>
         prev.map((deck) => {
-          if (type === 'deck' && id && String(deck.id) === String(id)) {
+          if (
+            type === 'deck' &&
+            targetDeckIds.includes(String(deck.id))
+          ) {
             return {
               ...deck,
               name: cleanName,
@@ -8249,8 +8324,8 @@ export default function AdvancedFlashcardPoC() {
 
           if (
             type === 'topic' &&
-            (deck.specialty || 'Sem especialidade') === specialtyName &&
-            (deck.sub_specialty || '') === currentName
+            sameArchiveFolderText(deck.specialty || 'Sem especialidade', specialtyName) &&
+            sameArchiveFolderText(deck.sub_specialty || '', currentName)
           ) {
             return {
               ...deck,
@@ -8261,7 +8336,7 @@ export default function AdvancedFlashcardPoC() {
 
           if (
             type === 'specialty' &&
-            (deck.specialty || 'Sem especialidade') === currentName
+            sameArchiveFolderText(deck.specialty || 'Sem especialidade', currentName)
           ) {
             return {
               ...deck,
@@ -8276,28 +8351,33 @@ export default function AdvancedFlashcardPoC() {
 
       setDeckTree((prev) => renameDeckTreeNodesLocally(prev));
 
-      if (type === 'specialty' && selectedArchiveSpecialty === currentName) {
+      if (
+        type === 'specialty' &&
+        sameArchiveFolderText(selectedArchiveSpecialty, currentName)
+      ) {
         setSelectedArchiveSpecialty(cleanName);
       }
 
       if (
         type === 'topic' &&
-        selectedArchiveSpecialty === specialtyName &&
-        selectedArchiveTopic === currentName
+        sameArchiveFolderText(selectedArchiveSpecialty, specialtyName) &&
+        sameArchiveFolderText(selectedArchiveTopic, currentName)
       ) {
         setSelectedArchiveTopic(cleanName);
       }
 
       const requests = [];
 
-      if (type === 'deck' && id && id !== 'sem-deck') {
-        requests.push(
-          updateDeckRequest(
-            id,
-            { name: cleanName },
-            'Erro ao renomear deck.'
-          )
-        );
+      if (type === 'deck' && targetDeckIds.length > 0) {
+        targetDeckIds.forEach((deckId) => {
+          requests.push(
+            updateDeckRequest(
+              deckId,
+              { name: cleanName },
+              'Erro ao renomear deck.'
+            )
+          );
+        });
       }
 
       if (type === 'topic') {
@@ -8312,8 +8392,8 @@ export default function AdvancedFlashcardPoC() {
         libraryDecks
           .filter(
             (deck) =>
-              (deck.specialty || 'Sem especialidade') === specialtyName &&
-              (deck.sub_specialty || '') === currentName
+              sameArchiveFolderText(deck.specialty || 'Sem especialidade', specialtyName) &&
+              sameArchiveFolderText(deck.sub_specialty || '', currentName)
           )
           .forEach((deck) => {
             requests.push(
@@ -8339,7 +8419,9 @@ export default function AdvancedFlashcardPoC() {
         }
 
         libraryDecks
-          .filter((deck) => (deck.specialty || 'Sem especialidade') === currentName)
+          .filter((deck) =>
+            sameArchiveFolderText(deck.specialty || 'Sem especialidade', currentName)
+          )
           .forEach((deck) => {
             requests.push(
               updateDeckRequest(
@@ -8363,14 +8445,23 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
-  const openMoveFolderDialog = ({ type, id = '', name, cards = [], specialtyName = '' }) => {
+  const openMoveFolderDialog = ({
+    type,
+    id = '',
+    deckIds = [],
+    name,
+    cards = [],
+    specialtyName = '',
+  }) => {
     setMoveFolderDialog({
       type,
       id,
+      deckIds,
       name,
       cards,
       specialtyName,
     });
+
     setMoveFolderTargetSpecialty('');
   };
 
@@ -8387,8 +8478,50 @@ export default function AdvancedFlashcardPoC() {
     try {
       setError(null);
 
-      const { type, name, cards = [], specialtyName = '' } = moveFolderDialog;
+      const {
+        type,
+        id,
+        deckIds = [],
+        name,
+        cards = [],
+        specialtyName = '',
+      } = moveFolderDialog;
+
       const sourceSpecialty = specialtyName || name;
+
+      const targetDeckIds = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(deckIds) ? deckIds : []),
+            id,
+            ...(type === 'deck'
+              ? cards.map((card) => card?.deck_id).filter(Boolean)
+              : []),
+          ]
+            .map((deckId) => String(deckId || '').trim())
+            .filter((deckId) => deckId && deckId !== 'sem-deck')
+        )
+      );
+
+      const patchDeckSpecialty = async (deckId) => {
+        if (!deckId || deckId === 'sem-deck') return null;
+
+        const response = await fetch(`${API_BASE}/api/flashcard-decks/${deckId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            specialty: target === 'Sem especialidade' ? null : target,
+          }),
+        });
+
+        const data = await parseResponseSafely(response);
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao mover deck.');
+        }
+
+        return data;
+      };
 
       if (cards.length) {
         await patchLibraryCardsBulk(cards, () => ({
@@ -8396,12 +8529,17 @@ export default function AdvancedFlashcardPoC() {
         }));
       }
 
+      if (type === 'deck' && targetDeckIds.length > 0) {
+        await Promise.all(targetDeckIds.map((deckId) => patchDeckSpecialty(deckId)));
+      }
+
       if (type === 'specialty') {
         const decksToMove = libraryDecks.filter((deck) => {
           const deckSpecialty = String(deck.specialty || '').trim();
+
           return name === 'Sem especialidade'
             ? !deckSpecialty
-            : deckSpecialty === name;
+            : sameArchiveFolderText(deckSpecialty, name);
         });
 
         await Promise.all(
@@ -8426,8 +8564,8 @@ export default function AdvancedFlashcardPoC() {
           libraryDecks
             .filter(
               (deck) =>
-                (deck.specialty || 'Sem especialidade') === sourceSpecialty &&
-                (deck.sub_specialty || '') === name
+                sameArchiveFolderText(deck.specialty || 'Sem especialidade', sourceSpecialty) &&
+                sameArchiveFolderText(deck.sub_specialty || '', name)
             )
             .map((deck) =>
               fetch(`${API_BASE}/api/flashcard-decks/${deck.id}`, {
@@ -8453,7 +8591,7 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
-  const clearArchiveFolder = async ({ type, id, name, cards = [] }) => {
+  const clearArchiveFolder = async ({ type, id, deckIds = [], name, cards = [] }) => {
     const confirmed = window.confirm(
       `Limpar "${name}"? A pasta continuará existindo, mas os flashcards dela serão arquivados.`
     );
@@ -8463,8 +8601,24 @@ export default function AdvancedFlashcardPoC() {
     try {
       setError(null);
 
-      if (type === 'deck' && id && id !== 'sem-deck') {
-        const response = await fetch(`${API_BASE}/api/flashcard-decks/${id}/clear-cards`, {
+      const targetDeckIds = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(deckIds) ? deckIds : []),
+            id,
+            ...(type === 'deck'
+              ? cards.map((card) => card?.deck_id).filter(Boolean)
+              : []),
+          ]
+            .map((deckId) => String(deckId || '').trim())
+            .filter((deckId) => deckId && deckId !== 'sem-deck')
+        )
+      );
+
+      const clearDeckById = async (deckId) => {
+        if (!deckId || deckId === 'sem-deck') return;
+
+        const response = await fetch(`${API_BASE}/api/flashcard-decks/${deckId}/clear-cards`, {
           method: 'POST',
         });
 
@@ -8473,6 +8627,10 @@ export default function AdvancedFlashcardPoC() {
         if (!response.ok) {
           throw new Error(data.error || 'Erro ao limpar pasta.');
         }
+      };
+
+      if (type === 'deck' && targetDeckIds.length > 0) {
+        await Promise.all(targetDeckIds.map((deckId) => clearDeckById(deckId)));
       } else if (cards.length) {
         await patchLibraryCardsBulk(cards, () => ({
           is_archived: true,
@@ -8486,7 +8644,7 @@ export default function AdvancedFlashcardPoC() {
     }
   };
 
-  const deleteArchiveFolder = async ({ type, id, name, specialtyName = '', cards = [] }) => {
+  const deleteArchiveFolder = async ({ type, id, deckIds = [], name, specialtyName = '', cards = [] }) => {
     const confirmed = window.confirm(
       `Excluir "${name}"? Os flashcards dessa pasta serão arquivados e a pasta sairá do acervo.`
     );
@@ -8509,6 +8667,20 @@ export default function AdvancedFlashcardPoC() {
         }
       };
 
+      const targetDeckIds = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(deckIds) ? deckIds : []),
+            id,
+            ...(type === 'deck'
+              ? cards.map((card) => card?.deck_id).filter(Boolean)
+              : []),
+          ]
+            .map((deckId) => String(deckId || '').trim())
+            .filter((deckId) => deckId && deckId !== 'sem-deck')
+        )
+      );
+
       if (cards.length) {
         await patchLibraryCardsBulk(cards, () => ({
           is_archived: true,
@@ -8516,15 +8688,16 @@ export default function AdvancedFlashcardPoC() {
       }
 
       if (type === 'deck') {
-        await deleteDeckById(id);
+        await Promise.all(targetDeckIds.map((deckId) => deleteDeckById(deckId)));
       }
 
       if (type === 'specialty') {
         const decksToDelete = libraryDecks.filter((deck) => {
           const deckSpecialty = String(deck.specialty || '').trim();
+
           return name === 'Sem especialidade'
             ? !deckSpecialty
-            : deckSpecialty === name;
+            : sameArchiveFolderText(deckSpecialty, name);
         });
         await Promise.all(decksToDelete.map((deck) => deleteDeckById(deck.id)));
 
@@ -8538,8 +8711,8 @@ export default function AdvancedFlashcardPoC() {
       if (type === 'topic') {
         const decksToDelete = libraryDecks.filter(
           (deck) =>
-            deck.specialty === specialtyName &&
-            (deck.sub_specialty || 'Geral') === name
+            sameArchiveFolderText(deck.specialty || 'Sem especialidade', specialtyName) &&
+            sameArchiveFolderText(deck.sub_specialty || 'Geral', name)
         );
 
         await Promise.all(decksToDelete.map((deck) => deleteDeckById(deck.id)));
@@ -9394,22 +9567,34 @@ export default function AdvancedFlashcardPoC() {
   };
 
   const selectedArchiveCards = useMemo(() => {
-    let cards = [...libraryCards];
+    let cards = [...archiveCards];
 
     if (selectedArchiveSpecialty) {
       cards = cards.filter(
-        (card) => getArchiveCardSpecialty(card) === selectedArchiveSpecialty
+        (card) =>
+          normalizeArchiveFolderKey(getArchiveCardSpecialty(card)) ===
+          normalizeArchiveFolderKey(selectedArchiveSpecialty)
       );
     }
 
     if (selectedArchiveTopic) {
       cards = cards.filter(
-        (card) => getArchiveCardTopic(card) === selectedArchiveTopic
+        (card) =>
+          normalizeArchiveFolderKey(getArchiveCardTopic(card)) ===
+          normalizeArchiveFolderKey(selectedArchiveTopic)
       );
     }
 
     if (selectedArchiveDeckId) {
-      cards = cards.filter((card) => card.deck_id === selectedArchiveDeckId);
+      cards = cards.filter((card) => {
+        const deck = getDeckById(card.deck_id);
+        const deckLabel = formatDeckDisplayName(deck?.name || 'Sem deck');
+
+        return (
+          String(card.deck_id || 'sem-deck') === String(selectedArchiveDeckId) ||
+          normalizeArchiveFolderKey(deckLabel) === normalizeArchiveFolderKey(selectedArchiveDeckId)
+        );
+      });
     }
 
     if (archiveSearch.trim()) {
@@ -9430,11 +9615,87 @@ export default function AdvancedFlashcardPoC() {
 
     return cards;
   }, [
-    libraryCards,
+    archiveCards,
     archiveSearch,
     selectedArchiveSpecialty,
     selectedArchiveTopic,
     selectedArchiveDeckId,
+    libraryDecks,
+  ]);
+
+  const selectedArchiveDeckGroup = useMemo(() => {
+    if (!selectedArchiveDeckId) return null;
+
+    const specialty = archiveTree.find(
+      (item) =>
+        normalizeArchiveFolderKey(item.name) ===
+        normalizeArchiveFolderKey(selectedArchiveSpecialty)
+    );
+
+    const topic = specialty?.topics?.find(
+      (item) =>
+        normalizeArchiveFolderKey(item.name) ===
+        normalizeArchiveFolderKey(selectedArchiveTopic)
+    );
+
+    return (
+      topic?.decks?.find(
+        (deck) =>
+          String(deck.id || '') === String(selectedArchiveDeckId) ||
+          String(deck.normalizedId || '') === String(selectedArchiveDeckId) ||
+          normalizeArchiveFolderKey(deck.name) ===
+            normalizeArchiveFolderKey(selectedArchiveDeckId)
+      ) || null
+    );
+  }, [
+    archiveTree,
+    selectedArchiveDeckId,
+    selectedArchiveSpecialty,
+    selectedArchiveTopic,
+  ]);
+
+  const selectedArchiveDeckIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          ...(Array.isArray(selectedArchiveDeckGroup?.deckIds)
+            ? selectedArchiveDeckGroup.deckIds
+            : []),
+          ...selectedArchiveCards.map((card) => card?.deck_id),
+        ]
+          .map((deckId) => String(deckId || '').trim())
+          .filter((deckId) => deckId && deckId !== 'sem-deck')
+      )
+    );
+  }, [selectedArchiveCards, selectedArchiveDeckGroup]);
+
+  const selectedArchivePrimaryDeckId =
+    selectedArchiveDeckIds[0] ||
+    selectedDeckId ||
+    '';
+
+  const selectedArchiveDeckName = useMemo(() => {
+    if (!selectedArchiveDeckId) return '';
+
+    if (selectedArchiveDeckGroup?.name) {
+      return formatDeckDisplayName(selectedArchiveDeckGroup.name);
+    }
+
+    const directDeck =
+      libraryDecks.find((deck) =>
+        selectedArchiveDeckIds.includes(String(deck.id))
+      ) ||
+      libraryDecks.find(
+        (deck) =>
+          normalizeArchiveFolderKey(formatDeckDisplayName(deck.name || '')) ===
+          normalizeArchiveFolderKey(selectedArchiveDeckId)
+      );
+
+    return formatDeckDisplayName(directDeck?.name || 'Deck selecionado');
+  }, [
+    selectedArchiveDeckId,
+    selectedArchiveDeckIds,
+    selectedArchiveDeckGroup,
     libraryDecks,
   ]);
 
@@ -9494,11 +9755,11 @@ export default function AdvancedFlashcardPoC() {
     setSelectedArchiveDeckId('');
   };
 
-  const selectArchiveDeck = (specialty, topic, deckId) => {
+  const selectArchiveDeck = (specialty, topic, deckId, primaryDeckId = deckId) => {
     setSelectedArchiveSpecialty(specialty);
     setSelectedArchiveTopic(topic);
     setSelectedArchiveDeckId(deckId);
-    setSelectedDeckId(deckId === 'sem-deck' ? '' : deckId);
+    setSelectedDeckId(primaryDeckId === 'sem-deck' ? '' : primaryDeckId);
   };
 
   const selectedArchiveTreeId = useMemo(() => {
@@ -9521,8 +9782,10 @@ export default function AdvancedFlashcardPoC() {
     return archiveTree.map((specialty) => {
       const visual = getFolderVisualForLabel(specialty.name);
 
-      const specialtyCards = libraryCards.filter(
-        (card) => getArchiveCardSpecialty(card) === specialty.name
+      const specialtyCards = archiveCards.filter(
+        (card) =>
+          normalizeArchiveFolderKey(getArchiveCardSpecialty(card)) ===
+          normalizeArchiveFolderKey(specialty.name)
       );
 
       return {
@@ -9549,7 +9812,9 @@ export default function AdvancedFlashcardPoC() {
           }),
         children: (specialty.topics || []).map((topic) => {
           const topicCards = specialtyCards.filter(
-            (card) => getArchiveCardTopic(card) === topic.name
+            (card) =>
+              normalizeArchiveFolderKey(getArchiveCardTopic(card)) ===
+              normalizeArchiveFolderKey(topic.name)
           );
 
           return {
@@ -9575,22 +9840,39 @@ export default function AdvancedFlashcardPoC() {
                 cards: topicCards,
               }),
             children: (topic.decks || []).map((deck) => {
-              const deckCards = topicCards.filter(
-                (card) => String(card.deck_id || 'sem-deck') === String(deck.id)
-              );
+              const deckCards = topicCards.filter((card) => {
+                const cardDeck = getDeckById(card.deck_id);
+                const cardDeckName = formatDeckDisplayName(cardDeck?.name || 'Sem deck');
+
+                return (
+                  String(card.deck_id || 'sem-deck') === String(deck.id) ||
+                  normalizeArchiveFolderKey(cardDeckName) === normalizeArchiveFolderKey(deck.name)
+                );
+              });
 
               return {
-                id: `archive:deck:${specialty.name}:${topic.name}:${deck.id}`,
+                id: `archive:deck:${specialty.name}:${topic.name}:${deck.normalizedId || deck.id}`,
                 label: deck.name,
                 description: 'Deck',
                 icon: BookOpen,
                 iconClass: 'bg-slate-100 text-slate-600 border-slate-200',
                 count: Array.isArray(deck.cards) ? deck.cards.length : 0,
-                onSelect: () => selectArchiveDeck(specialty.name, topic.name, deck.id),
+                onSelect: () =>
+                  selectArchiveDeck(
+                    specialty.name,
+                    topic.name,
+                    deck.normalizedId || deck.id,
+                    Array.isArray(deck.deckIds) && deck.deckIds.length > 0
+                      ? deck.deckIds[0]
+                      : deck.id
+                  ),
                 onRename: () =>
                   renameArchiveFolder({
                     type: 'deck',
-                    id: deck.id,
+                    id: Array.isArray(deck.deckIds) && deck.deckIds.length > 0
+                      ? deck.deckIds[0]
+                      : deck.id,
+                    deckIds: Array.isArray(deck.deckIds) ? deck.deckIds : [],
                     currentName: deck.name,
                     specialtyName: specialty.name,
                     cards: deckCards,
@@ -9598,7 +9880,10 @@ export default function AdvancedFlashcardPoC() {
                 onDelete: () =>
                   deleteArchiveFolder({
                     type: 'deck',
-                    id: deck.id,
+                    id: Array.isArray(deck.deckIds) && deck.deckIds.length > 0
+                      ? deck.deckIds[0]
+                      : deck.id,
+                    deckIds: Array.isArray(deck.deckIds) ? deck.deckIds : [],
                     name: deck.name,
                     specialtyName: specialty.name,
                     cards: deckCards,
@@ -9609,7 +9894,7 @@ export default function AdvancedFlashcardPoC() {
         }),
       };
     });
-  }, [archiveTree, libraryCards, libraryDecks]);
+  }, [archiveTree, archiveCards, libraryDecks]);
 
   const startStudyFromArchiveCards = (cards) => {
     const folderCards = normalizeFlashcards(cards);
@@ -13905,12 +14190,12 @@ export default function AdvancedFlashcardPoC() {
                         className="text-lg font-black text-slate-900 leading-snug line-clamp-2"
                         title={
                           selectedArchiveDeckId
-                            ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                            ? selectedArchiveDeckName
                             : selectedArchiveTopic || selectedArchiveSpecialty || 'Todo o acervo'
                         }
                       >
                         {selectedArchiveDeckId
-                          ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                          ? selectedArchiveDeckName
                           : selectedArchiveTopic || selectedArchiveSpecialty || 'Todo o acervo'}
                       </h3>
 
@@ -14032,9 +14317,10 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() =>
                               renameArchiveFolder({
                                 type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
-                                id: selectedArchiveDeckId || '',
+                                id: selectedArchiveDeckId ? selectedArchivePrimaryDeckId : '',
+                                deckIds: selectedArchiveDeckId ? selectedArchiveDeckIds : [],
                                 currentName: selectedArchiveDeckId
-                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  ? selectedArchiveDeckName
                                   : selectedArchiveTopic || selectedArchiveSpecialty,
                                 specialtyName: selectedArchiveSpecialty,
                                 cards: selectedArchiveCards,
@@ -14050,9 +14336,10 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() =>
                               setMoveFolderDialog({
                                 type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
-                                id: selectedArchiveDeckId || '',
+                                id: selectedArchiveDeckId ? selectedArchivePrimaryDeckId : '',
+                                deckIds: selectedArchiveDeckId ? selectedArchiveDeckIds : [],
                                 name: selectedArchiveDeckId
-                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  ? selectedArchiveDeckName
                                   : selectedArchiveTopic || selectedArchiveSpecialty,
                                 specialtyName: selectedArchiveSpecialty,
                                 cards: selectedArchiveCards,
@@ -14068,9 +14355,10 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() =>
                               clearArchiveFolder({
                                 type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
-                                id: selectedArchiveDeckId || '',
+                                id: selectedArchiveDeckId ? selectedArchivePrimaryDeckId : '',
+                                deckIds: selectedArchiveDeckId ? selectedArchiveDeckIds : [],
                                 name: selectedArchiveDeckId
-                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  ? selectedArchiveDeckName
                                   : selectedArchiveTopic || selectedArchiveSpecialty,
                                 cards: selectedArchiveCards,
                               })
@@ -14085,9 +14373,10 @@ export default function AdvancedFlashcardPoC() {
                             onClick={() =>
                               deleteArchiveFolder({
                                 type: selectedArchiveDeckId ? 'deck' : selectedArchiveTopic ? 'topic' : 'specialty',
-                                id: selectedArchiveDeckId || '',
+                                id: selectedArchiveDeckId ? selectedArchivePrimaryDeckId : '',
+                                deckIds: selectedArchiveDeckId ? selectedArchiveDeckIds : [],
                                 name: selectedArchiveDeckId
-                                  ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Deck selecionado'
+                                  ? selectedArchiveDeckName
                                   : selectedArchiveTopic || selectedArchiveSpecialty,
                                 specialtyName: selectedArchiveSpecialty,
                                 cards: selectedArchiveCards,

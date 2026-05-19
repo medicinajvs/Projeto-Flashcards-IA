@@ -1734,6 +1734,20 @@ function buildDeckSlug(value = '') {
     .trim();
 }
 
+function normalizeDeckComparableKey(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s-]/g, '')
+    .trim();
+}
+
+function sameDeckText(a = '', b = '') {
+  return normalizeDeckComparableKey(a) === normalizeDeckComparableKey(b);
+}
+
 async function touchDeck(deckId) {
   if (!deckId) return;
 
@@ -1751,35 +1765,84 @@ async function resolveOrCreateDeck({
   description = null,
   deckType = 'manual',
 }) {
-  const safeName = String(name || '').trim();
-  const safeSpecialty = String(specialty || '').trim() || null;
-  const safeSubSpecialty = String(subSpecialty || '').trim() || null;
+  const safeName = String(name || '').replace(/\s+/g, ' ').trim();
+  const safeSpecialty = String(specialty || '').replace(/\s+/g, ' ').trim() || null;
+  const safeSubSpecialty = String(subSpecialty || '').replace(/\s+/g, ' ').trim() || null;
 
   if (!safeName) {
     throw new Error('Nome do deck é obrigatório.');
   }
 
-  let existingDeckQuery = supabase
+  let candidatesQuery = supabase
     .from('flashcard_decks')
-    .select('*')
-    .eq('name', safeName)
-    .eq('specialty', safeSpecialty)
-    .eq('sub_specialty', safeSubSpecialty);
+    .select('*');
 
   if (parentDeckId) {
-    existingDeckQuery = existingDeckQuery.eq('parent_deck_id', parentDeckId);
+    candidatesQuery = candidatesQuery.eq('parent_deck_id', parentDeckId);
   } else {
-    existingDeckQuery = existingDeckQuery.is('parent_deck_id', null);
+    candidatesQuery = candidatesQuery.is('parent_deck_id', null);
   }
 
-  const { data: existingDeck, error: existingDeckError } =
-    await existingDeckQuery.maybeSingle();
+  const { data: candidates, error: candidatesError } = await candidatesQuery;
 
-  if (existingDeckError) {
-    throw new Error(`Falha ao buscar deck existente: ${existingDeckError.message}`);
+  if (candidatesError) {
+    throw new Error(`Falha ao buscar decks existentes: ${candidatesError.message}`);
   }
+
+  const safeNameKey = normalizeDeckComparableKey(safeName);
+  const safeSpecialtyKey = normalizeDeckComparableKey(safeSpecialty || '');
+  const safeSubSpecialtyKey = normalizeDeckComparableKey(safeSubSpecialty || '');
+
+  const existingDeck = (candidates || []).find((deck) => {
+    const deckNameKey = normalizeDeckComparableKey(deck.name || '');
+    const deckSpecialtyKey = normalizeDeckComparableKey(deck.specialty || '');
+    const deckSubSpecialtyKey = normalizeDeckComparableKey(deck.sub_specialty || '');
+
+    const nameMatches = deckNameKey === safeNameKey;
+    const specialtyMatches =
+      !safeSpecialtyKey ||
+      !deckSpecialtyKey ||
+      deckSpecialtyKey === safeSpecialtyKey;
+
+    const subSpecialtyMatches =
+      !safeSubSpecialtyKey ||
+      !deckSubSpecialtyKey ||
+      deckSubSpecialtyKey === safeSubSpecialtyKey;
+
+    return nameMatches && specialtyMatches && subSpecialtyMatches;
+  });
 
   if (existingDeck) {
+    const patch = {};
+
+    if (!existingDeck.specialty && safeSpecialty) {
+      patch.specialty = safeSpecialty;
+    }
+
+    if (!existingDeck.sub_specialty && safeSubSpecialty) {
+      patch.sub_specialty = safeSubSpecialty;
+    }
+
+    if (!existingDeck.deck_type && deckType) {
+      patch.deck_type = deckType;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      const { data: updatedDeck, error: updateError } = await supabase
+        .from('flashcard_decks')
+        .update({
+          ...patch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDeck.id)
+        .select('*')
+        .single();
+
+      if (!updateError && updatedDeck) {
+        return updatedDeck;
+      }
+    }
+
     return existingDeck;
   }
 
@@ -1858,13 +1921,17 @@ async function ensureDeckHierarchy({
   if (createLeafDeck) {
     const leafName = safeTheme || safeSubSpecialty || safeSpecialty;
 
-    finalDeck = await resolveOrCreateDeck({
-      name: leafName,
-      specialty: safeSpecialty,
-      subSpecialty: safeSubSpecialty || null,
-      parentDeckId: parent.id,
-      deckType: 'leaf-deck',
-    });
+    if (sameDeckText(leafName, parent.name)) {
+      finalDeck = parent;
+    } else {
+      finalDeck = await resolveOrCreateDeck({
+        name: leafName,
+        specialty: safeSpecialty,
+        subSpecialty: safeSubSpecialty || null,
+        parentDeckId: parent.id,
+        deckType: 'leaf-deck',
+      });
+    }
   }
 
   return {
@@ -1876,18 +1943,72 @@ function normalizeLibraryFlashcard(card = {}, index = 0) {
   return {
     question: card.question ?? card.pergunta ?? '',
     answer: card.answer ?? card.resposta ?? '',
+
+    question_html: card.questionHtml ?? card.question_html ?? null,
+    answer_html: card.answerHtml ?? card.answer_html ?? null,
+    preceptor_note_html:
+      card.preceptorNoteHtml ??
+      card.preceptor_note_html ??
+      null,
+
     preceptor_note:
       card.preceptorNote ??
       card.nota_preceptor ??
       card.preceptor_note ??
       null,
+
     difficulty: card.difficulty || 'medium',
     specialty: card.specialty || null,
     sub_specialty: card.subSpecialty ?? card.sub_specialty ?? null,
+    theme: card.theme ?? card.tema ?? null,
+    notes: card.notes ?? null,
     tags: Array.isArray(card.tags) ? card.tags : [],
+
+    image_url: card.imageUrl ?? card.image_url ?? null,
+    image_object_key: card.imageObjectKey ?? card.image_object_key ?? null,
+
+    question_image_url:
+      card.questionImageUrl ??
+      card.question_image_url ??
+      card.frontImageUrl ??
+      card.front_image_url ??
+      null,
+
+    question_image_object_key:
+      card.questionImageObjectKey ??
+      card.question_image_object_key ??
+      card.frontImageObjectKey ??
+      card.front_image_object_key ??
+      null,
+
+    answer_image_url:
+      card.answerImageUrl ??
+      card.answer_image_url ??
+      card.backImageUrl ??
+      card.back_image_url ??
+      null,
+
+    answer_image_object_key:
+      card.answerImageObjectKey ??
+      card.answer_image_object_key ??
+      card.backImageObjectKey ??
+      card.back_image_object_key ??
+      null,
+
+    image_source: card.imageSource ?? card.image_source ?? null,
+    image_prompt: card.imagePrompt ?? card.image_prompt ?? null,
+    image_generated_at: card.imageGeneratedAt ?? card.image_generated_at ?? null,
+
+    card_insights: card.cardInsights ?? card.card_insights ?? {},
+    card_insights_generated_at:
+      card.cardInsightsGeneratedAt ?? card.card_insights_generated_at ?? null,
+
     review_state: card.review_state || {},
     review_stats: card.review_stats || {},
-    sort_order: index,
+
+    sort_order: Number.isFinite(Number(card.sort_order ?? card.sortOrder ?? card.position))
+      ? Number(card.sort_order ?? card.sortOrder ?? card.position)
+      : index,
   };
 }
 
@@ -1922,18 +2043,44 @@ async function saveFlashcardsToLibrary({
     .map((card, index) => ({
       source_run_id: runId || null,
       deck_id: finalDeckId,
+
       question: card.question,
       answer: card.answer,
       preceptor_note: card.preceptor_note,
+
+      question_html: card.question_html || null,
+      answer_html: card.answer_html || null,
+      preceptor_note_html: card.preceptor_note_html || null,
+
       difficulty: card.difficulty,
       specialty: card.specialty || specialty || null,
       sub_specialty: card.sub_specialty || subSpecialty || null,
       theme: card.theme || theme || null,
       tags: Array.isArray(card.tags) ? card.tags : [],
       notes: card.notes || null,
+
+      image_url: card.image_url || null,
+      image_object_key: card.image_object_key || null,
+
+      question_image_url: card.question_image_url || null,
+      question_image_object_key: card.question_image_object_key || null,
+
+      answer_image_url: card.answer_image_url || null,
+      answer_image_object_key: card.answer_image_object_key || null,
+
+      image_source: card.image_source || null,
+      image_prompt: card.image_prompt || null,
+      image_generated_at: card.image_generated_at || null,
+
+      card_insights: card.card_insights || {},
+      card_insights_generated_at: card.card_insights_generated_at || null,
+
       review_state: card.review_state || {},
       review_stats: card.review_stats || {},
-      sort_order: index,
+
+      sort_order: Number.isFinite(Number(card.sort_order))
+        ? Number(card.sort_order)
+        : index,
     }));
 
   if (!payload.length) {

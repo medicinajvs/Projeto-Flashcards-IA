@@ -16,6 +16,16 @@ const {
   ImageRun,
   UnderlineType,
   PageOrientation,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  VerticalAlign,
+  ShadingType,
+  HeightRule,
+  TableLayoutType,
+  TabStopType,
 } = require('docx');
 const ffmpegStatic = require('ffmpeg-static');
 const { createClient } = require('@supabase/supabase-js');
@@ -574,19 +584,36 @@ function normalizeGeneratedBilingualFlashcards(cards = []) {
     .filter(Boolean);
 }
 
+function isBilingualEnglishTag(rawTag = '') {
+  const className = extractHtmlAttribute(rawTag, 'class');
+  const dataLang = extractHtmlAttribute(rawTag, 'data-lang');
+  const style = extractHtmlAttribute(rawTag, 'style');
+  const color = normalizeExportColor(extractStyleValue(style, 'color'));
+
+  return (
+    /\btext-blue-600\b/i.test(className || '') ||
+    /\benglish-text\b/i.test(className || '') ||
+    String(dataLang || '').toLowerCase() === 'en' ||
+    color === '2563EB' ||
+    color === '1D4ED8' ||
+    color === '0000FF'
+  );
+}
+
 function extractEnglishFromBilingualHtml(html = '') {
   const source = String(html || '');
 
   if (!source.trim()) return '';
 
   const matches = Array.from(
-    source.matchAll(/<p[^>]*class=["'][^"']*text-blue-600[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi)
+    source.matchAll(/(<p\b[^>]*>)([\s\S]*?)<\/p>/gi)
   );
 
   if (!matches.length) return '';
 
   return matches
-    .map((match) => stripHtmlToPlainText(match[1]))
+    .filter((match) => isBilingualEnglishTag(match[1]))
+    .map((match) => stripHtmlToPlainText(match[2]))
     .map((item) => item.trim())
     .filter(Boolean)
     .join('\n\n');
@@ -594,8 +621,10 @@ function extractEnglishFromBilingualHtml(html = '') {
 
 function removeEnglishParagraphsFromBilingualHtml(html = '') {
   return String(html || '').replace(
-    /<p[^>]*class=["'][^"']*text-blue-600[^"']*["'][^>]*>[\s\S]*?<\/p>/gi,
-    ''
+    /(<p\b[^>]*>)([\s\S]*?)<\/p>/gi,
+    (fullMatch, rawTag) => {
+      return isBilingualEnglishTag(rawTag) ? '' : fullMatch;
+    }
   );
 }
 
@@ -740,6 +769,20 @@ function buildDeckSlug(value = '') {
     .trim();
 }
 
+function normalizeDeckComparableKey(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s-]/g, '')
+    .trim();
+}
+
+function sameDeckText(a = '', b = '') {
+  return normalizeDeckComparableKey(a) === normalizeDeckComparableKey(b);
+}
+
 async function touchDeck(deckId) {
   if (!supabase || !deckId) return;
 
@@ -761,34 +804,84 @@ async function resolveOrCreateDeck({
     throw new Error('Supabase não configurado no backend.');
   }
 
-  const safeName = String(name || '').trim();
-  const safeSpecialty = String(specialty || '').trim() || null;
-  const safeSubSpecialty = String(subSpecialty || '').trim() || null;
+  const safeName = String(name || '').replace(/\s+/g, ' ').trim();
+  const safeSpecialty = String(specialty || '').replace(/\s+/g, ' ').trim() || null;
+  const safeSubSpecialty = String(subSpecialty || '').replace(/\s+/g, ' ').trim() || null;
 
   if (!safeName) {
     throw new Error('Nome do deck é obrigatório.');
   }
 
-  let existingDeckQuery = supabase
+  let candidatesQuery = supabase
     .from('flashcard_decks')
-    .select('*')
-    .eq('name', safeName)
-    .eq('specialty', safeSpecialty)
-    .eq('sub_specialty', safeSubSpecialty);
+    .select('*');
 
   if (parentDeckId) {
-    existingDeckQuery = existingDeckQuery.eq('parent_deck_id', parentDeckId);
+    candidatesQuery = candidatesQuery.eq('parent_deck_id', parentDeckId);
   } else {
-    existingDeckQuery = existingDeckQuery.is('parent_deck_id', null);
+    candidatesQuery = candidatesQuery.is('parent_deck_id', null);
   }
 
-  const { data: existingDeck, error: existingDeckError } = await existingDeckQuery.maybeSingle();
+  const { data: candidates, error: candidatesError } = await candidatesQuery;
 
-  if (existingDeckError) {
-    throw new Error(`Falha ao buscar deck existente: ${existingDeckError.message}`);
+  if (candidatesError) {
+    throw new Error(`Falha ao buscar decks existentes: ${candidatesError.message}`);
   }
+
+  const safeNameKey = normalizeDeckComparableKey(safeName);
+  const safeSpecialtyKey = normalizeDeckComparableKey(safeSpecialty || '');
+  const safeSubSpecialtyKey = normalizeDeckComparableKey(safeSubSpecialty || '');
+
+  const existingDeck = (candidates || []).find((deck) => {
+    const deckNameKey = normalizeDeckComparableKey(deck.name || '');
+    const deckSpecialtyKey = normalizeDeckComparableKey(deck.specialty || '');
+    const deckSubSpecialtyKey = normalizeDeckComparableKey(deck.sub_specialty || '');
+
+    const nameMatches = deckNameKey === safeNameKey;
+    const specialtyMatches =
+      !safeSpecialtyKey ||
+      !deckSpecialtyKey ||
+      deckSpecialtyKey === safeSpecialtyKey;
+
+    const subSpecialtyMatches =
+      !safeSubSpecialtyKey ||
+      !deckSubSpecialtyKey ||
+      deckSubSpecialtyKey === safeSubSpecialtyKey;
+
+    return nameMatches && specialtyMatches && subSpecialtyMatches;
+  });
 
   if (existingDeck) {
+    const patch = {};
+
+    if (!existingDeck.specialty && safeSpecialty) {
+      patch.specialty = safeSpecialty;
+    }
+
+    if (!existingDeck.sub_specialty && safeSubSpecialty) {
+      patch.sub_specialty = safeSubSpecialty;
+    }
+
+    if (!existingDeck.deck_type && deckType) {
+      patch.deck_type = deckType;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      const { data: updatedDeck, error: updateError } = await supabase
+        .from('flashcard_decks')
+        .update({
+          ...patch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDeck.id)
+        .select('*')
+        .single();
+
+      if (!updateError && updatedDeck) {
+        return updatedDeck;
+      }
+    }
+
     return existingDeck;
   }
 
@@ -869,13 +962,17 @@ async function ensureDeckHierarchy({
   if (createLeafDeck) {
     const leafName = safeTheme || safeSubSpecialty || safeSpecialty;
 
-    finalDeck = await resolveOrCreateDeck({
-      name: leafName,
-      specialty: safeSpecialty,
-      subSpecialty: safeSubSpecialty || null,
-      parentDeckId: parent.id,
-      deckType: 'leaf-deck',
-    });
+    if (sameDeckText(leafName, parent.name)) {
+      finalDeck = parent;
+    } else {
+      finalDeck = await resolveOrCreateDeck({
+        name: leafName,
+        specialty: safeSpecialty,
+        subSpecialty: safeSubSpecialty || null,
+        parentDeckId: parent.id,
+        deckType: 'leaf-deck',
+      });
+    }
   }
 
   return {
@@ -4838,17 +4935,59 @@ function normalizeExportFlashcards(cards = []) {
   return (Array.isArray(cards) ? cards : [])
     .map((card, index) => ({
       index: Number(card.position || card.sort_order || index + 1),
+
       question: String(card.question || card.pergunta || '').trim(),
+      question_en: String(card.question_en || card.questionEn || '').trim(),
+      questionEn: String(card.questionEn || card.question_en || '').trim(),
+
       answer: String(card.answer || card.resposta || '').trim(),
+      answer_en: String(card.answer_en || card.answerEn || '').trim(),
+      answerEn: String(card.answerEn || card.answer_en || '').trim(),
+
       questionHtml: String(card.questionHtml || card.question_html || '').trim(),
+      question_html: String(card.question_html || card.questionHtml || '').trim(),
+
       answerHtml: String(card.answerHtml || card.answer_html || '').trim(),
-      preceptorNote: String(card.preceptorNote || card.preceptor_note || card.nota_preceptor || '').trim(),
+      answer_html: String(card.answer_html || card.answerHtml || '').trim(),
+
+      preceptorNote: String(
+        card.preceptorNote ||
+          card.preceptor_note ||
+          card.nota_preceptor ||
+          ''
+      ).trim(),
+      preceptor_note: String(
+        card.preceptor_note ||
+          card.preceptorNote ||
+          card.nota_preceptor ||
+          ''
+      ).trim(),
+      preceptor_note_en: String(
+        card.preceptor_note_en ||
+          card.preceptorNoteEn ||
+          card.nota_preceptor_en ||
+          ''
+      ).trim(),
+      preceptorNoteEn: String(
+        card.preceptorNoteEn ||
+          card.preceptor_note_en ||
+          card.nota_preceptor_en ||
+          ''
+      ).trim(),
       preceptorNoteHtml: String(card.preceptorNoteHtml || card.preceptor_note_html || '').trim(),
+      preceptor_note_html: String(card.preceptor_note_html || card.preceptorNoteHtml || '').trim(),
+
       specialty: String(card.specialty || '').trim(),
-      topic: String(card.sub_specialty || card.theme || '').trim(),
+      topic: String(card.sub_specialty || card.subSpecialty || card.theme || card.topic || '').trim(),
+
       imageUrl: String(card.imageUrl || card.image_url || '').trim(),
+      image_url: String(card.image_url || card.imageUrl || '').trim(),
+
       questionImageUrl: String(card.questionImageUrl || card.question_image_url || '').trim(),
+      question_image_url: String(card.question_image_url || card.questionImageUrl || '').trim(),
+
       answerImageUrl: String(card.answerImageUrl || card.answer_image_url || '').trim(),
+      answer_image_url: String(card.answer_image_url || card.answerImageUrl || '').trim(),
     }))
     .filter((card) => card.question && card.answer)
     .sort((a, b) => a.index - b.index);
@@ -5103,6 +5242,16 @@ function parseFlashcardHtmlToRichParagraphs(html = '', fallback = '') {
       nextStyle.highlight = true;
     }
 
+    const className = extractHtmlAttribute(rawTag, 'class');
+    const dataLang = extractHtmlAttribute(rawTag, 'data-lang');
+
+    if (
+      /\btext-blue-600\b/i.test(className || '') ||
+      String(dataLang || '').toLowerCase() === 'en'
+    ) {
+      nextStyle.color = '2563EB';
+    }
+
     const style = extractHtmlAttribute(rawTag, 'style');
 
     if (style) {
@@ -5295,6 +5444,1243 @@ function buildDocxParagraphsFromRichHtml(html = '', fallback = '', paragraphOpti
       ...paragraphOptions,
     })
   );
+}
+
+async function normalizeImageAssetForEditableDocx(imageAsset, maxWidth = 620, maxHeight = 280) {
+  if (!imageAsset?.buffer) return null;
+
+  try {
+    const buffer = await sharp(imageAsset.buffer)
+      .rotate()
+      .resize({
+        width: maxWidth,
+        height: maxHeight,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+
+    const metadata = await sharp(buffer).metadata();
+
+    return {
+      buffer,
+      width: Math.max(1, Math.round(metadata.width || maxWidth)),
+      height: Math.max(1, Math.round(metadata.height || maxHeight)),
+    };
+  } catch (error) {
+    console.warn('⚠️ Falha ao preparar imagem para DOCX editável:', error.message);
+    return null;
+  }
+}
+
+function buildEditableDocxFieldHtml({ html = '', pt = '', en = '' }) {
+  if (String(html || '').trim()) {
+    return html;
+  }
+
+  return buildBilingualFieldHtml({
+    pt,
+    en,
+  });
+}
+
+function buildEditableDocxHeaderParagraph({
+  type = 'Pergunta',
+  cardNumber = 1,
+  totalCards = 1,
+}) {
+  const isQuestion = type === 'Pergunta';
+
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: {
+      after: 280,
+    },
+    children: [
+      new TextRun({
+        text: type,
+        bold: true,
+        size: 34,
+        color: isQuestion ? '0F766E' : '2563EB',
+      }),
+      new TextRun({
+        text: `  •  Card ${cardNumber} / ${totalCards}`,
+        bold: true,
+        size: 20,
+        color: '94A3B8',
+      }),
+    ],
+  });
+}
+
+function buildEditableDocxMetaParagraph(card = {}) {
+  const metadata = [
+    card.specialty,
+    card.topic || card.theme || card.subSpecialty || card.sub_specialty,
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .join(' · ');
+
+  if (!metadata) return null;
+
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: {
+      after: 240,
+    },
+    children: [
+      new TextRun({
+        text: metadata,
+        bold: true,
+        size: 18,
+        color: '64748B',
+      }),
+    ],
+  });
+}
+
+function splitStudyModeDocxText(value = '') {
+  return String(value || '')
+    .split(/\n{2,}|\r?\n/)
+    .map((item) => item.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function getStudyModeDocxFontSize(text = '', type = 'question', lang = 'pt') {
+  const length = String(text || '').length;
+
+  if (type === 'answer') {
+    if (length > 700) return lang === 'en' ? 21 : 24;
+    if (length > 420) return lang === 'en' ? 23 : 27;
+    if (length > 220) return lang === 'en' ? 25 : 30;
+    return lang === 'en' ? 28 : 34;
+  }
+
+  if (length > 260) return lang === 'en' ? 25 : 32;
+  if (length > 170) return lang === 'en' ? 28 : 38;
+  if (length > 90) return lang === 'en' ? 31 : 46;
+  return lang === 'en' ? 34 : 54;
+}
+
+function buildStudyModeDocxTextParagraphs({
+  text = '',
+  color = '111827',
+  size = 36,
+  bold = true,
+  alignment = AlignmentType.CENTER,
+  before = 0,
+  after = 90,
+  line = 420,
+}) {
+  const paragraphs = splitStudyModeDocxText(text);
+
+  if (!paragraphs.length) {
+    return [];
+  }
+
+  return paragraphs.map((paragraph, index) =>
+    new Paragraph({
+      alignment,
+      spacing: {
+        before: index === 0 ? before : 40,
+        after,
+        line,
+      },
+      children: [
+        new TextRun({
+          text: paragraph,
+          bold,
+          size,
+          color,
+        }),
+      ],
+    })
+  );
+}
+
+function buildStudyModeDocxEmptyParagraph(after = 120) {
+  return new Paragraph({
+    spacing: {
+      before: 0,
+      after,
+    },
+    children: [new TextRun({ text: '' })],
+  });
+}
+
+function buildStudyModeDocxCell({
+  children = [],
+  fill = 'FFFFFF',
+  verticalAlign = VerticalAlign.TOP,
+  margins = {
+    top: 220,
+    bottom: 220,
+    left: 520,
+    right: 520,
+  },
+} = {}) {
+  return new TableCell({
+    width: {
+      size: STUDY_MODE_DOCX_CARD_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    verticalAlign,
+    shading: {
+      type: ShadingType.CLEAR,
+      color: 'auto',
+      fill,
+    },
+    margins,
+    borders: {
+      top: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      bottom: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      left: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      right: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    children: children.length
+      ? children
+      : [
+          new Paragraph({
+            children: [new TextRun({ text: '' })],
+          }),
+        ],
+  });
+}
+
+const STUDY_MODE_DOCX_CARD_WIDTH_DXA = 15000;
+
+function buildStudyModeDocxCard({
+  type = 'Pergunta',
+  card = {},
+  cardNumber = 1,
+  totalCards = 1,
+}) {
+  const isQuestion = type === 'Pergunta';
+  const accent = isQuestion ? '3B82F6' : '2563EB';
+
+  const ptText = isQuestion
+    ? getBilingualPortugueseText(card, 'question')
+    : getBilingualPortugueseText(card, 'answer');
+
+  const enText = isQuestion
+    ? getBilingualEnglishText(card, 'question')
+    : getBilingualEnglishText(card, 'answer');
+
+  const footerLabel =
+    String(card.specialty || card.topic || card.theme || 'Flashcard').trim();
+
+  const ptSize = getStudyModeDocxFontSize(
+    ptText,
+    isQuestion ? 'question' : 'answer',
+    'pt'
+  );
+
+  const enSize = getStudyModeDocxFontSize(
+    enText,
+    isQuestion ? 'question' : 'answer',
+    'en'
+  );
+
+  const headerChildren = [
+    new Paragraph({
+      alignment: AlignmentType.LEFT,
+      spacing: {
+        before: 0,
+        after: 0,
+      },
+      children: [
+        new TextRun({
+          text: `FLASHCARD ${String(cardNumber).padStart(2, '0')}`,
+          bold: true,
+          size: 18,
+          color: accent,
+        }),
+        new TextRun({
+          text: `     ${type.toUpperCase()}     CARD ${cardNumber} / ${totalCards}`,
+          bold: true,
+          size: 14,
+          color: '94A3B8',
+        }),
+      ],
+    }),
+  ];
+
+  const bodyChildren = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: {
+        before: 0,
+        after: 180,
+      },
+      children: [
+        new TextRun({
+          text: isQuestion ? '?' : '✓',
+          bold: true,
+          size: 38,
+          color: accent,
+        }),
+      ],
+    }),
+
+    ...buildStudyModeDocxTextParagraphs({
+      text: ptText,
+      color: '111827',
+      size: ptSize,
+      bold: isQuestion,
+      alignment: AlignmentType.CENTER,
+      before: 0,
+      after: 90,
+      line: isQuestion ? 460 : 380,
+    }),
+
+    enText
+      ? buildStudyModeDocxEmptyParagraph(80)
+      : null,
+
+    ...buildStudyModeDocxTextParagraphs({
+      text: enText,
+      color: '2563EB',
+      size: enSize,
+      bold: true,
+      alignment: AlignmentType.CENTER,
+      before: 0,
+      after: 80,
+      line: isQuestion ? 420 : 350,
+    }),
+  ].filter(Boolean);
+
+  const footerChildren = [
+    footerLabel
+      ? new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          spacing: {
+            before: 0,
+            after: 0,
+          },
+          children: [
+            new TextRun({
+              text: footerLabel,
+              bold: true,
+              size: 28,
+              color: accent,
+            }),
+          ],
+        })
+      : buildStudyModeDocxEmptyParagraph(0),
+  ];
+
+  return new Table({
+    width: {
+      size: STUDY_MODE_DOCX_CARD_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    borders: {
+      top: {
+        style: BorderStyle.SINGLE,
+        size: 10,
+        color: 'E2E8F0',
+      },
+      bottom: {
+        style: BorderStyle.SINGLE,
+        size: 10,
+        color: 'E2E8F0',
+      },
+      left: {
+        style: BorderStyle.SINGLE,
+        size: 10,
+        color: 'E2E8F0',
+      },
+      right: {
+        style: BorderStyle.SINGLE,
+        size: 10,
+        color: 'E2E8F0',
+      },
+      insideHorizontal: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      insideVertical: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    rows: [
+      new TableRow({
+        height: {
+          value: 900,
+          rule: HeightRule.EXACT,
+        },
+        children: [
+          buildStudyModeDocxCell({
+            children: headerChildren,
+            fill: 'FFFFFF',
+            verticalAlign: VerticalAlign.TOP,
+            margins: {
+              top: 260,
+              bottom: 120,
+              left: 520,
+              right: 520,
+            },
+          }),
+        ],
+      }),
+
+      new TableRow({
+        height: {
+          value: 7200,
+          rule: HeightRule.ATLEAST,
+        },
+        children: [
+          buildStudyModeDocxCell({
+            children: bodyChildren,
+            fill: 'FFFFFF',
+            verticalAlign: VerticalAlign.CENTER,
+            margins: {
+              top: 260,
+              bottom: 260,
+              left: 900,
+              right: 900,
+            },
+          }),
+        ],
+      }),
+
+      new TableRow({
+        height: {
+          value: 900,
+          rule: HeightRule.EXACT,
+        },
+        children: [
+          buildStudyModeDocxCell({
+            children: footerChildren,
+            fill: 'FFFFFF',
+            verticalAlign: VerticalAlign.BOTTOM,
+            margins: {
+              top: 100,
+              bottom: 220,
+              left: 520,
+              right: 520,
+            },
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function buildStudyModeDocxFaceSection({
+  type = 'Pergunta',
+  card = {},
+  cardNumber = 1,
+  totalCards = 1,
+}) {
+  return {
+    properties: {
+      page: {
+        size: {
+          orientation: PageOrientation.LANDSCAPE,
+          width: 16838,
+          height: 11906,
+        },
+        margin: {
+          top: 560,
+          right: 700,
+          bottom: 560,
+          left: 700,
+        },
+      },
+    },
+    children: [
+      buildStudyModeDocxCard({
+        type,
+        card,
+        cardNumber,
+        totalCards,
+      }),
+    ],
+  };
+}
+
+function buildEditableDocxBorder(color = '10A8B5', size = 16) {
+  return {
+    style: BorderStyle.SINGLE,
+    size,
+    color,
+  };
+}
+
+function isEditableDocxEnglishSegment(segment = {}) {
+  const color = String(segment.color || '').toUpperCase();
+  return ['2563EB', '1D4ED8', '0000FF'].includes(color);
+}
+
+function buildEditableDocxDivider({
+  alignment = AlignmentType.LEFT,
+  before = 120,
+  after = 140,
+  color = 'BFC7CE',
+} = {}) {
+  return new Paragraph({
+    alignment,
+    spacing: {
+      before,
+      after,
+    },
+    children: [
+      new TextRun({
+        text: '━━━━',
+        bold: true,
+        size: 16,
+        color,
+      }),
+    ],
+  });
+}
+
+function richSegmentToEditableDocxTextRun(
+  segment = {},
+  {
+    ptSize = 34,
+    enSize = 26,
+    defaultColor = '111827',
+    forceBold = false,
+  } = {}
+) {
+  const isEnglish = isEditableDocxEnglishSegment(segment);
+
+  const options = {
+    text: segment.text,
+    bold: forceBold || Boolean(segment.bold),
+    italics: Boolean(segment.italics),
+    strike: Boolean(segment.strike),
+    size: isEnglish ? enSize : ptSize,
+    color: segment.color || defaultColor,
+  };
+
+  if (segment.underline) {
+    options.underline = {
+      type: UnderlineType.SINGLE,
+    };
+  }
+
+  if (segment.highlight) {
+    options.highlight = 'yellow';
+  }
+
+  return new TextRun(options);
+}
+
+function buildEditableDocxContentParagraphs(
+  html = '',
+  fallback = '',
+  {
+    alignment = AlignmentType.LEFT,
+    dividerAlignment = AlignmentType.LEFT,
+    ptSize = 38,
+    enSize = 28,
+    forceBold = false,
+    line = 380,
+    before = 80,
+    after = 120,
+  } = {}
+) {
+  const paragraphs = parseFlashcardHtmlToRichParagraphs(html, fallback);
+
+  if (!paragraphs.length) {
+    return [
+      new Paragraph({
+        alignment,
+        spacing: {
+          before,
+          after,
+          line,
+        },
+        children: [
+          new TextRun({
+            text: fallback || '',
+            size: ptSize,
+            bold: forceBold,
+            color: '111827',
+          }),
+        ],
+      }),
+    ];
+  }
+
+  const result = [];
+  let insertedEnglishDivider = false;
+
+  paragraphs.forEach((segments, paragraphIndex) => {
+    const isEnglishParagraph = segments.some(isEditableDocxEnglishSegment);
+
+    if (isEnglishParagraph && !insertedEnglishDivider) {
+      result.push(
+        buildEditableDocxDivider({
+          alignment: dividerAlignment,
+          before: 80,
+          after: 120,
+        })
+      );
+
+      insertedEnglishDivider = true;
+    }
+
+    result.push(
+      new Paragraph({
+        alignment,
+        spacing: {
+          before: paragraphIndex === 0 ? before : 30,
+          after,
+          line: isEnglishParagraph ? Math.max(300, line - 60) : line,
+        },
+        children: segments.map((segment) =>
+          richSegmentToEditableDocxTextRun(segment, {
+            ptSize,
+            enSize,
+            forceBold,
+          })
+        ),
+      })
+    );
+  });
+
+  return result;
+}
+
+function buildEditableDocxHeader({
+  type = 'Pergunta',
+  cardNumber = 1,
+  totalCards = 1,
+  accent = '10A8B5',
+} = {}) {
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: {
+      after: 180,
+    },
+    children: [
+      new TextRun({
+        text: type,
+        bold: true,
+        size: 34,
+        color: '213A5B',
+      }),
+      new TextRun({
+        text: '     ',
+      }),
+      new TextRun({
+        text: 'Flashcard',
+        bold: true,
+        size: 26,
+        color: accent,
+      }),
+      new TextRun({
+        text: `   CARD ${cardNumber} / ${totalCards}`,
+        bold: true,
+        size: 16,
+        color: '94A3B8',
+      }),
+    ],
+  });
+}
+
+function buildEditableDocxMeta(card = {}) {
+  const metadata = [
+    card.specialty,
+    card.topic || card.theme || card.subSpecialty || card.sub_specialty,
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .join(' · ');
+
+  if (!metadata) return null;
+
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: {
+      after: 160,
+    },
+    children: [
+      new TextRun({
+        text: metadata,
+        bold: true,
+        size: 17,
+        color: '64748B',
+      }),
+    ],
+  });
+}
+
+function buildEditableDocxFooter(card = {}, accent = '10A8B5') {
+  const label = String(card.specialty || card.topic || '').trim();
+
+  if (!label) return null;
+
+  return new Paragraph({
+    alignment: AlignmentType.RIGHT,
+    spacing: {
+      before: 240,
+      after: 0,
+    },
+    children: [
+      new TextRun({
+        text: label,
+        bold: true,
+        size: 30,
+        color: accent,
+      }),
+    ],
+  });
+}
+
+function buildEditableDocxCardShell({
+  headerChildren = [],
+  bodyChildren = [],
+  footerChildren = [],
+  accent = '10A8B5',
+} = {}) {
+  const safeHeaderChildren = headerChildren.filter(Boolean);
+  const safeBodyChildren = bodyChildren.filter(Boolean);
+  const safeFooterChildren = footerChildren.filter(Boolean);
+
+  const emptyParagraph = () =>
+    new Paragraph({
+      spacing: {
+        before: 0,
+        after: 0,
+      },
+      children: [new TextRun({ text: '' })],
+    });
+
+  const buildCell = ({
+    children = [],
+    verticalAlign = VerticalAlign.TOP,
+    margins = {
+      top: 260,
+      bottom: 260,
+      left: 520,
+      right: 520,
+    },
+  } = {}) =>
+    new TableCell({
+      verticalAlign,
+      shading: {
+        type: ShadingType.CLEAR,
+        color: 'auto',
+        fill: 'FBFDFE',
+      },
+      margins,
+      borders: {
+        top: {
+          style: BorderStyle.NONE,
+          size: 0,
+          color: 'FFFFFF',
+        },
+        bottom: {
+          style: BorderStyle.NONE,
+          size: 0,
+          color: 'FFFFFF',
+        },
+        left: {
+          style: BorderStyle.NONE,
+          size: 0,
+          color: 'FFFFFF',
+        },
+        right: {
+          style: BorderStyle.NONE,
+          size: 0,
+          color: 'FFFFFF',
+        },
+      },
+      children: children.length ? children : [emptyParagraph()],
+    });
+
+  return new Table({
+    width: {
+      size: 100,
+      type: WidthType.PERCENTAGE,
+    },
+    borders: {
+      top: buildEditableDocxBorder(accent, 18),
+      bottom: buildEditableDocxBorder(accent, 18),
+      left: buildEditableDocxBorder(accent, 18),
+      right: buildEditableDocxBorder(accent, 18),
+      insideHorizontal: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      insideVertical: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    rows: [
+      new TableRow({
+        height: {
+          value: 1500,
+          rule: HeightRule.EXACT,
+        },
+        children: [
+          buildCell({
+            children: safeHeaderChildren,
+            verticalAlign: VerticalAlign.TOP,
+            margins: {
+              top: 260,
+              bottom: 120,
+              left: 520,
+              right: 520,
+            },
+          }),
+        ],
+      }),
+
+      new TableRow({
+        height: {
+          value: 6800,
+          rule: HeightRule.ATLEAST,
+        },
+        children: [
+          buildCell({
+            children: safeBodyChildren,
+            verticalAlign: VerticalAlign.CENTER,
+            margins: {
+              top: 160,
+              bottom: 160,
+              left: 620,
+              right: 620,
+            },
+          }),
+        ],
+      }),
+
+      new TableRow({
+        height: {
+          value: 1800,
+          rule: HeightRule.EXACT,
+        },
+        children: [
+          buildCell({
+            children: safeFooterChildren,
+            verticalAlign: VerticalAlign.BOTTOM,
+            margins: {
+              top: 120,
+              bottom: 260,
+              left: 520,
+              right: 520,
+            },
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function getDocxFaceAccent(isQuestion = true) {
+  return isQuestion ? '10A8B5' : '5BA7E5';
+}
+
+function getDocxFaceAccentDark(isQuestion = true) {
+  return isQuestion ? '0C8C97' : '428FD2';
+}
+
+function buildDocxCardBorder(color = '10A8B5', size = 14) {
+  return {
+    style: BorderStyle.SINGLE,
+    size,
+    color,
+  };
+}
+
+function buildDocxCardShell(children = [], accent = '10A8B5') {
+  return new Table({
+    width: {
+      size: 100,
+      type: WidthType.PERCENTAGE,
+    },
+    borders: {
+      top: buildDocxCardBorder(accent, 18),
+      bottom: buildDocxCardBorder(accent, 18),
+      left: buildDocxCardBorder(accent, 18),
+      right: buildDocxCardBorder(accent, 18),
+      insideHorizontal: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      insideVertical: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            verticalAlign: VerticalAlign.TOP,
+            shading: {
+              type: ShadingType.CLEAR,
+              color: 'auto',
+              fill: 'FBFDFE',
+            },
+            margins: {
+              top: 420,
+              bottom: 420,
+              left: 620,
+              right: 620,
+            },
+            children: children.filter(Boolean),
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function isEnglishDocxSegment(segment = {}) {
+  const color = String(segment.color || '').toUpperCase();
+
+  return ['2563EB', '1D4ED8', '0000FF'].includes(color);
+}
+
+function richSegmentToPremiumDocxTextRun(
+  segment = {},
+  {
+    size = 34,
+    englishSize = 28,
+    color = '111827',
+    forceBold = false,
+  } = {}
+) {
+  const isEnglish = isEnglishDocxSegment(segment);
+
+  const options = {
+    text: segment.text,
+    bold: forceBold || Boolean(segment.bold),
+    italics: Boolean(segment.italics),
+    strike: Boolean(segment.strike),
+    size: isEnglish ? englishSize : size,
+    color: segment.color || color,
+  };
+
+  if (segment.underline) {
+    options.underline = {
+      type: UnderlineType.SINGLE,
+    };
+  }
+
+  if (segment.highlight) {
+    options.highlight = 'yellow';
+  }
+
+  return new TextRun(options);
+}
+
+function buildDocxMiniDividerParagraph({
+  alignment = AlignmentType.LEFT,
+  before = 120,
+  after = 120,
+} = {}) {
+  return new Paragraph({
+    alignment,
+    spacing: {
+      before,
+      after,
+    },
+    children: [
+      new TextRun({
+        text: '━━━━',
+        bold: true,
+        size: 18,
+        color: 'BFC7CE',
+      }),
+    ],
+  });
+}
+
+function buildPremiumDocxParagraphsFromRichHtml(
+  html = '',
+  fallback = '',
+  {
+    alignment = AlignmentType.LEFT,
+    size = 36,
+    englishSize = 28,
+    color = '111827',
+    forceBold = false,
+    line = 360,
+    before = 0,
+    after = 120,
+    dividerAlignment = AlignmentType.LEFT,
+  } = {}
+) {
+  const paragraphs = parseFlashcardHtmlToRichParagraphs(html, fallback);
+
+  if (!paragraphs.length) {
+    return [
+      new Paragraph({
+        alignment,
+        spacing: {
+          before,
+          after,
+          line,
+        },
+        children: [
+          new TextRun({
+            text: fallback || '',
+            size,
+            color,
+            bold: forceBold,
+          }),
+        ],
+      }),
+    ];
+  }
+
+  const result = [];
+  let insertedEnglishDivider = false;
+
+  paragraphs.forEach((segments, paragraphIndex) => {
+    const isEnglishParagraph = segments.some(isEnglishDocxSegment);
+
+    if (isEnglishParagraph && !insertedEnglishDivider) {
+      result.push(
+        buildDocxMiniDividerParagraph({
+          alignment: dividerAlignment,
+          before: 80,
+          after: 80,
+        })
+      );
+
+      insertedEnglishDivider = true;
+    }
+
+    result.push(
+      new Paragraph({
+        alignment,
+        spacing: {
+          before: paragraphIndex === 0 ? before : 40,
+          after,
+          line: isEnglishParagraph ? Math.max(300, line - 60) : line,
+        },
+        children: segments.map((segment) =>
+          richSegmentToPremiumDocxTextRun(segment, {
+            size,
+            englishSize,
+            color,
+            forceBold,
+          })
+        ),
+      })
+    );
+  });
+
+  return result;
+}
+
+function buildDocxPremiumHeaderParagraph({
+  type = 'Pergunta',
+  cardNumber = 1,
+  totalCards = 1,
+  accent = '10A8B5',
+} = {}) {
+  const isQuestion = type === 'Pergunta';
+
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: {
+      after: 260,
+    },
+    children: [
+      new TextRun({
+        text: type,
+        bold: true,
+        size: isQuestion ? 42 : 38,
+        color: '213A5B',
+      }),
+      new TextRun({
+        text: '    ',
+      }),
+      new TextRun({
+        text: 'Flashcard',
+        bold: true,
+        size: 30,
+        color: accent,
+      }),
+      new TextRun({
+        text: `   CARD ${cardNumber} / ${totalCards}`,
+        bold: true,
+        size: 16,
+        color: '94A3B8',
+      }),
+    ],
+  });
+}
+
+function buildDocxPremiumMetaParagraph(card = {}) {
+  const metadata = [
+    card.specialty,
+    card.topic || card.theme || card.subSpecialty || card.sub_specialty,
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .join(' · ');
+
+  if (!metadata) return null;
+
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: {
+      after: 240,
+    },
+    children: [
+      new TextRun({
+        text: metadata,
+        bold: true,
+        size: 18,
+        color: '64748B',
+      }),
+    ],
+  });
+}
+
+function buildDocxPremiumFooterParagraph(card = {}, accent = '10A8B5') {
+  const label = String(card.specialty || card.topic || 'Flashcard').trim();
+
+  if (!label) return null;
+
+  return new Paragraph({
+    alignment: AlignmentType.RIGHT,
+    spacing: {
+      before: 280,
+      after: 0,
+    },
+    children: [
+      new TextRun({
+        text: label,
+        bold: true,
+        size: 34,
+        color: accent,
+      }),
+    ],
+  });
+}
+
+async function buildEditableFlashcardFaceSection({
+  type = 'Pergunta',
+  card = {},
+  cardNumber = 1,
+  totalCards = 1,
+  imageAsset = null,
+}) {
+  const isQuestion = type === 'Pergunta';
+  const accent = getEditableDocxAccent(type);
+
+  const contentHtml = isQuestion
+    ? buildEditableDocxFieldHtml({
+        html: card.questionHtml || card.question_html,
+        pt: getBilingualPortugueseText(card, 'question'),
+        en: getBilingualEnglishText(card, 'question'),
+      })
+    : buildEditableDocxFieldHtml({
+        html: card.answerHtml || card.answer_html,
+        pt: getBilingualPortugueseText(card, 'answer'),
+        en: getBilingualEnglishText(card, 'answer'),
+      });
+
+  const fallbackText = isQuestion
+    ? getBilingualPortugueseText(card, 'question')
+    : getBilingualPortugueseText(card, 'answer');
+
+  const imageParagraph = await buildEditableDocxImageParagraph(imageAsset);
+
+  const contentParagraphs = buildEditableDocxContentParagraphs(
+    contentHtml,
+    fallbackText,
+    {
+      alignment: isQuestion ? AlignmentType.LEFT : AlignmentType.CENTER,
+      dividerAlignment: isQuestion ? AlignmentType.LEFT : AlignmentType.CENTER,
+      ptSize: isQuestion ? 46 : 34,
+      enSize: isQuestion ? 28 : 25,
+      forceBold: isQuestion,
+      line: isQuestion ? 460 : 360,
+      before: 0,
+      after: isQuestion ? 120 : 100,
+    }
+  );
+
+  const headerChildren = [
+    buildEditableDocxHeader({
+      type,
+      cardNumber,
+      totalCards,
+      accent,
+    }),
+    buildEditableDocxMeta(card),
+  ].filter(Boolean);
+
+  const bodyChildren = [
+    buildEditableDocxDivider({
+      alignment: isQuestion ? AlignmentType.LEFT : AlignmentType.CENTER,
+      before: 0,
+      after: 220,
+    }),
+
+    ...contentParagraphs,
+
+    imageParagraph,
+  ].filter(Boolean);
+
+  const footerChildren = [
+    buildEditableDocxFooter(card, accent),
+  ].filter(Boolean);
+
+  return {
+    properties: {
+      page: {
+        size: {
+          orientation: PageOrientation.LANDSCAPE,
+          width: 11906,
+          height: 16838,
+        },
+        margin: {
+          top: 240,
+          right: 300,
+          bottom: 240,
+          left: 300,
+        },
+      },
+    },
+    children: [
+      buildEditableDocxCardShell({
+        headerChildren,
+        bodyChildren,
+        footerChildren,
+        accent,
+      }),
+    ],
+  };
 }
 
 function escapeSvg(value = '') {
@@ -5555,7 +6941,9 @@ async function buildFlashcardFaceSvg({
     ? wrapSvgText(
         plainEnglishText,
         Math.max(18, maxChars - 3),
-        Math.max(2, Math.floor(maxLines * 0.45))
+        isQuestion
+          ? Math.max(1, Math.min(3, Math.floor(maxLines * 0.38)))
+          : Math.max(2, Math.min(4, Math.floor(maxLines * 0.45)))
       )
     : [];
 
@@ -5584,27 +6972,59 @@ async function buildFlashcardFaceSvg({
   const englishFontSize = Math.max(34, Math.round(fontSize * 0.62));
   const englishLineHeight = Math.round(englishFontSize * 1.26);
 
+  const bilingualVisualGap = englishTextLines.length
+    ? Math.round(Math.max(38, fontSize * 0.42))
+    : 0;
+
+  const bilingualSeparatorGap = bilingualVisualGap;
+
+  const bilingualSeparatorToEnglishGap = englishTextLines.length
+    ? Math.round(bilingualVisualGap + englishFontSize * 0.78)
+    : 0;
+
   const textBlockHeight =
     textLines.length * lineHeight +
-    (englishTextLines.length ? 38 + englishTextLines.length * englishLineHeight : 0);
+    (englishTextLines.length
+      ? bilingualSeparatorGap +
+        bilingualSeparatorToEnglishGap +
+        englishTextLines.length * englishLineHeight
+      : 0);
 
   const questionTextX = 115;
-  const questionTextY = imageDataUrl ? 345 : 375;
-
-  const questionTextBottom =
-    questionTextY + Math.max(0, textLines.length - 1) * lineHeight;
-
-  const questionDividerY = Math.min(height - 170, questionTextBottom + 115);
+  const questionTextY = imageDataUrl ? 330 : 335;
 
   const answerTextX = imageDataUrl ? 118 : width / 2;
   const answerTextY = imageDataUrl
-    ? 390
-    : Math.max(430, Math.round((height - textBlockHeight) / 2) + 20);
+    ? 410
+    : Math.max(470, Math.round((height - textBlockHeight) / 2) + 70);
+
+  const baseTextY = isQuestion ? questionTextY : answerTextY;
+
+  const portugueseLastLineY =
+    baseTextY + Math.max(0, textLines.length - 1) * lineHeight;
+
+  const bilingualSeparatorY = englishTextLines.length
+    ? portugueseLastLineY + bilingualSeparatorGap
+    : null;
+
+  const englishStartY = englishTextLines.length
+    ? bilingualSeparatorY + bilingualSeparatorToEnglishGap
+    : null;
+
+  const englishLastLineY = englishTextLines.length
+    ? englishStartY + Math.max(0, englishTextLines.length - 1) * englishLineHeight
+    : portugueseLastLineY;
+
+  const contentBottomY = englishTextLines.length
+    ? englishLastLineY
+    : portugueseLastLineY;
+
+  const questionDividerY = Math.min(height - 170, contentBottomY + 115);
 
   const portugueseTextSvg = textLines
     .map((line, index) => {
       const x = isQuestion ? questionTextX : answerTextX;
-      const y = (isQuestion ? questionTextY : answerTextY) + index * lineHeight;
+      const y = baseTextY + index * lineHeight;
       const anchor = isQuestion ? 'start' : imageDataUrl ? 'start' : 'middle';
 
       return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="700" fill="#111827">${escapeSvgText(
@@ -5613,10 +7033,11 @@ async function buildFlashcardFaceSvg({
     })
     .join('\n');
 
-  const englishStartY =
-    (isQuestion ? questionTextY : answerTextY) +
-    textLines.length * lineHeight +
-    42;
+  const bilingualSeparatorSvg = englishTextLines.length
+    ? isQuestion
+      ? `<line x1="${questionTextX}" y1="${bilingualSeparatorY}" x2="${questionTextX + 142}" y2="${bilingualSeparatorY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>`
+      : `<line x1="${width / 2 - 72}" y1="${bilingualSeparatorY}" x2="${width / 2 + 72}" y2="${bilingualSeparatorY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>`
+    : '';
 
   const englishTextSvg = englishTextLines
     .map((line, index) => {
@@ -5630,7 +7051,13 @@ async function buildFlashcardFaceSvg({
     })
     .join('\n');
 
-  const textSvg = [portugueseTextSvg, englishTextSvg].filter(Boolean).join('\n');
+  const textSvg = [
+    portugueseTextSvg,
+    bilingualSeparatorSvg,
+    englishTextSvg,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   const repeatedWatermarks = '';
 
@@ -5740,7 +7167,11 @@ async function buildFlashcardFaceSvg({
   ${
     isQuestion
       ? `
-        <line x1="48" y1="${questionDividerY}" x2="190" y2="${questionDividerY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>
+        ${
+          englishTextLines.length
+            ? ''
+            : `<line x1="48" y1="${questionDividerY}" x2="190" y2="${questionDividerY}" stroke="#BFC7CE" stroke-width="12" stroke-linecap="round"/>`
+        }
         <text x="1660" y="1060" text-anchor="end" font-size="86" font-family="${EXPORT_SVG_FONT_FAMILY}" font-weight="900" fill="${accent}">${escapeSvg(
           specialtyLabel
         )}</text>
@@ -5792,11 +7223,17 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
     const card = cards[index];
 
     const questionImageAsset = await fetchImageAsset(
-      card.questionImageUrl || card.imageUrl
+      card.questionImageUrl ||
+        card.question_image_url ||
+        card.imageUrl ||
+        card.image_url
     );
 
     const answerImageAsset = await fetchImageAsset(
-      card.answerImageUrl || card.imageUrl
+      card.answerImageUrl ||
+        card.answer_image_url ||
+        card.imageUrl ||
+        card.image_url
     );
 
     const questionPng = await buildFlashcardFacePngBuffer({
@@ -5839,96 +7276,345 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
   return await finished;
 }
 
-async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
-  const CARD_WIDTH_PX = 1772;
-  const CARD_HEIGHT_PX = 1185;
+const FLASHCARD_DOCX_TABLE_WIDTH_DXA = 9500;
+const FLASHCARD_DOCX_HEADER_TAB_DXA = 9100;
 
-  const DOCX_PAGE_WIDTH_TWIPS = 16838;
-  const DOCX_PAGE_HEIGHT_TWIPS = Math.round(
-    DOCX_PAGE_WIDTH_TWIPS * (CARD_HEIGHT_PX / CARD_WIDTH_PX)
-  );
+const FLASHCARD_DOCX_COLORS = {
+  teal: '009688',
+  tealLight: 'E0F2F1',
+  englishBlue: '3B82F6',
+  portugueseText: '333333',
+  mutedText: '64748B',
+};
 
-  const DOCX_IMAGE_WIDTH_PX = 1080;
-  const DOCX_IMAGE_HEIGHT_PX = 722;
+function buildDocxText(value = '') {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  const buildImageSection = (imageBuffer) => ({
-    properties: {
-      page: {
-        size: {
-          orientation: PageOrientation.LANDSCAPE,
-          width: DOCX_PAGE_WIDTH_TWIPS,
-          height: DOCX_PAGE_HEIGHT_TWIPS,
-        },
-        margin: {
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-        },
+function buildFlashcardDocxHeaderCell({
+  leftText = '',
+  rightText = '',
+  topBorder = null,
+  bottomBorder = {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: FLASHCARD_DOCX_COLORS.teal,
+  },
+} = {}) {
+  return new TableCell({
+    width: {
+      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    shading: {
+      fill: FLASHCARD_DOCX_COLORS.tealLight,
+    },
+    borders: {
+      top: topBorder || {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
       },
+      bottom: bottomBorder || {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      left: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+      right: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    margins: {
+      top: 100,
+      bottom: 100,
+      left: 200,
+      right: 200,
     },
     children: [
       new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: {
-          before: 0,
-          after: 0,
-          line: 0,
-        },
+        tabStops: [
+          {
+            type: TabStopType.RIGHT,
+            position: FLASHCARD_DOCX_HEADER_TAB_DXA,
+          },
+        ],
         children: [
-          new ImageRun({
-            data: imageBuffer,
-            transformation: {
-              width: DOCX_IMAGE_WIDTH_PX,
-              height: DOCX_IMAGE_HEIGHT_PX,
-            },
+          new TextRun({
+            text: leftText,
+            bold: true,
+            size: 20,
+            color: FLASHCARD_DOCX_COLORS.teal,
+          }),
+          new TextRun({
+            text: `\t${rightText}`,
+            bold: true,
+            size: 20,
+            color: FLASHCARD_DOCX_COLORS.teal,
           }),
         ],
       }),
     ],
   });
+}
 
-  const sections = [];
+function buildFlashcardDocxBodyCell({
+  portuguese = '',
+  english = '',
+  portugueseSize = 32,
+  englishSize = 32,
+  fill = 'FFFFFF',
+} = {}) {
+  const portugueseText = buildDocxText(portuguese);
+  const englishText = buildDocxText(english);
 
-  for (let index = 0; index < cards.length; index += 1) {
-    const card = cards[index];
+  const children = [];
 
-    const questionImageAsset = await fetchImageAsset(
-      card.questionImageUrl || card.imageUrl
+  if (portugueseText) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: {
+          after: englishText ? 200 : 0,
+          line: 360,
+        },
+        children: [
+          new TextRun({
+            text: portugueseText,
+            size: portugueseSize,
+            bold: true,
+            color: FLASHCARD_DOCX_COLORS.portugueseText,
+          }),
+        ],
+      })
     );
-
-    const answerImageAsset = await fetchImageAsset(
-      card.answerImageUrl || card.imageUrl
-    );
-
-    const questionPng = await buildFlashcardFacePngBuffer({
-      type: 'Pergunta',
-      text: getBilingualPortugueseText(card, 'question'),
-      englishText: getBilingualEnglishText(card, 'question'),
-      specialty: card.specialty,
-      topic: card.topic,
-      cardNumber: index + 1,
-      totalCards: cards.length,
-      imageAsset: questionImageAsset,
-    });
-
-    const answerPng = await buildFlashcardFacePngBuffer({
-      type: 'Resposta',
-      text: getBilingualPortugueseText(card, 'answer'),
-      englishText: getBilingualEnglishText(card, 'answer'),
-      specialty: card.specialty,
-      topic: card.topic,
-      cardNumber: index + 1,
-      totalCards: cards.length,
-      imageAsset: answerImageAsset,
-    });
-
-    sections.push(buildImageSection(questionPng));
-    sections.push(buildImageSection(answerPng));
   }
 
+  if (englishText) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: {
+          after: 0,
+          line: 360,
+        },
+        children: [
+          new TextRun({
+            text: englishText,
+            size: englishSize,
+            bold: true,
+            color: FLASHCARD_DOCX_COLORS.englishBlue,
+          }),
+        ],
+      })
+    );
+  }
+
+  if (!children.length) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: '' })],
+      })
+    );
+  }
+
+  return new TableCell({
+    width: {
+      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    shading: {
+      fill,
+    },
+    margins: {
+      top: 600,
+      bottom: 600,
+      left: 400,
+      right: 400,
+    },
+    children,
+  });
+}
+
+function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) {
+  const specialty = buildDocxText(card.specialty || 'Flashcard');
+  const topic = buildDocxText(
+    card.topic ||
+      card.theme ||
+      card.subSpecialty ||
+      card.sub_specialty ||
+      specialty
+  );
+
+  const questionPt = getBilingualPortugueseText(card, 'question');
+  const questionEn = getBilingualEnglishText(card, 'question');
+
+  const answerPt = getBilingualPortugueseText(card, 'answer');
+  const answerEn = getBilingualEnglishText(card, 'answer');
+
+  return new Table({
+    layout: TableLayoutType.FIXED,
+    columnWidths: [FLASHCARD_DOCX_TABLE_WIDTH_DXA],
+    width: {
+      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    borders: {
+      top: {
+        style: BorderStyle.SINGLE,
+        size: 8,
+        color: FLASHCARD_DOCX_COLORS.teal,
+      },
+      bottom: {
+        style: BorderStyle.SINGLE,
+        size: 8,
+        color: FLASHCARD_DOCX_COLORS.teal,
+      },
+      left: {
+        style: BorderStyle.SINGLE,
+        size: 8,
+        color: FLASHCARD_DOCX_COLORS.teal,
+      },
+      right: {
+        style: BorderStyle.SINGLE,
+        size: 8,
+        color: FLASHCARD_DOCX_COLORS.teal,
+      },
+      insideHorizontal: {
+        style: BorderStyle.SINGLE,
+        size: 4,
+        color: 'D9E7E5',
+      },
+      insideVertical: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          buildFlashcardDocxHeaderCell({
+            leftText: `0.0 Flashcard ${String(cardNumber).padStart(2, '0')}  -  Pergunta`,
+            rightText: specialty,
+          }),
+        ],
+      }),
+
+      new TableRow({
+        children: [
+          buildFlashcardDocxBodyCell({
+            portuguese: questionPt,
+            english: questionEn,
+            portugueseSize: 32,
+            englishSize: 32,
+            fill: 'FFFFFF',
+          }),
+        ],
+      }),
+
+      new TableRow({
+        children: [
+          buildFlashcardDocxHeaderCell({
+            leftText: 'Resposta',
+            rightText: topic,
+            topBorder: {
+              style: BorderStyle.SINGLE,
+              size: 4,
+              color: FLASHCARD_DOCX_COLORS.teal,
+            },
+            bottomBorder: {
+              style: BorderStyle.SINGLE,
+              size: 4,
+              color: FLASHCARD_DOCX_COLORS.teal,
+            },
+          }),
+        ],
+      }),
+
+      new TableRow({
+        children: [
+          buildFlashcardDocxBodyCell({
+            portuguese: answerPt,
+            english: answerEn,
+            portugueseSize: 30,
+            englishSize: 30,
+            fill: 'F8FAFC',
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function buildFlashcardDocxSpacer(after = 400) {
+  return new Paragraph({
+    text: '',
+    spacing: {
+      after,
+    },
+  });
+}
+
+async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
+  const children = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: {
+        after: 420,
+      },
+      children: [
+        new TextRun({
+          text: title || 'Apostila de Flashcards',
+          bold: true,
+          size: 36,
+          color: FLASHCARD_DOCX_COLORS.teal,
+        }),
+      ],
+    }),
+  ];
+
+  cards.forEach((card, index) => {
+    children.push(
+      buildFlashcardDocxTable({
+        card,
+        cardNumber: index + 1,
+        totalCards: cards.length,
+      })
+    );
+
+    children.push(buildFlashcardDocxSpacer(420));
+  });
+
   const document = new Document({
-    sections,
+    sections: [
+      {
+        properties: {
+          page: {
+            size: {
+              orientation: PageOrientation.PORTRAIT,
+              width: 11906,
+              height: 16838,
+            },
+            margin: {
+              top: 720,
+              right: 720,
+              bottom: 720,
+              left: 720,
+            },
+          },
+        },
+        children,
+      },
+    ],
   });
 
   return await Packer.toBuffer(document);
