@@ -7276,7 +7276,7 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
   return await finished;
 }
 
-const FLASHCARD_DOCX_TABLE_WIDTH_DXA = 9500;
+const FLASHCARD_DOCX_TABLE_WIDTH_DXA = 9200;
 const FLASHCARD_DOCX_HEADER_TAB_DXA = 9100;
 
 const FLASHCARD_DOCX_COLORS = {
@@ -7294,8 +7294,7 @@ function buildDocxText(value = '') {
 }
 
 function buildFlashcardDocxHeaderCell({
-  leftText = '',
-  rightText = '',
+  headerText = '',
   topBorder = null,
   bottomBorder = {
     style: BorderStyle.SINGLE,
@@ -7334,28 +7333,17 @@ function buildFlashcardDocxHeaderCell({
       },
     },
     margins: {
-      top: 100,
-      bottom: 100,
-      left: 200,
-      right: 200,
+      top: 120,
+      bottom: 120,
+      left: 240,
+      right: 240,
     },
     children: [
       new Paragraph({
-        tabStops: [
-          {
-            type: TabStopType.RIGHT,
-            position: FLASHCARD_DOCX_HEADER_TAB_DXA,
-          },
-        ],
+        alignment: AlignmentType.LEFT,
         children: [
           new TextRun({
-            text: leftText,
-            bold: true,
-            size: 20,
-            color: FLASHCARD_DOCX_COLORS.teal,
-          }),
-          new TextRun({
-            text: `\t${rightText}`,
+            text: headerText,
             bold: true,
             size: 20,
             color: FLASHCARD_DOCX_COLORS.teal,
@@ -7461,6 +7449,7 @@ function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) 
   const answerEn = getBilingualEnglishText(card, 'answer');
 
   return new Table({
+    alignment: AlignmentType.CENTER,
     layout: TableLayoutType.FIXED,
     columnWidths: [FLASHCARD_DOCX_TABLE_WIDTH_DXA],
     width: {
@@ -7503,8 +7492,7 @@ function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) 
       new TableRow({
         children: [
           buildFlashcardDocxHeaderCell({
-            leftText: `0.0 Flashcard ${String(cardNumber).padStart(2, '0')}  -  Pergunta`,
-            rightText: specialty,
+            headerText: `Flashcard ${String(cardNumber).padStart(2, '0')} · Pergunta: ${specialty}`,
           }),
         ],
       }),
@@ -7524,8 +7512,7 @@ function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) 
       new TableRow({
         children: [
           buildFlashcardDocxHeaderCell({
-            leftText: 'Resposta',
-            rightText: topic,
+            headerText: `Resposta: ${topic}`,
             topBorder: {
               style: BorderStyle.SINGLE,
               size: 4,
