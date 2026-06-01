@@ -1611,6 +1611,13 @@ Para textos longos, não compacte demais. Cubra todos os blocos temáticos relev
 - Cada card deve cobrar uma ideia central, objetiva e útil.
 - A pergunta deve ser clara, específica e com cara de revisão de residência.
 - A resposta deve ser curta, correta e de alta retenção.
+- Fim dos blocos densos de texto: nunca gere respostas em parágrafos longos contínuos.
+- Use chunking instrucional: quebre respostas em blocos curtos, listas e linhas semanticamente separadas quando houver múltiplos itens.
+- Quando houver classificação, critérios, passos, condutas, diferenças ou consequências clínicas, prefira bullets curtos.
+- Use marcação **termo-chave** para destacar palavras essenciais dentro da resposta.
+- A pergunta deve ser direta e escaneável.
+- A nota do preceptor deve ter tom de mentor experiente, com frases como "Lembre-se que...", "Na prática..." ou "Cuidado com...".
+- Sempre que houver um mnemônico útil e clinicamente correto, inclua-o de forma breve na nota do preceptor ou na resposta.
 - Para cada pergunta, resposta e nota do preceptor, gere também uma versão em inglês médico natural.
 - O conteúdo em português deve ser o principal.
 - O conteúdo em inglês deve ser uma tradução fiel, clara e natural, sem acrescentar informações novas.
@@ -1622,6 +1629,11 @@ Para textos longos, não compacte demais. Cubra todos os blocos temáticos relev
   - answer_en: inglês
   - preceptor_note_en: inglês
 - Quando houver nuance importante, use "nota_preceptor" para destacar pegadinha, exceção, correlação clínica ou dica de prova.
+- O conteúdo será exportado para Word em blocos visuais. Portanto, escreva pensando em leitura rápida:
+  Pergunta curta.
+  Resposta ideal em blocos.
+  Nota do preceptor prática.
+  Sem textos longos.
 - Se a transcrição tiver poucos conteúdos clínicos, gere menos cards, mas mantenha qualidade.
 - Não inclua texto fora do JSON.
 - Classifique cada flashcard com dificuldade: easy, medium ou hard.
@@ -3022,17 +3034,25 @@ Tarefa:
    - mnemonic_value com o mnemônico;
    - mnemonic_application explicando exatamente como o aluno deve usar esse mnemônico neste card.
 4. Se não houver mnemônico útil, retorne mnemonic_detected = false e strings vazias nos campos de mnemônico.
-5. Sugira melhoria objetiva em português. Se houver mnemônico útil, a melhoria deve incorporar o mnemônico de forma ponderada, sem transformar todo card em mnemônico.
-6. Escreva uma resposta corrigida em português, mais completa e didática, mas sem ficar prolixa. Se o mnemônico for útil, inclua uma frase curta ensinando como aplicá-lo.
-7. Sugira nota de preceptor em português. Se houver mnemônico útil, inclua uma orientação específica de uso.
-8. Gere também versões em inglês médico natural para:
+5. Sugira melhoria objetiva em português.
+6. Escreva corrected_answer como "Resposta Ideal": direta, didática, escaneável e com chunking.
+7. Em corrected_answer, evite parágrafos longos. Use linhas curtas e bullets quando houver listas, classificações, critérios, diferenças ou condutas.
+8. Use marcação **termo-chave** para destacar conceitos importantes.
+9. Escreva preceptor_note_suggestion com tom de preceptor experiente:
+   - dica clínica;
+   - armadilha de prova;
+   - conselho prático;
+   - frase curta e memorável.
+10. Se houver mnemônico útil, inclua uma orientação específica de uso no campo mnemonic_application.
+11. Gere também versões em inglês médico natural para:
    - gap_en;
    - improvement_en;
    - corrected_answer_en;
    - preceptor_note_suggestion_en.
-9. O inglês deve ser tradução fiel do português, sem acrescentar fatos novos.
-10. Sugira uma palavra-chave visual curta para imagem.
-11. Sugira tags curtas.
+12. O inglês deve ser tradução fiel do português, sem acrescentar fatos novos.
+13. Sugira uma palavra-chave visual curta para imagem.
+14. Sugira tags curtas.
+15. Sugira image_prompt como descrição visual objetiva para representar o tema.
 `,
     responseSchema,
   });
@@ -4976,6 +4996,58 @@ function normalizeExportFlashcards(cards = []) {
       ).trim(),
       preceptorNoteHtml: String(card.preceptorNoteHtml || card.preceptor_note_html || '').trim(),
       preceptor_note_html: String(card.preceptor_note_html || card.preceptorNoteHtml || '').trim(),
+
+      aiProposition: String(
+        card.aiProposition ||
+          card.ai_proposition ||
+          card.cardInsights?.improvement ||
+          card.card_insights?.improvement ||
+          ''
+      ).trim(),
+      ai_proposition: String(
+        card.ai_proposition ||
+          card.aiProposition ||
+          card.card_insights?.improvement ||
+          card.cardInsights?.improvement ||
+          ''
+      ).trim(),
+      aiPropositionGeneratedAt:
+        card.aiPropositionGeneratedAt ||
+        card.ai_proposition_generated_at ||
+        card.cardInsightsGeneratedAt ||
+        card.card_insights_generated_at ||
+        null,
+      ai_proposition_generated_at:
+        card.ai_proposition_generated_at ||
+        card.aiPropositionGeneratedAt ||
+        card.card_insights_generated_at ||
+        card.cardInsightsGeneratedAt ||
+        null,
+
+      cardInsights:
+        card.cardInsights && typeof card.cardInsights === 'object'
+          ? card.cardInsights
+          : card.card_insights && typeof card.card_insights === 'object'
+            ? card.card_insights
+            : {},
+      card_insights:
+        card.card_insights && typeof card.card_insights === 'object'
+          ? card.card_insights
+          : card.cardInsights && typeof card.cardInsights === 'object'
+            ? card.cardInsights
+            : {},
+      cardInsightsGeneratedAt:
+        card.cardInsightsGeneratedAt ||
+        card.card_insights_generated_at ||
+        null,
+      card_insights_generated_at:
+        card.card_insights_generated_at ||
+        card.cardInsightsGeneratedAt ||
+        null,
+
+      tags: Array.isArray(card.tags)
+        ? card.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+        : [],
 
       specialty: String(card.specialty || '').trim(),
       topic: String(card.sub_specialty || card.subSpecialty || card.theme || card.topic || '').trim(),
@@ -7277,46 +7349,571 @@ async function buildFlashcardsPdfBuffer({ cards = [], title = 'Flashcards' }) {
 }
 
 const FLASHCARD_DOCX_TABLE_WIDTH_DXA = 9200;
-const FLASHCARD_DOCX_HEADER_TAB_DXA = 9100;
+const FLASHCARD_DOCX_HALF_WIDTH_DXA = Math.floor(FLASHCARD_DOCX_TABLE_WIDTH_DXA / 2);
 
 const FLASHCARD_DOCX_COLORS = {
-  teal: '009688',
-  tealLight: 'E0F2F1',
+  slate800: '1E293B',
+  slate400: '94A3B8',
+  slateText: '111827',
+  grayText: '374151',
+  mutedText: '6B7280',
+
+  cardBorder: 'E5E7EB',
+  divider: 'F3F4F6',
+  footerFill: 'F9FAFB',
+  tagFill: 'E5E7EB',
+
+  blueTitle: '2563EB',
+
+  answerTitle: '16A34A',
+  answerFill: 'F0FDF4',
+  answerBorder: 'DCFCE7',
+
+  mnemonicTitle: '047857',
+  mnemonicFill: 'ECFDF5',
+  mnemonicBorder: 'A7F3D0',
+  mnemonicText: '064E3B',
+
+  preceptorTitle: '92400E',
+  preceptorFill: 'FFFBEB',
+  preceptorBorder: 'FDE68A',
+  preceptorText: '78350F',
+
+  aiTitle: '3730A3',
+  aiFill: 'EEF2FF',
+  aiBorder: 'C7D2FE',
+  aiText: '4338CA',
+
   englishBlue: '3B82F6',
-  portugueseText: '333333',
-  mutedText: '64748B',
 };
 
 function buildDocxText(value = '') {
+  return stripHtmlToPlainText(value)
+    .replace(/\r/g, '')
+    .trim();
+}
+
+function cleanDocxInlineText(value = '') {
   return String(value || '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function buildFlashcardDocxHeaderCell({
-  headerText = '',
-  topBorder = null,
-  bottomBorder = {
-    style: BorderStyle.SINGLE,
-    size: 4,
-    color: FLASHCARD_DOCX_COLORS.teal,
-  },
+function formatDocxDate(value = '') {
+  if (!value) return '';
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return String(value || '');
+
+    return date.toLocaleDateString('pt-BR');
+  } catch {
+    return String(value || '');
+  }
+}
+
+function splitDocxTextBlocks(value = '') {
+  const clean = buildDocxText(value);
+
+  if (!clean) return [];
+
+  return clean
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
+function buildDocxRunsFromMarkdown(value = '', {
+  size = 22,
+  color = FLASHCARD_DOCX_COLORS.grayText,
+  bold = false,
+  italics = false,
 } = {}) {
+  const text = String(value || '');
+
+  if (!text) {
+    return [new TextRun({ text: '', size, color, bold, italics })];
+  }
+
+  return text
+    .split(/(\*\*[^*]+\*\*)/g)
+    .filter(Boolean)
+    .map((part) => {
+      const isBoldMarkdown = /^\*\*[\s\S]+\*\*$/.test(part);
+      const clean = isBoldMarkdown ? part.slice(2, -2) : part;
+
+      return new TextRun({
+        text: clean,
+        size,
+        color,
+        bold: bold || isBoldMarkdown,
+        italics,
+      });
+    });
+}
+
+function buildDocxParagraphsFromText(value = '', {
+  size = 22,
+  color = FLASHCARD_DOCX_COLORS.grayText,
+  bold = false,
+  italics = false,
+  spacingAfter = 100,
+  line = 300,
+} = {}) {
+  const blocks = splitDocxTextBlocks(value);
+
+  if (!blocks.length) {
+    return [
+      new Paragraph({
+        children: [new TextRun({ text: '', size })],
+      }),
+    ];
+  }
+
+  const paragraphs = [];
+
+  blocks.forEach((block) => {
+    const lines = block
+      .split(/\n+/)
+      .map((lineItem) => lineItem.trim())
+      .filter(Boolean);
+
+    const allBulletLines =
+      lines.length > 1 &&
+      lines.every((lineItem) => /^([-•*]|\d+[.)])\s+/.test(lineItem));
+
+    if (allBulletLines) {
+      lines.forEach((lineItem) => {
+        const bulletText = lineItem.replace(/^([-•*]|\d+[.)])\s+/, '');
+
+        paragraphs.push(
+          new Paragraph({
+            bullet: {
+              level: 0,
+            },
+            spacing: {
+              after: spacingAfter,
+              line,
+            },
+            children: buildDocxRunsFromMarkdown(bulletText, {
+              size,
+              color,
+              bold,
+              italics,
+            }),
+          })
+        );
+      });
+
+      return;
+    }
+
+    paragraphs.push(
+      new Paragraph({
+        spacing: {
+          after: spacingAfter,
+          line,
+        },
+        children: buildDocxRunsFromMarkdown(lines.join(' '), {
+          size,
+          color,
+          bold,
+          italics,
+        }),
+      })
+    );
+  });
+
+  return paragraphs;
+}
+
+function buildFlashcardDocxCardHeaderCell({
+  cardNumber = 1,
+  specialty = '',
+  topic = '',
+} = {}) {
+  const label = `Flashcard ${String(cardNumber).padStart(2, '0')}`;
+  const suffix = cleanDocxInlineText(topic || specialty);
+
   return new TableCell({
+    columnSpan: 2,
     width: {
       size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
       type: WidthType.DXA,
     },
     shading: {
-      fill: FLASHCARD_DOCX_COLORS.tealLight,
+      fill: FLASHCARD_DOCX_COLORS.slate800,
     },
     borders: {
-      top: topBorder || {
+      top: { style: BorderStyle.NONE, size: 0, color: FLASHCARD_DOCX_COLORS.slate800 },
+      bottom: { style: BorderStyle.NONE, size: 0, color: FLASHCARD_DOCX_COLORS.slate800 },
+      left: { style: BorderStyle.NONE, size: 0, color: FLASHCARD_DOCX_COLORS.slate800 },
+      right: { style: BorderStyle.NONE, size: 0, color: FLASHCARD_DOCX_COLORS.slate800 },
+    },
+    margins: {
+      top: 180,
+      bottom: 180,
+      left: 360,
+      right: 360,
+    },
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `🗂️  ${label}`,
+            bold: true,
+            size: 25,
+            color: 'FFFFFF',
+          }),
+          ...(suffix
+            ? [
+                new TextRun({
+                  text: ` | ${suffix}`,
+                  size: 23,
+                  color: FLASHCARD_DOCX_COLORS.slate400,
+                }),
+              ]
+            : []),
+        ],
+      }),
+    ],
+  });
+}
+
+function buildFlashcardDocxSectionCell({
+  title = '',
+  titleColor = FLASHCARD_DOCX_COLORS.blueTitle,
+  text = '',
+  english = '',
+  fill = 'FFFFFF',
+  borderColor = 'FFFFFF',
+  textColor = FLASHCARD_DOCX_COLORS.grayText,
+  textSize = 22,
+  titleSize = 19,
+  boldText = false,
+  italics = false,
+  marginTop = 180,
+  marginBottom = 180,
+} = {}) {
+  const children = [
+    new Paragraph({
+      spacing: {
+        after: 90,
+      },
+      children: [
+        new TextRun({
+          text: title,
+          bold: true,
+          size: titleSize,
+          color: titleColor,
+          allCaps: true,
+        }),
+      ],
+    }),
+    ...buildDocxParagraphsFromText(text, {
+      size: textSize,
+      color: textColor,
+      bold: boldText,
+      italics,
+      spacingAfter: 90,
+      line: 310,
+    }),
+  ];
+
+  if (english) {
+    children.push(
+      ...buildDocxParagraphsFromText(english, {
+        size: Math.max(18, textSize - 2),
+        color: FLASHCARD_DOCX_COLORS.englishBlue,
+        italics: true,
+        spacingAfter: 80,
+        line: 290,
+      })
+    );
+  }
+
+  return new TableCell({
+    columnSpan: 2,
+    width: {
+      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    shading: {
+      fill,
+    },
+    borders: {
+      top: {
+        style: BorderStyle.SINGLE,
+        size: borderColor === 'FFFFFF' ? 2 : 4,
+        color: borderColor,
+      },
+      bottom: {
+        style: BorderStyle.SINGLE,
+        size: borderColor === 'FFFFFF' ? 2 : 4,
+        color: borderColor,
+      },
+      left: {
         style: BorderStyle.NONE,
         size: 0,
         color: 'FFFFFF',
       },
-      bottom: bottomBorder || {
+      right: {
+        style: BorderStyle.NONE,
+        size: 0,
+        color: 'FFFFFF',
+      },
+    },
+    margins: {
+      top: marginTop,
+      bottom: marginBottom,
+      left: 420,
+      right: 420,
+    },
+    children,
+  });
+}
+
+function buildFlashcardDocxRow(children = []) {
+  return new TableRow({
+    cantSplit: true,
+    children,
+  });
+}
+
+function buildFlashcardDocxTwoColumnInfoRow({
+  leftTitle = '',
+  leftEmoji = '',
+  leftText = '',
+  leftEnglish = '',
+  leftFill = 'FFFFFF',
+  leftBorder = FLASHCARD_DOCX_COLORS.cardBorder,
+  leftTitleColor = FLASHCARD_DOCX_COLORS.grayText,
+  leftTextColor = FLASHCARD_DOCX_COLORS.grayText,
+
+  rightTitle = '',
+  rightEmoji = '',
+  rightText = '',
+  rightEnglish = '',
+  rightFill = 'FFFFFF',
+  rightBorder = FLASHCARD_DOCX_COLORS.cardBorder,
+  rightTitleColor = FLASHCARD_DOCX_COLORS.grayText,
+  rightTextColor = FLASHCARD_DOCX_COLORS.grayText,
+} = {}) {
+  const halfWidth = FLASHCARD_DOCX_HALF_WIDTH_DXA;
+
+  function buildCell({
+    title,
+    emoji,
+    text,
+    english,
+    fill,
+    border,
+    titleColor,
+    textColor,
+  }) {
+    return new TableCell({
+      width: {
+        size: halfWidth,
+        type: WidthType.DXA,
+      },
+      shading: {
+        fill,
+      },
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 4, color: border },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: border },
+        left: { style: BorderStyle.SINGLE, size: 4, color: border },
+        right: { style: BorderStyle.SINGLE, size: 4, color: border },
+      },
+      margins: {
+        top: 220,
+        bottom: 220,
+        left: 280,
+        right: 280,
+      },
+      children: [
+        new Paragraph({
+          spacing: {
+            after: 100,
+          },
+          children: [
+            new TextRun({
+              text: `${emoji ? `${emoji}  ` : ''}${title}`,
+              bold: true,
+              size: 22,
+              color: titleColor,
+            }),
+          ],
+        }),
+        ...buildDocxParagraphsFromText(text || '—', {
+          size: 19,
+          color: textColor,
+          italics: title.toLowerCase().includes('preceptor'),
+          spacingAfter: 70,
+          line: 280,
+        }),
+        ...(english
+          ? buildDocxParagraphsFromText(english, {
+              size: 18,
+              color: FLASHCARD_DOCX_COLORS.englishBlue,
+              italics: true,
+              spacingAfter: 60,
+              line: 260,
+            })
+          : []),
+      ],
+    });
+  }
+
+  return new TableRow({
+    cantSplit: true,
+    children: [
+      buildCell({
+        title: leftTitle,
+        emoji: leftEmoji,
+        text: leftText,
+        english: leftEnglish,
+        fill: leftFill,
+        border: leftBorder,
+        titleColor: leftTitleColor,
+        textColor: leftTextColor,
+      }),
+      buildCell({
+        title: rightTitle,
+        emoji: rightEmoji,
+        text: rightText,
+        english: rightEnglish,
+        fill: rightFill,
+        border: rightBorder,
+        titleColor: rightTitleColor,
+        textColor: rightTextColor,
+      }),
+    ],
+  });
+}
+
+function buildFlashcardDocxAnalysisCell({
+  gap = '',
+  gapEn = '',
+  improvement = '',
+  improvementEn = '',
+} = {}) {
+  const lines = [];
+
+  if (gap) {
+    lines.push(`Lacuna identificada: ${gap}`);
+  }
+
+  if (improvement) {
+    lines.push(`Melhoria aplicada: ${improvement}`);
+  }
+
+  const englishLines = [];
+
+  if (gapEn) {
+    englishLines.push(`Identified gap: ${gapEn}`);
+  }
+
+  if (improvementEn) {
+    englishLines.push(`Applied improvement: ${improvementEn}`);
+  }
+
+  if (!lines.length && !englishLines.length) return null;
+
+  return buildFlashcardDocxSectionCell({
+    title: '🤖  Análise e Edição da IA',
+    titleColor: FLASHCARD_DOCX_COLORS.aiTitle,
+    text: lines.map((line) => `- ${line}`).join('\n'),
+    english: englishLines.map((line) => `- ${line}`).join('\n'),
+    fill: FLASHCARD_DOCX_COLORS.aiFill,
+    borderColor: FLASHCARD_DOCX_COLORS.aiBorder,
+    textColor: FLASHCARD_DOCX_COLORS.aiText,
+    textSize: 18,
+    titleSize: 19,
+    marginTop: 220,
+    marginBottom: 220,
+  });
+}
+
+function buildFlashcardDocxFooterCell({
+  tags = [],
+  updatedAt = '',
+  imageKeyword = '',
+  imagePrompt = '',
+} = {}) {
+  const safeTags = tags
+    .map((tag) => cleanDocxInlineText(tag))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const metaLines = [];
+
+  if (imageKeyword) {
+    metaLines.push(`Palavra-chave visual: ${imageKeyword}`);
+  }
+
+  if (imagePrompt) {
+    metaLines.push(`Prompt visual sugerido: ${imagePrompt}`);
+  }
+
+  if (updatedAt) {
+    metaLines.push(`Atualizado em: ${updatedAt}`);
+  }
+
+  const children = [
+    new Paragraph({
+      spacing: {
+        after: safeTags.length || metaLines.length ? 80 : 0,
+      },
+      children: [
+        new TextRun({
+          text: '🏷️  ',
+          size: 18,
+          color: FLASHCARD_DOCX_COLORS.mutedText,
+        }),
+        new TextRun({
+          text: safeTags.length ? safeTags.join('   •   ') : 'Sem tags',
+          size: 18,
+          color: FLASHCARD_DOCX_COLORS.mutedText,
+        }),
+      ],
+    }),
+  ];
+
+  metaLines.forEach((line) => {
+    children.push(
+      new Paragraph({
+        spacing: {
+          after: 30,
+        },
+        children: [
+          new TextRun({
+            text: line,
+            size: 17,
+            color: FLASHCARD_DOCX_COLORS.mutedText,
+          }),
+        ],
+      })
+    );
+  });
+
+  return new TableCell({
+    columnSpan: 2,
+    width: {
+      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
+      type: WidthType.DXA,
+    },
+    shading: {
+      fill: FLASHCARD_DOCX_COLORS.footerFill,
+    },
+    borders: {
+      top: {
+        style: BorderStyle.SINGLE,
+        size: 4,
+        color: FLASHCARD_DOCX_COLORS.cardBorder,
+      },
+      bottom: {
         style: BorderStyle.NONE,
         size: 0,
         color: 'FFFFFF',
@@ -7333,108 +7930,20 @@ function buildFlashcardDocxHeaderCell({
       },
     },
     margins: {
-      top: 120,
-      bottom: 120,
-      left: 240,
-      right: 240,
-    },
-    children: [
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        children: [
-          new TextRun({
-            text: headerText,
-            bold: true,
-            size: 20,
-            color: FLASHCARD_DOCX_COLORS.teal,
-          }),
-        ],
-      }),
-    ],
-  });
-}
-
-function buildFlashcardDocxBodyCell({
-  portuguese = '',
-  english = '',
-  portugueseSize = 32,
-  englishSize = 32,
-  fill = 'FFFFFF',
-} = {}) {
-  const portugueseText = buildDocxText(portuguese);
-  const englishText = buildDocxText(english);
-
-  const children = [];
-
-  if (portugueseText) {
-    children.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: {
-          after: englishText ? 200 : 0,
-          line: 360,
-        },
-        children: [
-          new TextRun({
-            text: portugueseText,
-            size: portugueseSize,
-            bold: true,
-            color: FLASHCARD_DOCX_COLORS.portugueseText,
-          }),
-        ],
-      })
-    );
-  }
-
-  if (englishText) {
-    children.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: {
-          after: 0,
-          line: 360,
-        },
-        children: [
-          new TextRun({
-            text: englishText,
-            size: englishSize,
-            bold: true,
-            color: FLASHCARD_DOCX_COLORS.englishBlue,
-          }),
-        ],
-      })
-    );
-  }
-
-  if (!children.length) {
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: '' })],
-      })
-    );
-  }
-
-  return new TableCell({
-    width: {
-      size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
-      type: WidthType.DXA,
-    },
-    shading: {
-      fill,
-    },
-    margins: {
-      top: 600,
-      bottom: 600,
-      left: 400,
-      right: 400,
+      top: 160,
+      bottom: 160,
+      left: 420,
+      right: 420,
     },
     children,
   });
 }
 
 function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) {
-  const specialty = buildDocxText(card.specialty || 'Flashcard');
-  const topic = buildDocxText(
+  const insights = card.cardInsights || card.card_insights || {};
+
+  const specialty = cleanDocxInlineText(card.specialty || 'Flashcard');
+  const topic = cleanDocxInlineText(
     card.topic ||
       card.theme ||
       card.subSpecialty ||
@@ -7448,10 +7957,149 @@ function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) 
   const answerPt = getBilingualPortugueseText(card, 'answer');
   const answerEn = getBilingualEnglishText(card, 'answer');
 
+  const correctedAnswerPt = insights.corrected_answer || '';
+  const correctedAnswerEn = insights.corrected_answer_en || '';
+
+  const preceptorPt =
+    insights.preceptor_note_suggestion ||
+    getBilingualPortugueseText(card, 'preceptor');
+
+  const preceptorEn =
+    insights.preceptor_note_suggestion_en ||
+    getBilingualEnglishText(card, 'preceptor');
+
+  const mnemonicText =
+    insights.mnemonic_detected && insights.mnemonic_value
+      ? [
+          insights.mnemonic_value,
+          insights.mnemonic_application
+            ? `Como usar: ${insights.mnemonic_application}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      : '';
+
+  const suggestedTags = Array.isArray(insights.suggested_tags)
+    ? insights.suggested_tags
+    : [];
+
+  const tags = suggestedTags.length
+    ? suggestedTags
+    : Array.isArray(card.tags)
+      ? card.tags
+      : [];
+
+  const imageKeyword = insights.image_keyword || '';
+  const imagePrompt = insights.image_prompt || card.imagePrompt || card.image_prompt || '';
+
+  const updatedAt = formatDocxDate(
+    card.cardInsightsGeneratedAt ||
+      card.card_insights_generated_at ||
+      card.aiPropositionGeneratedAt ||
+      card.ai_proposition_generated_at ||
+      card.updatedAt ||
+      card.updated_at ||
+      card.createdAt ||
+      card.created_at
+  );
+
+  const analysisCell = buildFlashcardDocxAnalysisCell({
+    gap: insights.gap || '',
+    gapEn: insights.gap_en || '',
+    improvement:
+      card.aiProposition ||
+      card.ai_proposition ||
+      insights.improvement ||
+      '',
+    improvementEn: insights.improvement_en || '',
+  });
+
+  const rows = [
+    buildFlashcardDocxRow([
+      buildFlashcardDocxCardHeaderCell({
+        cardNumber,
+        specialty,
+        topic,
+      }),
+    ]),
+
+    buildFlashcardDocxRow([
+      buildFlashcardDocxSectionCell({
+        title: 'Pergunta',
+        titleColor: FLASHCARD_DOCX_COLORS.blueTitle,
+        text: questionPt,
+        english: questionEn,
+        fill: 'FFFFFF',
+        borderColor: 'FFFFFF',
+        textColor: FLASHCARD_DOCX_COLORS.slateText,
+        textSize: 27,
+        boldText: true,
+        marginTop: 320,
+        marginBottom: 280,
+      }),
+    ]),
+
+    buildFlashcardDocxRow([
+      buildFlashcardDocxSectionCell({
+        title: correctedAnswerPt
+          ? 'Resposta Ideal (Sugerida pela IA)'
+          : 'Resposta',
+        titleColor: FLASHCARD_DOCX_COLORS.answerTitle,
+        text: correctedAnswerPt || answerPt,
+        english: correctedAnswerEn || answerEn,
+        fill: FLASHCARD_DOCX_COLORS.answerFill,
+        borderColor: FLASHCARD_DOCX_COLORS.answerBorder,
+        textColor: FLASHCARD_DOCX_COLORS.grayText,
+        textSize: 22,
+        marginTop: 260,
+        marginBottom: 260,
+      }),
+    ]),
+  ];
+
+  if (mnemonicText || preceptorPt || preceptorEn) {
+    rows.push(
+      buildFlashcardDocxTwoColumnInfoRow({
+        leftTitle: 'Mnemônico',
+        leftEmoji: '🧠',
+        leftText: mnemonicText || 'Sem mnemônico específico para este card.',
+        leftFill: FLASHCARD_DOCX_COLORS.mnemonicFill,
+        leftBorder: FLASHCARD_DOCX_COLORS.mnemonicBorder,
+        leftTitleColor: FLASHCARD_DOCX_COLORS.mnemonicTitle,
+        leftTextColor: FLASHCARD_DOCX_COLORS.mnemonicText,
+
+        rightTitle: 'Nota do Preceptor',
+        rightEmoji: '💡',
+        rightText: preceptorPt || 'Sem nota do preceptor para este card.',
+        rightEnglish: preceptorEn,
+        rightFill: FLASHCARD_DOCX_COLORS.preceptorFill,
+        rightBorder: FLASHCARD_DOCX_COLORS.preceptorBorder,
+        rightTitleColor: FLASHCARD_DOCX_COLORS.preceptorTitle,
+        rightTextColor: FLASHCARD_DOCX_COLORS.preceptorText,
+      })
+    );
+  }
+
+  if (analysisCell) {
+    rows.push(buildFlashcardDocxRow([analysisCell]));
+  }
+
+  rows.push(
+    buildFlashcardDocxRow([
+      buildFlashcardDocxFooterCell({
+        tags,
+        updatedAt,
+        imageKeyword,
+        imagePrompt,
+      }),
+    ])
+  );
+
   return new Table({
     alignment: AlignmentType.CENTER,
     layout: TableLayoutType.FIXED,
-    columnWidths: [FLASHCARD_DOCX_TABLE_WIDTH_DXA],
+    columnWidths: [FLASHCARD_DOCX_HALF_WIDTH_DXA, FLASHCARD_DOCX_HALF_WIDTH_DXA],
     width: {
       size: FLASHCARD_DOCX_TABLE_WIDTH_DXA,
       type: WidthType.DXA,
@@ -7459,86 +8107,36 @@ function buildFlashcardDocxTable({ card = {}, cardNumber = 1, totalCards = 1 }) 
     borders: {
       top: {
         style: BorderStyle.SINGLE,
-        size: 8,
-        color: FLASHCARD_DOCX_COLORS.teal,
+        size: 6,
+        color: FLASHCARD_DOCX_COLORS.cardBorder,
       },
       bottom: {
         style: BorderStyle.SINGLE,
-        size: 8,
-        color: FLASHCARD_DOCX_COLORS.teal,
+        size: 6,
+        color: FLASHCARD_DOCX_COLORS.cardBorder,
       },
       left: {
         style: BorderStyle.SINGLE,
-        size: 8,
-        color: FLASHCARD_DOCX_COLORS.teal,
+        size: 6,
+        color: FLASHCARD_DOCX_COLORS.cardBorder,
       },
       right: {
         style: BorderStyle.SINGLE,
-        size: 8,
-        color: FLASHCARD_DOCX_COLORS.teal,
+        size: 6,
+        color: FLASHCARD_DOCX_COLORS.cardBorder,
       },
       insideHorizontal: {
         style: BorderStyle.SINGLE,
-        size: 4,
-        color: 'D9E7E5',
+        size: 2,
+        color: FLASHCARD_DOCX_COLORS.divider,
       },
       insideVertical: {
-        style: BorderStyle.NONE,
-        size: 0,
-        color: 'FFFFFF',
+        style: BorderStyle.SINGLE,
+        size: 2,
+        color: FLASHCARD_DOCX_COLORS.divider,
       },
     },
-    rows: [
-      new TableRow({
-        children: [
-          buildFlashcardDocxHeaderCell({
-            headerText: `Flashcard ${String(cardNumber).padStart(2, '0')} · Pergunta: ${specialty}`,
-          }),
-        ],
-      }),
-
-      new TableRow({
-        children: [
-          buildFlashcardDocxBodyCell({
-            portuguese: questionPt,
-            english: questionEn,
-            portugueseSize: 32,
-            englishSize: 32,
-            fill: 'FFFFFF',
-          }),
-        ],
-      }),
-
-      new TableRow({
-        children: [
-          buildFlashcardDocxHeaderCell({
-            headerText: `Resposta: ${topic}`,
-            topBorder: {
-              style: BorderStyle.SINGLE,
-              size: 4,
-              color: FLASHCARD_DOCX_COLORS.teal,
-            },
-            bottomBorder: {
-              style: BorderStyle.SINGLE,
-              size: 4,
-              color: FLASHCARD_DOCX_COLORS.teal,
-            },
-          }),
-        ],
-      }),
-
-      new TableRow({
-        children: [
-          buildFlashcardDocxBodyCell({
-            portuguese: answerPt,
-            english: answerEn,
-            portugueseSize: 30,
-            englishSize: 30,
-            fill: 'F8FAFC',
-          }),
-        ],
-      }),
-    ],
+    rows,
   });
 }
 
@@ -7551,7 +8149,85 @@ function buildFlashcardDocxSpacer(after = 400) {
   });
 }
 
-async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
+function normalizeDocxTitlePart(value = '') {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function uniqueDocxTitleParts(items = []) {
+  const seen = new Set();
+
+  return items
+    .map(normalizeDocxTitlePart)
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      if (seen.has(key)) return false;
+
+      seen.add(key);
+      return true;
+    });
+}
+
+function deriveDocxTitleParts({
+  title = 'Flashcards',
+  documentTitle = '',
+  documentSubtitle = '',
+  folderPath = [],
+} = {}) {
+  const pathParts = uniqueDocxTitleParts(
+    Array.isArray(folderPath) ? folderPath : []
+  );
+
+  const titlePartsFromText = uniqueDocxTitleParts(
+    String(title || '')
+      .split(/\s+[—>-]\s+|\s+\/\s+/)
+      .map((item) => item.trim())
+  );
+
+  const parts = pathParts.length ? pathParts : titlePartsFromText;
+
+  const mainTitle =
+    normalizeDocxTitlePart(documentTitle) ||
+    parts[0] ||
+    'Flashcards';
+
+  const subtitleFromParts = parts
+    .slice(parts[0] === mainTitle ? 1 : 0)
+    .filter((item) => item !== mainTitle)
+    .join(' • ');
+
+  const subtitle =
+    normalizeDocxTitlePart(documentSubtitle) ||
+    subtitleFromParts ||
+    (normalizeDocxTitlePart(title) !== mainTitle
+      ? normalizeDocxTitlePart(title)
+      : 'Revisão e estudo');
+
+  return {
+    mainTitle,
+    subtitle,
+  };
+}
+
+async function buildFlashcardsDocxBuffer({
+  cards = [],
+  title = 'Flashcards',
+  documentTitle = '',
+  documentSubtitle = '',
+  folderPath = [],
+}) {
+  const { mainTitle, subtitle } = deriveDocxTitleParts({
+    title,
+    documentTitle,
+    documentSubtitle,
+    folderPath,
+  });
   const children = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -7560,16 +8236,39 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
       },
       children: [
         new TextRun({
-          text: title || 'Apostila de Flashcards',
+          text: mainTitle,
           bold: true,
           size: 36,
-          color: FLASHCARD_DOCX_COLORS.teal,
+          color: FLASHCARD_DOCX_COLORS.slateText,
+        }),
+      ],
+    }),
+
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: {
+        after: 520,
+      },
+      children: [
+        new TextRun({
+          text: subtitle || 'Revisão e estudo',
+          size: 22,
+          color: FLASHCARD_DOCX_COLORS.mutedText,
         }),
       ],
     }),
   ];
 
   cards.forEach((card, index) => {
+    if (index > 0) {
+      children.push(
+        new Paragraph({
+          pageBreakBefore: true,
+          children: [new TextRun({ text: '' })],
+        })
+      );
+    }
+
     children.push(
       buildFlashcardDocxTable({
         card,
@@ -7578,7 +8277,9 @@ async function buildFlashcardsDocxBuffer({ cards = [], title = 'Flashcards' }) {
       })
     );
 
-    children.push(buildFlashcardDocxSpacer(420));
+    if (index < cards.length - 1) {
+      children.push(buildFlashcardDocxSpacer(220));
+    }
   });
 
   const document = new Document({
@@ -8052,6 +8753,9 @@ app.post('/api/exports/flashcards/docx', async (req, res) => {
     const {
       cards = [],
       title = 'Flashcards',
+      documentTitle = '',
+      documentSubtitle = '',
+      folderPath = [],
     } = req.body || {};
 
     const normalizedCards = normalizeExportFlashcards(cards);
@@ -8065,6 +8769,9 @@ app.post('/api/exports/flashcards/docx', async (req, res) => {
     const buffer = await buildFlashcardsDocxBuffer({
       cards: normalizedCards,
       title,
+      documentTitle,
+      documentSubtitle,
+      folderPath,
     });
 
     const filename = `${safeExportFilename(title)}.docx`;

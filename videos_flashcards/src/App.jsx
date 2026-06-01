@@ -5133,22 +5133,140 @@ export default function AdvancedFlashcardPoC() {
     window.URL.revokeObjectURL(url);
   };
 
-  const buildFlashcardExportTitle = ({ source = 'current' } = {}) => {
-    if (source === 'archive') {
-      return selectedArchiveDeckId
-        ? libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name || 'Flashcards da pasta'
-        : selectedArchiveTopic || selectedArchiveSpecialty || 'Flashcards da pasta';
+  const cleanExportTitlePart = (value = '') =>
+    String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const uniqueExportTitleParts = (items = []) => {
+    const seen = new Set();
+
+    return items
+      .map(cleanExportTitlePart)
+      .filter(Boolean)
+      .filter((item) => {
+        const key = item
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+
+        if (seen.has(key)) return false;
+
+        seen.add(key);
+        return true;
+      });
+  };
+
+  const buildLibraryDeckPath = (deckId) => {
+    if (!deckId) return [];
+
+    const deckMap = new Map(
+      libraryDecks.map((deck) => [String(deck.id), deck])
+    );
+
+    const path = [];
+    const visited = new Set();
+    let current = deckMap.get(String(deckId));
+
+    while (current && !visited.has(String(current.id))) {
+      visited.add(String(current.id));
+      path.unshift(cleanExportTitlePart(current.name));
+
+      current = current.parent_deck_id
+        ? deckMap.get(String(current.parent_deck_id))
+        : null;
     }
 
-    return currentFilename || currentSpecialty || 'Flashcards';
+    return uniqueExportTitleParts(path);
   };
+
+  const buildFlashcardExportMetadata = ({ source = 'current' } = {}) => {
+    if (source === 'archive') {
+      const deckPath = selectedArchiveDeckId
+        ? buildLibraryDeckPath(selectedArchiveDeckId)
+        : [];
+
+      const selectedDeckLabel = selectedArchiveDeckId
+        ? selectedArchiveDeckName ||
+          libraryDecks.find((deck) => String(deck.id) === String(selectedArchiveDeckId))?.name ||
+          ''
+        : '';
+
+      const folderPath = uniqueExportTitleParts([
+        selectedArchiveSpecialty,
+        selectedArchiveTopic,
+        ...deckPath,
+        selectedDeckLabel,
+      ]);
+
+      const documentTitle =
+        folderPath[0] ||
+        selectedArchiveSpecialty ||
+        'Flashcards';
+
+      const documentSubtitle =
+        folderPath.length > 1
+          ? folderPath.slice(1).join(' • ')
+          : selectedArchiveSpecialty
+            ? 'Todos os flashcards da especialidade'
+            : 'Flashcards da pasta';
+
+      const title = folderPath.length
+        ? folderPath.join(' — ')
+        : selectedArchiveTopic || selectedArchiveSpecialty || 'Flashcards da pasta';
+
+      return {
+        title,
+        documentTitle,
+        documentSubtitle,
+        folderPath,
+      };
+    }
+
+    const documentTitle = cleanExportTitlePart(currentSpecialty || currentFilename || 'Flashcards');
+    const documentSubtitle = cleanExportTitlePart(
+      currentFilename && currentFilename !== documentTitle
+        ? currentFilename
+        : 'Revisão e estudo'
+    );
+
+    return {
+      title: currentFilename || currentSpecialty || 'Flashcards',
+      documentTitle,
+      documentSubtitle,
+      folderPath: uniqueExportTitleParts([currentSpecialty, currentFilename]),
+    };
+  };
+
+  const buildFlashcardExportTitle = ({ source = 'current' } = {}) =>
+    buildFlashcardExportMetadata({ source }).title;
 
   const exportFlashcardsFile = async ({
     format = 'pdf',
     cards = flashcards,
-    title = buildFlashcardExportTitle(),
+    title = '',
+    exportMeta = buildFlashcardExportMetadata(),
   } = {}) => {
     const cardsToExport = normalizeFlashcards(cards);
+
+    const resolvedExportMeta = exportMeta || {};
+    const exportTitle =
+      title ||
+      resolvedExportMeta.title ||
+      buildFlashcardExportTitle();
+
+    const documentTitle =
+      resolvedExportMeta.documentTitle ||
+      exportTitle ||
+      'Flashcards';
+
+    const documentSubtitle =
+      resolvedExportMeta.documentSubtitle ||
+      'Revisão e estudo';
+
+    const folderPath = Array.isArray(resolvedExportMeta.folderPath)
+      ? resolvedExportMeta.folderPath
+      : [];
 
     if (!cardsToExport.length) {
       setError('Não há flashcards para exportar.');
@@ -5163,7 +5281,10 @@ export default function AdvancedFlashcardPoC() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
+          title: exportTitle,
+          documentTitle,
+          documentSubtitle,
+          folderPath,
           cards: cardsToExport.map((card, index) => ({
             position: Number(card.position || card.sort_order || index + 1),
 
@@ -5188,6 +5309,48 @@ export default function AdvancedFlashcardPoC() {
             preceptorNoteHtml: card.preceptorNoteHtml || card.preceptor_note_html || '',
             preceptor_note_html: card.preceptor_note_html || card.preceptorNoteHtml || '',
 
+            ...(format === 'docx'
+              ? {
+                  aiProposition:
+                    card.aiProposition ||
+                    card.ai_proposition ||
+                    card.cardInsights?.improvement ||
+                    card.card_insights?.improvement ||
+                    '',
+                  ai_proposition:
+                    card.ai_proposition ||
+                    card.aiProposition ||
+                    card.card_insights?.improvement ||
+                    card.cardInsights?.improvement ||
+                    '',
+                  aiPropositionGeneratedAt:
+                    card.aiPropositionGeneratedAt ||
+                    card.ai_proposition_generated_at ||
+                    card.cardInsightsGeneratedAt ||
+                    card.card_insights_generated_at ||
+                    null,
+                  ai_proposition_generated_at:
+                    card.ai_proposition_generated_at ||
+                    card.aiPropositionGeneratedAt ||
+                    card.card_insights_generated_at ||
+                    card.cardInsightsGeneratedAt ||
+                    null,
+
+                  cardInsights: card.cardInsights || card.card_insights || {},
+                  card_insights: card.card_insights || card.cardInsights || {},
+                  cardInsightsGeneratedAt:
+                    card.cardInsightsGeneratedAt ||
+                    card.card_insights_generated_at ||
+                    null,
+                  card_insights_generated_at:
+                    card.card_insights_generated_at ||
+                    card.cardInsightsGeneratedAt ||
+                    null,
+
+                  tags: Array.isArray(card.tags) ? card.tags : [],
+                }
+              : {}),
+
             imageUrl: card.imageUrl || card.image_url || '',
             image_url: card.image_url || card.imageUrl || '',
 
@@ -5210,7 +5373,7 @@ export default function AdvancedFlashcardPoC() {
       }
 
       const blob = await response.blob();
-      const safeTitle = String(title || 'flashcards')
+      const safeTitle = String(exportTitle || 'flashcards')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-zA-Z0-9-_]+/g, '-')
@@ -11485,7 +11648,7 @@ export default function AdvancedFlashcardPoC() {
                       exportFlashcardsFile({
                         format: 'pdf',
                         cards: flashcards,
-                        title: buildFlashcardExportTitle(),
+                        exportMeta: buildFlashcardExportMetadata(),
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
@@ -11502,7 +11665,7 @@ export default function AdvancedFlashcardPoC() {
                       exportFlashcardsFile({
                         format: 'docx',
                         cards: flashcards,
-                        title: buildFlashcardExportTitle(),
+                        exportMeta: buildFlashcardExportMetadata(),
                       })
                     }
                     disabled={!flashcards.length || isExportingFlashcardsFile}
@@ -14266,7 +14429,7 @@ export default function AdvancedFlashcardPoC() {
                           exportFlashcardsFile({
                             format: 'pdf',
                             cards: selectedArchiveCards,
-                            title: buildFlashcardExportTitle({ source: 'archive' }),
+                            exportMeta: buildFlashcardExportMetadata({ source: 'archive' }),
                           })
                         }
                         disabled={!selectedArchiveCards.length || isExportingFlashcardsFile}
@@ -14281,7 +14444,7 @@ export default function AdvancedFlashcardPoC() {
                           exportFlashcardsFile({
                             format: 'docx',
                             cards: selectedArchiveCards,
-                            title: buildFlashcardExportTitle({ source: 'archive' }),
+                            exportMeta: buildFlashcardExportMetadata({ source: 'archive' }),
                           })
                         }
                         disabled={!selectedArchiveCards.length || isExportingFlashcardsFile}
